@@ -74,10 +74,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     try {
       await InAppWebViewController.clearAllCache();
       final webStorageManager = WebStorageManager.instance();
-      
-      // Korrektur für Version 6.0.0
       await webStorageManager.deleteAllData();
-      
       CookieManager cookieManager = CookieManager.instance();
       await cookieManager.deleteAllCookies();
     } catch (e) {
@@ -109,7 +106,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     String contextWhy = _whyController.text;
     if (addedGoal != null) {
-      contextWhy = "\$contextWhy \$addedGoal";
+      contextWhy = "$contextWhy $addedGoal";
     }
 
     final fullQuery = await builder.buildQuery(
@@ -130,14 +127,13 @@ class _HomePageState extends ConsumerState<HomePage> {
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // MOBILE STEALTH: High-End Mobile UA (iPhone 15/Pixel 8)
       final randomUA = MirrorLogic.getRandomUserAgent();
       _webViewController.loadUrl(urlRequest: URLRequest(
         url: WebUri(url),
         headers: {
           'User-Agent': randomUA,
           'Accept-Language': 'de-DE,de;q=0.9',
-          'Sec-Ch-Ua-Mobile': '?1', // Mandatory for Mobile Stealth
+          'Sec-Ch-Ua-Mobile': '?1',
           'Sec-Ch-Ua-Platform': '"iOS"',
           'Sec-Fetch-Mode': 'navigate',
         },
@@ -217,6 +213,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildPremiumHomeScreen({Key? key}) {
+    final l10n = AppLocalizations.of(context);
     return Container(
       key: key,
       width: double.infinity,
@@ -241,9 +238,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                         padding: const EdgeInsets.symmetric(horizontal: 40),
                         child: Column(
                           children: [
-                            _buildMenuButton(title: AppLocalizations.of(context)!.startSearch, icon: Icons.search_rounded, onTap: () => setState(() => _viewState = 'dashboard')),
+                            _buildMenuButton(title: l10n?.startSearch ?? 'Suche starten', icon: Icons.search_rounded, onTap: () => setState(() => _viewState = 'dashboard')),
                             const SizedBox(height: 16),
-                            _buildMenuButton(title: AppLocalizations.of(context)!.settingsTitle, icon: Icons.settings_rounded, onTap: () => Navigator.pushNamed(context, '/settings')),
+                            _buildMenuButton(title: l10n?.settingsTitle ?? 'Einstellungen', icon: Icons.settings_rounded, onTap: () => Navigator.pushNamed(context, '/settings')),
                           ],
                         ),
                       ),
@@ -286,6 +283,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildSearchDashboard({Key? key}) {
+    final l10n = AppLocalizations.of(context);
     return Container(
       key: key,
       color: FindUXProTheme.primaryPurple,
@@ -301,13 +299,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                   Row(
                     children: [
                       IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20), onPressed: () => setState(() => _viewState = 'home')),
-                      Text(AppLocalizations.of(context)!.knowledgeSession, style: FindUXProTheme.titleStyle.copyWith(color: Colors.white, fontSize: 24)),
+                      Text(l10n?.knowledgeSession ?? 'Wissens-Sitzung', style: FindUXProTheme.titleStyle.copyWith(color: Colors.white, fontSize: 24)),
                     ],
                   ),
                   const SizedBox(height: 32),
-                  _buildMissionInput(controller: _whatController, label: AppLocalizations.of(context)!.whatSearch, hint: AppLocalizations.of(context)!.topicHint),
+                  _buildMissionInput(controller: _whatController, label: l10n?.whatSearch ?? 'Was suchst du?', hint: l10n?.topicHint ?? 'Thema...'),
                   const SizedBox(height: 20),
-                  _buildMissionInput(controller: _whyController, label: AppLocalizations.of(context)!.whySearch, hint: AppLocalizations.of(context)!.reasonHint),
+                  _buildMissionInput(controller: _whyController, label: l10n?.whySearch ?? 'Warum suchst du?', hint: l10n?.reasonHint ?? 'Grund...'),
                   const SizedBox(height: 32),
                   SizedBox(
                     width: double.infinity,
@@ -319,7 +317,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       ),
                       onPressed: () => _performSearch(),
                       icon: const Icon(Icons.bolt_rounded),
-                      label: Text(AppLocalizations.of(context)!.startAnalysis, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                      label: Text(l10n?.startAnalysis ?? 'Analyse starten', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
                     ),
                   ),
                 ],
@@ -363,6 +361,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildWebViewResults({Key? key}) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       key: key,
       children: [
@@ -397,7 +396,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                     clearCache: true,
                     useShouldOverrideUrlLoading: true,
                     safeBrowsingEnabled: true,
-                    // MOBILE OPTIMIZATION: Zurück zur mobilen Ansicht
                     preferredContentMode: UserPreferredContentMode.MOBILE,
                   ),
                   pullToRefreshController: _pullToRefreshController,
@@ -422,7 +420,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20), onPressed: () => _webViewController.goBack()),
                   IconButton(icon: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 20), onPressed: () => _webViewController.goForward()),
                 ])),
-                GestureDetector(onTap: () => setState(() => _showFeedbackOverlay = !_showFeedbackOverlay), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: FindUXProTheme.primaryPurple, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))]), child: Row(children: [Icon(Icons.psychology, color: Colors.white, size: 20), SizedBox(width: 8), Text(AppLocalizations.of(context)!.learningMode, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))]))),
+                GestureDetector(onTap: () => setState(() => _showFeedbackOverlay = !_showFeedbackOverlay), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: FindUXProTheme.primaryPurple, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))]), child: Row(children: [const Icon(Icons.psychology, color: Colors.white, size: 20), const SizedBox(width: 8), Text(l10n?.learningMode ?? 'Lernmodus', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))]))),
               ]))),
               if (_showDeepAnalysisOverlay) _buildDeepAnalysisOverlay(),
               if (_showFeedbackOverlay) _buildEnhancedFeedbackOverlay(),
