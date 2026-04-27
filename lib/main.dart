@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -93,10 +95,21 @@ class _MyAppState extends ConsumerState<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    final settings = ref.watch(settingsProvider);
+    final locale = Locale(settings.language);
+
     if (Platform.isIOS) {
       return CupertinoApp(
         title: 'FindYouX',
         theme: FindUXProTheme.cupertinoTheme,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: locale,
         onGenerateRoute: _onGenerateRoute,
         initialRoute: '/',
         debugShowCheckedModeBanner: false,
@@ -107,6 +120,14 @@ class _MyAppState extends ConsumerState<MyApp> {
         theme: FindUXProTheme.materialTheme,
         darkTheme: ThemeData.dark(),
         themeMode: ThemeMode.system,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: locale,
         onGenerateRoute: _onGenerateRoute,
         initialRoute: '/',
         debugShowCheckedModeBanner: false,

@@ -13,5 +13,20 @@
   "privacyPolicy": "Datenschutzerklärung",
   "termsOfService": "AGB",
   "onboardingWelcome": "Willkommen bei FindUX",
-  "onboardingText": "Ihre Privatsphäre ist unsere Priorität. Alle Daten bleiben lokal auf Ihrem Gerät."
+  "onboardingText": "Ihre Privatsphäre ist unsere Priorität. Alle Daten bleiben lokal auf Ihrem Gerät.",
+  "startSearch": "Suche starten",
+  "knowledgeSession": "Wissens-Sitzung",
+  "whatSearch": "Was suchst du?",
+  "whySearch": "Warum suchst du?",
+  "topicHint": "Thema...",
+  "reasonHint": "Grund...",
+  "startAnalysis": "Analyse starten",
+  "learningMode": "Lernmodus",
+  "unlockHardware": "Hardware entsperren",
+  "authenticating": "Autorisierung...",
+  "zeroDataPolicy": "Zero-Data Policy aktiv.",
+  "secureAccess": "Hardware-verschlüsselter Zugriff.",
+  "next": "Weiter",
+  "back": "Zurück",
+  "start": "Starten"
 }

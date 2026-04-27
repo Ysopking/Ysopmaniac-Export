@@ -13,5 +13,20 @@
   "privacyPolicy": "Privacy Policy",
   "termsOfService": "Terms of Service",
   "onboardingWelcome": "Welcome to FindUX",
-  "onboardingText": "Your privacy is our priority. All data stays local on your device."
+  "onboardingText": "Your privacy is our priority. All data stays local on your device.",
+  "startSearch": "Start Search",
+  "knowledgeSession": "Knowledge Session",
+  "whatSearch": "What are you looking for?",
+  "whySearch": "Why are you looking for it?",
+  "topicHint": "Topic...",
+  "reasonHint": "Reason...",
+  "startAnalysis": "Start Analysis",
+  "learningMode": "Learning Mode",
+  "unlockHardware": "Unlock Hardware",
+  "authenticating": "Authenticating...",
+  "zeroDataPolicy": "Zero-Data Policy active.",
+  "secureAccess": "Hardware-encrypted access.",
+  "next": "Next",
+  "back": "Back",
+  "start": "Start"
 }

@@ -41,11 +41,27 @@ class FindUXQueryBuilder {
     String mode = 'standard'
   }) async {
     String googleDork = '';
+    final prefs = await SharedPreferences.getInstance();
 
     // 1. WAS (Das exakte Suchziel - Google "exact phrase" logic)
     if (what.isNotEmpty) {
       String cleanedWhat = what.replaceAll(RegExp(r'[“”„‟]'), '"').replaceAll(RegExp(r'\s+'), ' ').trim();
       googleDork = (cleanedWhat.contains(' ') && !cleanedWhat.contains('"')) ? '"$cleanedWhat"' : cleanedWhat;
+    }
+
+    // 1.1 LERN-ERWEITERUNG: Stark gewichtete Keywords einfließen lassen (NEU)
+    final List<String> learnedBoosts = [];
+    final allKeys = prefs.getKeys();
+    for (var key in allKeys) {
+      if (key.startsWith('weight_kw_')) {
+        final weight = prefs.getDouble(key) ?? 1.0;
+        if (weight > 1.5) { // Nur bei hoher Relevanz
+          learnedBoosts.add(key.replaceFirst('weight_kw_', ''));
+        }
+      }
+    }
+    if (learnedBoosts.isNotEmpty) {
+      googleDork += ' (' + learnedBoosts.take(3).join(' OR ') + ')';
     }
 
     // 2. WARUM (Kontextuelle Erweiterung - Google "allintext" logic)

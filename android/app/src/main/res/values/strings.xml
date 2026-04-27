@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">FindUX</string>
+    <string name="accessibility_service_description">Ermöglicht den Stealth-Start von FindYouX über die Lautstärketasten.</string>
+    <string name="tile_label">FindUX</string>
+    <string name="shortcut_search_label">Suche starten</string>
+    <string name="shortcut_search_short_label">Suche</string>
+    <string name="widget_text_hint">FindUX Suche...</string>
 </resources>

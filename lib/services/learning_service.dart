@@ -83,18 +83,22 @@ class LearningService {
       if (searchId != null && searchData.containsKey(searchId)) {
         final search = searchData[searchId];
 
-        // Modus-Interesse schärfen
+        // 1.1 Modus-Interesse schärfen
         final mode = search['mode'] as String;
         double currentModeWeight = prefs.getDouble('weight_mode_$mode') ?? 1.0;
         prefs.setDouble('weight_mode_$mode', (currentModeWeight * multiplier).clamp(0.1, 5.0));
 
-        // Filter-Interesse schärfen
+        // 1.2 Filter-Interesse schärfen
         final sources = search['sources'] as List;
         final files = search['files'] as List;
         for (var filter in [...sources, ...files]) {
           double currentFilterWeight = prefs.getDouble('weight_filter_$filter') ?? 1.0;
           prefs.setDouble('weight_filter_$filter', (currentFilterWeight * multiplier).clamp(0.1, 5.0));
         }
+
+        // 1.3 Keyword-Interesse schärfen (NEU)
+        final query = search['query'] as String;
+        _extractAndWeightKeywords(query, multiplier, prefs);
       }
     });
 
@@ -132,5 +136,21 @@ class LearningService {
       'action': 'interest_model_refinement',
       'message': message,
     });
+  }
+
+  void _extractAndWeightKeywords(String query, double multiplier, SharedPreferences prefs) {
+    // Einfache Tokenisierung & Bereinigung
+    final words = query.toLowerCase()
+        .replaceAll(RegExp(r'[^\w\s]'), '')
+        .split(' ')
+        .where((w) => w.length > 3) // Nur relevante Wörter (keine Stoppwörter wie "der", "die", "und")
+        .toList();
+
+    for (var word in words) {
+      double currentWeight = prefs.getDouble('weight_kw_$word') ?? 1.0;
+      // Keywords werden langsamer gewichtet als Filter, um Overfitting zu vermeiden
+      double leanMultiplier = 1.0 + (multiplier - 1.0) * 0.5; 
+      prefs.setDouble('weight_kw_$word', (currentWeight * leanMultiplier).clamp(0.5, 3.0));
+    }
   }
 }

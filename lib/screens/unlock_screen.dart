@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import '../theme.dart';
 
 class UnlockScreen extends StatefulWidget {
@@ -96,7 +97,9 @@ class _UnlockScreenState extends State<UnlockScreen> {
                           ),
                           const SizedBox(height: 20),
                           Text(
-                            _isAuthenticating ? 'Autorisierung...' : 'Hardware entsperren',
+                            _isAuthenticating 
+                                ? AppLocalizations.of(context)!.authenticating 
+                                : AppLocalizations.of(context)!.unlockHardware,
                             style: const TextStyle(
                               fontSize: 16,
                               color: Colors.white,
@@ -114,10 +117,10 @@ class _UnlockScreenState extends State<UnlockScreen> {
                 ),
               ),
               const SizedBox(height: 40),
-              const Text(
-                'Zero-Data Policy aktiv.\nHardware-verschlüsselter Zugriff.',
+              Text(
+                '${AppLocalizations.of(context)!.zeroDataPolicy}\n${AppLocalizations.of(context)!.secureAccess}',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white38, fontSize: 12),
+                style: const TextStyle(color: Colors.white38, fontSize: 12),
               ),
             ],
           ),

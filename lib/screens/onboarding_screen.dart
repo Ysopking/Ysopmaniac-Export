@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import '../logic/state_provider.dart';
 import '../theme.dart';
 
@@ -116,7 +117,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           child: Row(
                             children: [
                               Text(
-                                'FindUX Pro',
+                                '${AppLocalizations.of(context)!.appTitle} Pro',
                                 style: FindUXProTheme.headlineStyle.copyWith(
                                   color: Colors.white,
                                   fontSize: 28,
@@ -162,7 +163,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                 Expanded(
                                   child: ElevatedButton(
                                     style: FindUXProTheme.glassButtonStyle,
-                                    child: const Text('Zurück'),
+                                    child: Text(AppLocalizations.of(context)!.back),
                                     onPressed: () => _go(_page - 1),
                                   ),
                                 ),
@@ -177,7 +178,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                     padding: const EdgeInsets.symmetric(vertical: 16),
                                   ),
                                   child: Text(
-                                    _page == _totalPages ? 'Starten' : 'Weiter',
+                                    _page == _totalPages 
+                                        ? AppLocalizations.of(context)!.start 
+                                        : AppLocalizations.of(context)!.next,
                                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                                   ),
                                   onPressed: () async {

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import '../logic/state_provider.dart';
 import '../theme.dart';
 
@@ -21,9 +22,9 @@ class SettingsScreen extends ConsumerWidget {
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'ÜBER FIND UX PRO',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, letterSpacing: 1.2, fontSize: 18),
+        title: Text(
+          AppLocalizations.of(context)!.settingsTitle.toUpperCase(),
+          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w900, letterSpacing: 1.2, fontSize: 18),
         ),
       ),
       body: Column(
@@ -39,10 +40,28 @@ class SettingsScreen extends ConsumerWidget {
                   onTap: () {},
                 ),
                 _buildOptionTile(
-                  icon: Icons.card_giftcard_outlined,
-                  title: 'Produkte',
-                  subtitle: 'Subtitle der Produkte',
-                  onTap: () {},
+                  icon: Icons.language,
+                  title: AppLocalizations.of(context)!.languageLabel,
+                  subtitle: settings.language == 'de' ? 'Deutsch' : 'English',
+                  onTap: () {
+                    final newLang = settings.language == 'de' ? 'en' : 'de';
+                    notifier.updateField(language: newLang);
+                  },
+                ),
+                _buildOptionTile(
+                  icon: Icons.location_on_outlined,
+                  title: AppLocalizations.of(context)!.zipLabel,
+                  subtitle: settings.plz.isEmpty ? 'Nicht festgelegt' : settings.plz,
+                  onTap: () => _showZipDialog(context, ref),
+                ),
+                _buildOptionTile(
+                  icon: Icons.public,
+                  title: AppLocalizations.of(context)!.countryLabel,
+                  subtitle: settings.country.toUpperCase(),
+                  onTap: () {
+                    final newCountry = settings.country == 'de' ? 'at' : 'de';
+                    notifier.updateField(country: newCountry);
+                  },
                 ),
                 _buildOptionTile(
                   icon: Icons.settings_outlined,
@@ -118,6 +137,31 @@ class SettingsScreen extends ConsumerWidget {
           HapticFeedback.selectionClick();
           onTap();
         },
+      ),
+    );
+  }
+
+  void _showZipDialog(BuildContext context, WidgetRef ref) {
+    final controller = TextEditingController(text: ref.read(settingsProvider).plz);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(AppLocalizations.of(context)!.zipLabel),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(hintText: 'z.B. 10115'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
+          TextButton(
+            onPressed: () {
+              ref.read(settingsProvider.notifier).updateField(plz: controller.text);
+              Navigator.pop(context);
+            },
+            child: Text(AppLocalizations.of(context)!.saveButton),
+          ),
+        ],
       ),
     );
   }

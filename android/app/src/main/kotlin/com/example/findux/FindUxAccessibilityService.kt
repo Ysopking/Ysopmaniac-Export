@@ -1,18 +1,35 @@
 package com.example.findux
 
 import android.accessibilityservice.AccessibilityService
+import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.content.Intent
 import android.util.Log
 
 class FindUxAccessibilityService : AccessibilityService() {
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // TODO: Hier das Doppeltippen auf die Lauter-Taste abfangen
-        // Verwende AccessibilityEvent für Volume-Key-Events
-        // Wenn doppelt getippt, öffne die FindUX-App als Overlay
+    private var lastVolumeUpTime: Long = 0
+    private val DOUBLE_TAP_TIMEOUT = 500L
 
-        Log.d("FindUX", "Accessibility Event: ${event?.eventType}")
+    override fun onKeyEvent(event: KeyEvent): Boolean {
+        val keyCode = event.keyCode
+        val action = event.action
+
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP && action == KeyEvent.ACTION_DOWN) {
+            val currentTime = System.currentTimeMillis()
+            if (currentTime - lastVolumeUpTime < DOUBLE_TAP_TIMEOUT) {
+                // Double Tap erkannt
+                openFindUxOverlay()
+                lastVolumeUpTime = 0 // Reset
+                return true // Event konsumieren, damit Lautstärke sich nicht ändert
+            }
+            lastVolumeUpTime = currentTime
+        }
+        return super.onKeyEvent(event)
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // Nicht benötigt für Key-Events
     }
 
     override fun onInterrupt() {

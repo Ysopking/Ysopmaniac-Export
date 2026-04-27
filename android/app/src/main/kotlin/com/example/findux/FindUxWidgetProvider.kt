@@ -1,4 +1,4 @@
-package com.example.findux.widget
+package com.example.findux
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
@@ -6,8 +6,6 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
-import com.example.findux.MainActivity
-import com.example.findux.R
 
 class FindUxWidgetProvider : AppWidgetProvider() {
 
@@ -18,21 +16,19 @@ class FindUxWidgetProvider : AppWidgetProvider() {
     }
 
     private fun updateAppWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
-        // RemoteViews für das Widget erstellen
-        val views = RemoteViews(context.packageName, R.layout.widget_findux)
+        // RemoteViews für das Widget erstellen (Nutzt den korrekten Layout-Namen)
+        val views = RemoteViews(context.packageName, R.layout.widget_layout)
 
         // Intent zum Öffnen der MainActivity
         val intent = Intent(context, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+        val pendingIntent = PendingIntent.getActivity(context, 0, intent, 
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-        // Button mit PendingIntent verknüpfen
-        views.setOnClickPendingIntent(R.id.widgetButton, pendingIntent)
+        // Button/Layout mit PendingIntent verknüpfen
+        views.setOnClickPendingIntent(R.id.widget_button, pendingIntent)
+        views.setOnClickPendingIntent(R.id.widget_text, pendingIntent)
 
         // Widget aktualisieren
         appWidgetManager.updateAppWidget(appWidgetId, views)
     }
-
-    // TODO: Hier die Widget-Logik erweitern
-    // - Direkt-Suche aus dem Widget ermöglichen
-    // - Schnellzugriff auf häufige Suchen
 }
