@@ -74,11 +74,10 @@ class _HomePageState extends ConsumerState<HomePage> {
     try {
       await InAppWebViewController.clearAllCache();
       final webStorageManager = WebStorageManager.instance();
-      if (Platform.isAndroid) {
-        await webStorageManager.deleteAllData();
-      } else if (Platform.isIOS) {
-        await webStorageManager.removeData(dataTypes: WebsiteDataType.values);
-      }
+      
+      // Korrektur für Version 6.0.0
+      await webStorageManager.deleteAllData();
+      
       CookieManager cookieManager = CookieManager.instance();
       await cookieManager.deleteAllCookies();
     } catch (e) {
@@ -423,7 +422,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20), onPressed: () => _webViewController.goBack()),
                   IconButton(icon: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 20), onPressed: () => _webViewController.goForward()),
                 ])),
-                GestureDetector(onTap: () => setState(() => _showFeedbackOverlay = !_showFeedbackOverlay), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: FindUXProTheme.primaryPurple, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))]), child: Row(children: [Icon(Icons.psychology, color: Colors.white, size: 20), SizedBox(width: 8), Text(AppLocalizations.of(context)!.learningMode, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))]))),
+                GestureDetector(onTap: () => setState(() => _showFeedbackOverlay = !_showFeedbackOverlay), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: FindUXProTheme.primaryPurple, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))]), child: Row(children: [Icon(Icons.psychology, color: Colors.white, size: 20), SizedBox(width: 8), Text(AppLocalizations.of(context)!.learningMode, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))]))),
               ]))),
               if (_showDeepAnalysisOverlay) _buildDeepAnalysisOverlay(),
               if (_showFeedbackOverlay) _buildEnhancedFeedbackOverlay(),
@@ -509,6 +508,93 @@ class _HomePageState extends ConsumerState<HomePage> {
       ),
     );
   }
+
+  Widget _buildEnhancedFeedbackOverlay() {
+    return Positioned.fill(
+      child: GestureDetector(
+        onTap: () {
+          FocusScope.of(context).unfocus();
+          setState(() => _showFeedbackOverlay = false);
+        },
+        child: Container(
+          color: Colors.black.withOpacity(0.4),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+            child: Center(
+              child: SingleChildScrollView(
+                child: Container(
+                  margin: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: FindUXProTheme.largeSquircleRadius,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Spezifizierung präzise?', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+                      const SizedBox(height: 12),
+                      const Text('Dieses Feedback verfeinert die Gewichtung deiner persönlichen Daten.', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54, fontSize: 14)),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildFeedbackIcon(Icons.thumb_down_alt_outlined, 'down', Colors.red),
+                          _buildFeedbackIcon(Icons.thumb_up_alt_outlined, 'up', Colors.green),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      CupertinoTextField(
+                        controller: _feedbackController,
+                        placeholder: 'Details zur Sitzung...',
+                        maxLines: 3,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: FindUXProTheme.lightGray.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: FindUXProTheme.primaryButtonStyle.copyWith(
+                            backgroundColor: WidgetStateProperty.all(_selectedRating != null ? FindUXProTheme.primaryPurple : Colors.grey),
+                          ),
+                          onPressed: _selectedRating != null ? _submitFeedback : null,
+                          child: const Text('Sitzung bewerten'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeedbackIcon(IconData icon, String rating, Color color) {
+    bool isSelected = _selectedRating == rating;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _selectedRating = rating);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withOpacity(0.2) : color.withOpacity(0.05),
+          shape: BoxShape.circle,
+          border: Border.all(color: isSelected ? color : Colors.transparent, width: 2),
+        ),
+        child: Icon(icon, color: color, size: 36),
+      ),
+    );
+  }
 }
 
 class _AnimatedScaleButton extends StatefulWidget {
@@ -549,31 +635,6 @@ class __AnimatedScaleButtonState extends State<_AnimatedScaleButton> with Single
       onTapCancel: () => _controller.reverse(),
       onTap: widget.onTap,
       child: ScaleTransition(scale: _scaleAnimation, child: widget.child),
-    );
-  }
-}
-  Widget _buildEnhancedFeedbackOverlay() {
-    return Positioned.fill(child: GestureDetector(onTap: () { FocusScope.of(context).unfocus(); setState(() => _showFeedbackOverlay = false); }, child: Container(color: Colors.black.withOpacity(0.4), child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5), child: Center(child: SingleChildScrollView(child: Container(margin: const EdgeInsets.all(24), padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: Colors.white, borderRadius: FindUXProTheme.largeSquircleRadius), child: Column(mainAxisSize: MainAxisSize.min, children: [
-      const Text('Spezifizierung präzise?', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-      const SizedBox(height: 12),
-      const Text('Dieses Feedback verfeinert die Gewichtung deiner persönlichen Daten.', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54, fontSize: 14)),
-      const SizedBox(height: 24),
-      Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-        _buildFeedbackIcon(Icons.thumb_down_alt_outlined, 'down', Colors.red),
-        _buildFeedbackIcon(Icons.thumb_up_alt_outlined, 'up', Colors.green),
-      ]),
-      const SizedBox(height: 24),
-      CupertinoTextField(controller: _feedbackController, placeholder: 'Details zur Sitzung...', maxLines: 3, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: FindUXProTheme.lightGray.withOpacity(0.5), borderRadius: BorderRadius.circular(12))),
-      const SizedBox(height: 24),
-      SizedBox(width: double.infinity, child: ElevatedButton(style: FindUXProTheme.primaryButtonStyle.copyWith(backgroundColor: WidgetStateProperty.all(_selectedRating != null ? FindUXProTheme.primaryPurple : Colors.grey)), onPressed: _selectedRating != null ? _submitFeedback : null, child: const Text('Sitzung bewerten'))),
-    ]))))))));
-  }
-
-  Widget _buildFeedbackIcon(IconData icon, String rating, Color color) {
-    bool isSelected = _selectedRating == rating;
-    return GestureDetector(
-      onTap: () { HapticFeedback.selectionClick(); setState(() => _selectedRating = rating); },
-      child: AnimatedContainer(duration: const Duration(milliseconds: 200), padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: isSelected ? color.withOpacity(0.2) : color.withOpacity(0.05), shape: BoxShape.circle, border: Border.all(color: isSelected ? color : Colors.transparent, width: 2)), child: Icon(icon, color: color, size: 36)),
     );
   }
 }

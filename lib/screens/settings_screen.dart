@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import '../logic/state_provider.dart';
+import '../services/learning_service.dart';
 import '../theme.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -147,6 +148,31 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  void _showZipDialog(BuildContext context, WidgetRef ref) {
+    final controller = TextEditingController(text: ref.read(settingsProvider).plz);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(AppLocalizations.of(context)!.zipLabel),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(hintText: 'z.B. 10115'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
+          TextButton(
+            onPressed: () {
+              ref.read(settingsProvider.notifier).updateField(plz: controller.text);
+              Navigator.pop(context);
+            },
+            child: Text(AppLocalizations.of(context)!.saveButton),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showFeedbackExportDialog(BuildContext context, WidgetRef ref) {
     final learningService = ref.read(learningServiceProvider);
     final feedbacks = learningService.getFeedbackForReview();
@@ -177,7 +203,7 @@ class SettingsScreen extends ConsumerWidget {
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(color: Color(0xFFF0F0F5), borderRadius: BorderRadius.circular(16)),
+                          decoration: BoxDecoration(color: const Color(0xFFF0F0F5), borderRadius: BorderRadius.circular(16)),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
