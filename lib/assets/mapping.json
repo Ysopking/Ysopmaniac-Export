@@ -1,0 +1,15 @@
+{
+  "precision_lens": {
+    "privacy_browser_extensions": ["Brave", "Tor Browser", "Firefox Focus"],
+    "local_search_tools_offline": ["FindUX", "Offline Wikipedia", "Local Docs Search"],
+    "encrypted_data_storage_mobile": ["Signal", "Threema", "ProtonMail"],
+    "zero_server_policy_apps": ["FindUX", "LocalOnly Apps", "Offline-First Tools"]
+  },
+  "search_mappings": {
+    "google": "https://www.google.com/search?q=",
+    "bing": "https://www.bing.com/search?q=",
+    "duckduckgo": "https://duckduckgo.com/?q="
+  },
+  "version": "1.0.0",
+  "last_updated": "2026-04-25"
+}
