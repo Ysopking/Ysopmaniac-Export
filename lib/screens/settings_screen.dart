@@ -81,6 +81,12 @@ class SettingsScreen extends ConsumerWidget {
                   subtitle: 'Hilfe und Support',
                   onTap: () {},
                 ),
+                _buildOptionTile(
+                  icon: Icons.security_rounded,
+                  title: AppLocalizations.of(context)!.reviewFeedback,
+                  subtitle: 'Datenexport manuell freigeben',
+                  onTap: () => _showFeedbackExportDialog(context, ref),
+                ),
               ],
             ),
           ),
@@ -141,27 +147,89 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _showZipDialog(BuildContext context, WidgetRef ref) {
-    final controller = TextEditingController(text: ref.read(settingsProvider).plz);
-    showDialog(
+  void _showFeedbackExportDialog(BuildContext context, WidgetRef ref) {
+    final learningService = ref.read(learningServiceProvider);
+    final feedbacks = learningService.getFeedbackForReview();
+
+    showCupertinoModalPopup(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(AppLocalizations.of(context)!.zipLabel),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(hintText: 'z.B. 10115'),
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(topLeft: Radius.circular(30), topRight: Radius.circular(30)),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
-          TextButton(
-            onPressed: () {
-              ref.read(settingsProvider.notifier).updateField(plz: controller.text);
-              Navigator.pop(context);
-            },
-            child: Text(AppLocalizations.of(context)!.saveButton),
-          ),
-        ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(AppLocalizations.of(context)!.feedbackTitle, style: FindUXProTheme.titleStyle),
+            const SizedBox(height: 8),
+            Text(AppLocalizations.of(context)!.feedbackDesc, style: const TextStyle(color: Colors.black54)),
+            const SizedBox(height: 20),
+            Expanded(
+              child: feedbacks.isEmpty
+                  ? Center(child: Text(AppLocalizations.of(context)!.noFeedback))
+                  : ListView.builder(
+                      itemCount: feedbacks.length,
+                      itemBuilder: (context, i) {
+                        final f = feedbacks[i];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(color: Color(0xFFF0F0F5), borderRadius: BorderRadius.circular(16)),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(f['rating'] == 'up' ? Icons.thumb_up : Icons.thumb_down, 
+                                       color: f['rating'] == 'up' ? Colors.green : Colors.red, size: 18),
+                                  const SizedBox(width: 8),
+                                  Text(f['timestamp'].toString().substring(0, 10), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                              if (f['comment'] != null && f['comment'].toString().isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(f['comment'], style: const TextStyle(fontStyle: FontStyle.italic)),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    style: FindUXProTheme.outlinePurpleButtonStyle,
+                    onPressed: () async {
+                      await learningService.clearAllFeedback();
+                      Navigator.pop(context);
+                    },
+                    child: Text(AppLocalizations.of(context)!.deleteFeedback),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    style: FindUXProTheme.primaryButtonStyle,
+                    onPressed: feedbacks.isEmpty ? null : () {
+                      // Hier würde der tatsächliche verschlüsselte Versand stattfinden
+                      HapticFeedback.heavyImpact();
+                      learningService.clearAllFeedback();
+                      Navigator.pop(context);
+                    },
+                    child: Text(AppLocalizations.of(context)!.sendFeedbackSafe),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

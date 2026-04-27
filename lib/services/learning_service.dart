@@ -102,29 +102,13 @@ class LearningService {
       }
     });
 
-    // 2. ANONYMISIERTER FEEDBACK-EXPORT (Nur bei Einwilligung)
-    // Dieses Feedback ist für den Entwickler, um die App an sich zu verbessern.
-    // Es enthält KEIN Interessen-Modell und KEINE Gewichte.
-    final List<Map<String, dynamic>> anonymousFeedbackExport = [];
-    if (prefs.getBool('allowFeedback') ?? false) {
-      feedbackData.forEach((fKey, fValue) {
-        anonymousFeedbackExport.add({
-          'rating': fValue['rating'],
-          'comment': fValue['comment'],
-          'timestamp': fValue['timestamp'],
-        });
-      });
-    }
-
-    if (anonymousFeedbackExport.isNotEmpty) {
-      await logBox.put('feedback_export_${DateTime.now().millisecondsSinceEpoch}', anonymousFeedbackExport);
-    }
-
-    // 3. RADIKALE LÖSCHUNG DER ROHDATEN (Privacy Hygiene)
-    // Wir löschen ALLES, was Rückschlüsse auf das Verhalten zulässt.
-    // Das Ergebnis des Lernens (die Gewichte) bleibt erhalten.
-    await searchBox.clear();
-    await feedbackBox.clear();
+    // 2. KEIN AUTOMATISCHER EXPORT MEHR (Privacy Härtung)
+    // Die Feedback-Daten verbleiben verschlüsselt in der feedbackBox, 
+    // bis der Nutzer sie manuell im Settings-Screen zur Übertragung freigibt.
+    
+    // 3. RADIKALE LÖSCHUNG DER VERLAUFSDATEN (Privacy Hygiene)
+    await searchBox.clear(); 
+    // FeedbackBox wird NICHT automatisch gelöscht, da der Nutzer die Daten noch sichten will
 
     await _logPrivacyAction('Interessen-Modell verfeinert. Verlaufs-Hygiene durchgeführt. Gewichte sind persistent.');
   }
@@ -136,6 +120,16 @@ class LearningService {
       'action': 'interest_model_refinement',
       'message': message,
     });
+  }
+
+  // NEU: Methode für den manuellen Export-Review
+  List<Map<String, dynamic>> getFeedbackForReview() {
+    final box = Hive.box(_feedbackBoxName);
+    return box.values.map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  Future<void> clearAllFeedback() async {
+    await Hive.box(_feedbackBoxName).clear();
   }
 
   void _extractAndWeightKeywords(String query, double multiplier, SharedPreferences prefs) {

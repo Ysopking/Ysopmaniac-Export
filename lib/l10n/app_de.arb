@@ -28,5 +28,11 @@
   "secureAccess": "Hardware-verschlüsselter Zugriff.",
   "next": "Weiter",
   "back": "Zurück",
-  "start": "Starten"
+  "start": "Starten",
+  "reviewFeedback": "Feedback prüfen",
+  "noFeedback": "Kein Feedback zum Export vorhanden.",
+  "sendFeedbackSafe": "Sicher übertragen",
+  "deleteFeedback": "Löschen",
+  "feedbackTitle": "Feedback Export",
+  "feedbackDesc": "Nur diese Daten werden übertragen:"
 }

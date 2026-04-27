@@ -28,5 +28,11 @@
   "secureAccess": "Hardware-encrypted access.",
   "next": "Next",
   "back": "Back",
-  "start": "Start"
+  "start": "Start",
+  "reviewFeedback": "Review Feedback",
+  "noFeedback": "No feedback available for export.",
+  "sendFeedbackSafe": "Secure Transfer",
+  "deleteFeedback": "Delete",
+  "feedbackTitle": "Feedback Export",
+  "feedbackDesc": "Only these data will be transferred:"
 }
