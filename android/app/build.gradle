@@ -1,7 +1,7 @@
 plugins {
     id "com.android.application"
+    id "org.jetbrains.kotlin.android"
     id "dev.flutter.flutter-gradle-plugin"
-    id "kotlin-android"
 }
 
 def localProperties = new Properties()
@@ -78,5 +78,4 @@ flutter {
 }
 
 dependencies {
-    // Flutter engine dependencies are added automatically by the plugin
 }
