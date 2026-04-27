@@ -8,6 +8,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.19.0
   flutter_riverpod: ^2.5.1
   shared_preferences: ^2.0.0
   local_auth: ^2.1.6
@@ -30,8 +33,11 @@ dev_dependencies:
   mobile: any
 flutter:
   uses-material-design: true
+  generate: true
   assets:
     - assets/logo.png
+    - assets/legal/
+    - assets/data/
 
 flutter_launcher_icons:
   android: true

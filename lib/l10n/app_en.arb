@@ -1,0 +1,17 @@
+{
+  "@@locale": "en",
+  "appTitle": "FindUX",
+  "searchHint": "Search securely...",
+  "settingsTitle": "Settings",
+  "languageLabel": "Language",
+  "countryLabel": "Country",
+  "regionLabel": "State/Region",
+  "cityLabel": "City",
+  "zipLabel": "ZIP Code",
+  "optionalInfo": "These details are optional. However, they help refine local search results.",
+  "saveButton": "Save",
+  "privacyPolicy": "Privacy Policy",
+  "termsOfService": "Terms of Service",
+  "onboardingWelcome": "Welcome to FindUX",
+  "onboardingText": "Your privacy is our priority. All data stays local on your device."
+}
