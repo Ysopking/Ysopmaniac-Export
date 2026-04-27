@@ -1,7 +1,7 @@
 plugins {
     id "com.android.application"
-    id "org.jetbrains.kotlin.android"
     id "dev.flutter.flutter-gradle-plugin"
+    id "kotlin-android"
 }
 
 def localProperties = new Properties()
@@ -29,6 +29,7 @@ if (flutterVersionName == null) {
 }
 
 android {
+    namespace 'com.example.findux'
     compileSdkVersion 35
     ndkVersion = "26.1.10909125"
 
@@ -44,8 +45,6 @@ android {
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
     }
-
-    namespace 'com.example.findux'
 
     signingConfigs {
         release {
@@ -79,5 +78,5 @@ flutter {
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
+    // Flutter engine dependencies are added automatically by the plugin
 }
