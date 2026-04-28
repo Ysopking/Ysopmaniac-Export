@@ -1,7 +1,7 @@
 plugins {
     id "com.android.application"
-    id "dev.flutter.flutter-gradle-plugin"
     id "org.jetbrains.kotlin.android"
+    id "dev.flutter.flutter-gradle-plugin"
 }
 
 def localProperties = new Properties()
@@ -17,7 +17,7 @@ def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '
 
 android {
     namespace 'com.example.findux'
-    compileSdkVersion 35
+    compileSdkVersion 34
     ndkVersion = "26.1.10909125"
 
     compileOptions {
@@ -36,7 +36,7 @@ android {
     defaultConfig {
         applicationId "com.example.findux"
         minSdkVersion 23
-        targetSdkVersion 35
+        targetSdkVersion 34
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
     }
@@ -55,5 +55,4 @@ flutter {
 }
 
 dependencies {
-    // The Flutter Gradle Plugin automatically adds the necessary dependencies.
 }
