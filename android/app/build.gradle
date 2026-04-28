@@ -56,6 +56,4 @@ flutter {
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
-    // Manueller Fix: Direkte Verknüpfung der Flutter Engine (Stable 3.22.0 Hash)
-    implementation "io.flutter:flutter_embedding_debug:1.0.0-5d29f874836166e5f8f30730d1d73a7000d60d3d"
 }
