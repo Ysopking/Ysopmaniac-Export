@@ -27,9 +27,9 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          flutter-version: '3.24.5' # Upgrade auf modernste stabile Version
           channel: 'stable'
-          cache: false # Erzwinge frischen Download aller Pakete
+          cache: false
 
       - name: Get Dependencies
         run: |
