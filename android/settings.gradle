@@ -9,7 +9,9 @@ pluginManagement {
         if (sdkPath == null) {
             sdkPath = System.getenv("FLUTTER_ROOT")
         }
-        assert sdkPath != null, "Flutter SDK not found. Define location with flutter.sdk in local.properties or FLUTTER_ROOT env var."
+        if (sdkPath == null) {
+            sdkPath = System.getenv("FLUTTER_HOME")
+        }
         return sdkPath
     }()
 
@@ -23,7 +25,7 @@ pluginManagement {
 }
 
 plugins {
-    id "dev.flutter.flutter-gradle-plugin" apply false
+    id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
 }
 
 include ":app"
