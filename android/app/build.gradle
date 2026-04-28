@@ -55,4 +55,7 @@ flutter {
 }
 
 dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
+    // Manueller Link zum Flutter Embedding für CI-Runner
+    compileOnly "io.flutter:flutter_embedding_debug:1.0.0-5d29f874836166e5f8f30730d1d73a7000d60d3d"
 }

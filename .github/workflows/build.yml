@@ -32,7 +32,9 @@ jobs:
           cache: true
 
       - name: Get Dependencies
-        run: flutter pub get
+        run: |
+          flutter pub get
+          flutter precache --android
 
       - name: Build APK (Debug)
         run: flutter build apk --debug
