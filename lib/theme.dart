@@ -231,7 +231,7 @@ class FindUXProTheme {
       filled: true,
       fillColor: surfaceWhite,
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: backgroundWhite,
       shadowColor: subtleShadow.color,
       elevation: 0,

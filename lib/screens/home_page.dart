@@ -213,7 +213,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildPremiumHomeScreen({Key? key}) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       key: key,
       width: double.infinity,
@@ -283,7 +283,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildSearchDashboard({Key? key}) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       key: key,
       color: FindUXProTheme.primaryPurple,
@@ -361,7 +361,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildWebViewResults({Key? key}) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       key: key,
       children: [
