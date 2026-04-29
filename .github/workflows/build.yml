@@ -9,7 +9,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  GRADLE_OPTS: -Xmx4096m -Dorg.gradle.daemon=false
+  GRADLE_OPTS: -Xmx8192m -Dorg.gradle.daemon=false
 
 jobs:
   build:
@@ -28,14 +28,14 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.41.8' # Aktuelle stabile Version
+          flutter-version: '3.24.5' # Stabilere Version für bessere Kompatibilität
           channel: 'stable'
           cache: false
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+          packages: 'platform-tools platforms;android-36 build-tools;34.0.0 ndk;28.2.13676358'
 
       - name: Get Dependencies
         run: |
