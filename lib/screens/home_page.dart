@@ -6,7 +6,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../services/learning_service.dart';
 import '../services/security_service.dart';
 import '../logic/query_builder.dart';
