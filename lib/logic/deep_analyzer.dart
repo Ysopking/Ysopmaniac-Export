@@ -1,4 +1,3 @@
-import 'dart:math';
 
 class DeepAnalyzer {
   // Simuliert die Analyse der ersten 50 Websites basierend auf der Query

@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../services/learning_service.dart';
-import '../services/security_service.dart';
 import '../logic/query_builder.dart';
 import '../logic/state_provider.dart';
 import '../logic/mirror_logic.dart';
@@ -28,11 +27,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   final TextEditingController _whatController = TextEditingController();
   final TextEditingController _whyController = TextEditingController();
 
-  String _currentUrl = '';
-  double _progress = 0;
   late InAppWebViewController _webViewController;
   late PullToRefreshController _pullToRefreshController;
-  bool _isLoading = false;
   bool _webViewLoaded = false;
   bool _showFeedbackOverlay = false;
   bool _showDeepAnalysisOverlay = false;
@@ -262,7 +258,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.3),
+          color: Colors.black.withValues(alpha: 0.3),
           borderRadius: FindUXProTheme.largeSquircleRadius,
           border: Border.all(color: Colors.white10),
         ),
@@ -349,7 +345,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: FindUXProTheme.squircleRadius, border: Border.all(color: Colors.white10)),
+          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: FindUXProTheme.largeSquircleRadius, border: Border.all(color: Colors.white10)),
           child: TextField(
             controller: controller,
             style: const TextStyle(color: Colors.white, fontSize: 16),
@@ -402,15 +398,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                     pullToRefreshController: _pullToRefreshController,
                     onWebViewCreated: (controller) => _webViewController = controller,
                     onLoadStart: (controller, url) {
-                      setState(() { _isLoading = true; _currentUrl = url.toString(); });
                       controller.evaluateJavascript(source: MirrorLogic.getStealthShieldJs());
                     },
                     onLoadStop: (controller, url) {
-                      setState(() { _isLoading = false; _webViewLoaded = true; _currentUrl = url.toString(); });
+                      setState(() { _webViewLoaded = true; });
                       controller.evaluateJavascript(source: MirrorLogic.getStealthShieldJs());
                     },
                     onProgressChanged: (controller, progress) {
-                      setState(() => _progress = progress / 100);
                       if (progress > 30) controller.evaluateJavascript(source: MirrorLogic.getStealthShieldJs());
                     },
                   ),
@@ -418,11 +412,11 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
               if (!_webViewLoaded) Container(color: FindUXProTheme.primaryPurple, child: const Center(child: CupertinoActivityIndicator(color: Colors.white, radius: 14))),
               Positioned(bottom: 30, left: 20, right: 20, child: SafeArea(child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Container(padding: const EdgeInsets.all(4), decoration: BoxDecoration(color: FindUXProTheme.primaryPurple.withOpacity(0.9), borderRadius: BorderRadius.circular(30)), child: Row(children: [
+                Container(padding: const EdgeInsets.all(4), decoration: BoxDecoration(color: FindUXProTheme.primaryPurple.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(30)), child: Row(children: [
                   IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20), onPressed: () => _webViewController.goBack()),
                   IconButton(icon: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 20), onPressed: () => _webViewController.goForward()),
                 ])),
-                GestureDetector(onTap: () => setState(() => _showFeedbackOverlay = !_showFeedbackOverlay), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: FindUXProTheme.primaryPurple, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))]), child: Row(children: [const Icon(Icons.psychology, color: Colors.white, size: 20), const SizedBox(width: 8),                 Text(l10n.learningMode, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))]))),
+                GestureDetector(onTap: () => setState(() => _showFeedbackOverlay = !_showFeedbackOverlay), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: FindUXProTheme.primaryPurple, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 5))]), child: Row(children: [const Icon(Icons.psychology, color: Colors.white, size: 20), const SizedBox(width: 8),                 Text(l10n.learningMode, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))]))),
               ]))),
               if (_showDeepAnalysisOverlay) _buildDeepAnalysisOverlay(),
               if (_showFeedbackOverlay) _buildEnhancedFeedbackOverlay(),
@@ -442,7 +436,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           return Opacity(
             opacity: value,
             child: Container(
-              color: Colors.black.withOpacity(0.6 * value),
+              color: Colors.black.withValues(alpha: 0.6 * value),
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 8 * value, sigmaY: 8 * value),
                 child: Center(
@@ -486,9 +480,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
-                      color: FindUXProTheme.primaryPurple.withOpacity(0.1),
+                      color: FindUXProTheme.primaryPurple.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: FindUXProTheme.primaryPurple.withOpacity(0.2)),
+                      border: Border.all(color: FindUXProTheme.primaryPurple.withValues(alpha: 0.2)),
                     ),
                     child: Text(goal, style: const TextStyle(color: FindUXProTheme.primaryPurple, fontWeight: FontWeight.w600)),
                   ),
@@ -517,7 +511,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           setState(() => _showFeedbackOverlay = false);
         },
         child: Container(
-          color: Colors.black.withOpacity(0.4),
+          color: Colors.black.withValues(alpha: 0.4),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
             child: Center(
@@ -550,7 +544,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         maxLines: 3,
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: FindUXProTheme.lightGray.withOpacity(0.5),
+                          color: FindUXProTheme.lightGray.withValues(alpha: 0.5),
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
@@ -587,7 +581,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.2) : color.withOpacity(0.05),
+          color: isSelected ? color.withValues(alpha: 0.2) : color.withValues(alpha: 0.05),
           shape: BoxShape.circle,
           border: Border.all(color: isSelected ? color : Colors.transparent, width: 2),
         ),
