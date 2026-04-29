@@ -1,5 +1,3 @@
-import 'dart:math';
-
 class DeepAnalyzer {
   // Simuliert die Analyse der ersten 50 Websites basierend auf der Query
   // In einer echten Implementierung würde hier ein lokaler NLP-Prozess die Snippets/Meta-Tags scannen
