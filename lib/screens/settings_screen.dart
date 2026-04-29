@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../logic/state_provider.dart';
-import '../services/learning_service.dart';
 import '../theme.dart';
 
 class SettingsScreen extends ConsumerWidget {

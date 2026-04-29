@@ -66,7 +66,6 @@ class LearningService {
   Future<void> _analyzeAndOptimize() async {
     final searchBox = Hive.box(_boxName);
     final feedbackBox = Hive.box(_feedbackBoxName);
-    final logBox = Hive.box(_logBoxName);
 
     final searchData = searchBox.toMap();
     final feedbackData = feedbackBox.toMap();

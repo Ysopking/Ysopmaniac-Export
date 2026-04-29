@@ -238,9 +238,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                         padding: const EdgeInsets.symmetric(horizontal: 40),
                         child: Column(
                           children: [
-                            _buildMenuButton(title: l10n?.startSearch ?? 'Suche starten', icon: Icons.search_rounded, onTap: () => setState(() => _viewState = 'dashboard')),
+                            _buildMenuButton(title: l10n.startSearch, icon: Icons.search_rounded, onTap: () => setState(() => _viewState = 'dashboard')),
                             const SizedBox(height: 16),
-                            _buildMenuButton(title: l10n?.settingsTitle ?? 'Einstellungen', icon: Icons.settings_rounded, onTap: () => Navigator.pushNamed(context, '/settings')),
+                            _buildMenuButton(title: l10n.settingsTitle, icon: Icons.settings_rounded, onTap: () => Navigator.pushNamed(context, '/settings')),
                           ],
                         ),
                       ),
@@ -299,13 +299,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                   Row(
                     children: [
                       IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20), onPressed: () => setState(() => _viewState = 'home')),
-                      Text(l10n?.knowledgeSession ?? 'Wissens-Sitzung', style: FindUXProTheme.titleStyle.copyWith(color: Colors.white, fontSize: 24)),
+                      Text(l10n.knowledgeSession, style: FindUXProTheme.titleStyle.copyWith(color: Colors.white, fontSize: 24)),
                     ],
                   ),
                   const SizedBox(height: 32),
-                  _buildMissionInput(controller: _whatController, label: l10n?.whatSearch ?? 'Was suchst du?', hint: l10n?.topicHint ?? 'Thema...'),
+                  _buildMissionInput(controller: _whatController, label: l10n.whatSearch, hint: l10n.topicHint),
                   const SizedBox(height: 20),
-                  _buildMissionInput(controller: _whyController, label: l10n?.whySearch ?? 'Warum suchst du?', hint: l10n?.reasonHint ?? 'Grund...'),
+                  _buildMissionInput(controller: _whyController, label: l10n.whySearch, hint: l10n.reasonHint),
                   const SizedBox(height: 32),
                   SizedBox(
                     width: double.infinity,
@@ -317,7 +317,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       ),
                       onPressed: () => _performSearch(),
                       icon: const Icon(Icons.bolt_rounded),
-                      label: Text(l10n?.startAnalysis ?? 'Analyse starten', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                      label: Text(l10n.startAnalysis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
                     ),
                   ),
                 ],
@@ -420,7 +420,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20), onPressed: () => _webViewController.goBack()),
                   IconButton(icon: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 20), onPressed: () => _webViewController.goForward()),
                 ])),
-                GestureDetector(onTap: () => setState(() => _showFeedbackOverlay = !_showFeedbackOverlay), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: FindUXProTheme.primaryPurple, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))]), child: Row(children: [const Icon(Icons.psychology, color: Colors.white, size: 20), const SizedBox(width: 8), Text(l10n?.learningMode ?? 'Lernmodus', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))]))),
+                GestureDetector(onTap: () => setState(() => _showFeedbackOverlay = !_showFeedbackOverlay), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: FindUXProTheme.primaryPurple, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))]), child: Row(children: [const Icon(Icons.psychology, color: Colors.white, size: 20), const SizedBox(width: 8),                 Text(l10n.learningMode, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))]))),
               ]))),
               if (_showDeepAnalysisOverlay) _buildDeepAnalysisOverlay(),
               if (_showFeedbackOverlay) _buildEnhancedFeedbackOverlay(),
