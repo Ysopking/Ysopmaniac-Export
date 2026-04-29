@@ -121,7 +121,7 @@ class FindUXProTheme {
 
   // Glassmorphism Button (für Homescreen)
   static ButtonStyle get glassButtonStyle => ElevatedButton.styleFrom(
-    backgroundColor: backgroundWhite.withValues(alpha: 0.15),
+    backgroundColor: backgroundWhite.withOpacity(0.15),
     foregroundColor: backgroundWhite,
     shape: RoundedRectangleBorder(borderRadius: squircleRadius),
     elevation: 0,
@@ -149,16 +149,16 @@ class FindUXProTheme {
   );
 
   static BoxDecoration get glassCardDecoration => BoxDecoration(
-    color: backgroundWhite.withValues(alpha: 0.85),
+    color: backgroundWhite.withOpacity(0.85),
     borderRadius: squircleRadius,
-    border: Border.all(color: backgroundWhite.withValues(alpha: 0.25)),
+    border: Border.all(color: backgroundWhite.withOpacity(0.25)),
     boxShadow: [glassShadow],
   );
 
   // Input Styles
   static InputDecoration get searchInputDecoration => InputDecoration(
     filled: true,
-    fillColor: backgroundWhite.withValues(alpha: 0.95),
+    fillColor: backgroundWhite.withOpacity(0.95),
     border: OutlineInputBorder(
       borderRadius: largeSquircleRadius,
       borderSide: BorderSide.none,
@@ -171,7 +171,7 @@ class FindUXProTheme {
   // Purple AppBar Search Decoration
   static InputDecoration get purpleSearchInputDecoration => InputDecoration(
     filled: true,
-    fillColor: backgroundWhite.withValues(alpha: 0.2),
+    fillColor: backgroundWhite.withOpacity(0.2),
     border: OutlineInputBorder(
       borderRadius: largeSquircleRadius,
       borderSide: BorderSide.none,

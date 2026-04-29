@@ -80,10 +80,10 @@ class _UnlockScreenState extends State<UnlockScreen> {
                       padding: const EdgeInsets.all(32),
                       width: 260,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.1),
+                        color: Colors.white.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.2),
+                          color: Colors.white.withOpacity(0.2),
                           width: 1,
                         ),
                       ),

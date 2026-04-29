@@ -237,7 +237,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         style: const TextStyle(color: Colors.white),
         placeholderStyle: const TextStyle(color: Colors.white54),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.1),
+          color: Colors.white.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.white24),
         ),
@@ -257,7 +257,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         style: const TextStyle(color: Colors.white),
         placeholderStyle: const TextStyle(color: Colors.white54),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.1),
+          color: Colors.white.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.white24),
         ),
@@ -277,7 +277,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         style: const TextStyle(color: Colors.white),
         placeholderStyle: const TextStyle(color: Colors.white54),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.1),
+          color: Colors.white.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.white24),
         ),
@@ -362,7 +362,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: isSel ? Colors.white : Colors.white.withValues(alpha: 0.1),
+                  color: isSel ? Colors.white : Colors.white.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
@@ -454,7 +454,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: isSel ? Colors.white : Colors.white.withValues(alpha: 0.15),
+                color: isSel ? Colors.white : Colors.white.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(25),
                 border: Border.all(color: isSel ? Colors.white : Colors.white24),
               ),
@@ -478,7 +478,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.1),
+          color: Colors.white.withOpacity(0.1),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white24),
         ),
@@ -498,7 +498,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
+        color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -508,8 +508,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           CupertinoSwitch(
             value: value,
             onChanged: onChanged,
-            activeTrackColor: Colors.white,
-            inactiveTrackColor: Colors.white24,
+            activeColor: Colors.white,
+            trackColor: Colors.white24,
           ),
         ],
       ),
