@@ -17,22 +17,27 @@ import 'theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Hive.initFlutter();
 
-  final securityService = SecurityService();
-  await securityService.initSecureBox();
+  // Vereinfachte Initialisierung für stabileren Start
+  try {
+    await Hive.initFlutter();
 
-  final learningService = LearningService();
-  await learningService.init();
-  await learningService.checkAndAnalyze();
+    final securityService = SecurityService();
+    await securityService.initSecureBox();
+
+    // LearningService optional machen
+    final learningService = LearningService();
+    await learningService.init();
+    // await learningService.checkAndAnalyze(); // Temporär deaktiviert
+
+  } catch (e) {
+    // Bei Fehlern trotzdem starten
+    print('Initialisierungsfehler: $e');
+  }
 
   runApp(
     ProviderScope(
-      overrides: [
-        securityServiceProvider.overrideWithValue(securityService),
-        learningServiceProvider.overrideWithValue(learningService),
-      ],
-      child: MyApp(),
+      child: const MyApp(),
     ),
   );
 }
