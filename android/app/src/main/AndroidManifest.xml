@@ -17,6 +17,11 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
+        <!-- Performance: Enable Impeller Rendering Engine for 60/120 FPS -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="true" />
+
         <!-- MainActivity -->
         <activity
             android:name=".MainActivity"

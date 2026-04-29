@@ -384,34 +384,36 @@ class _HomePageState extends ConsumerState<HomePage> {
         Expanded(
           child: Stack(
             children: [
-              AnimatedOpacity(
-                duration: const Duration(milliseconds: 400),
-                opacity: _webViewLoaded ? 1.0 : 0.0,
-                child: InAppWebView(
-                  initialSettings: InAppWebViewSettings(
-                    javaScriptEnabled: true,
-                    transparentBackground: true,
-                    incognito: true,
-                    cacheEnabled: false,
-                    clearCache: true,
-                    useShouldOverrideUrlLoading: true,
-                    safeBrowsingEnabled: true,
-                    preferredContentMode: UserPreferredContentMode.MOBILE,
+              RepaintBoundary(
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 400),
+                  opacity: _webViewLoaded ? 1.0 : 0.0,
+                  child: InAppWebView(
+                    initialSettings: InAppWebViewSettings(
+                      javaScriptEnabled: true,
+                      transparentBackground: true,
+                      incognito: true,
+                      cacheEnabled: false,
+                      clearCache: true,
+                      useShouldOverrideUrlLoading: true,
+                      safeBrowsingEnabled: true,
+                      preferredContentMode: UserPreferredContentMode.MOBILE,
+                    ),
+                    pullToRefreshController: _pullToRefreshController,
+                    onWebViewCreated: (controller) => _webViewController = controller,
+                    onLoadStart: (controller, url) {
+                      setState(() { _isLoading = true; _currentUrl = url.toString(); });
+                      controller.evaluateJavascript(source: MirrorLogic.getStealthShieldJs());
+                    },
+                    onLoadStop: (controller, url) {
+                      setState(() { _isLoading = false; _webViewLoaded = true; _currentUrl = url.toString(); });
+                      controller.evaluateJavascript(source: MirrorLogic.getStealthShieldJs());
+                    },
+                    onProgressChanged: (controller, progress) {
+                      setState(() => _progress = progress / 100);
+                      if (progress > 30) controller.evaluateJavascript(source: MirrorLogic.getStealthShieldJs());
+                    },
                   ),
-                  pullToRefreshController: _pullToRefreshController,
-                  onWebViewCreated: (controller) => _webViewController = controller,
-                  onLoadStart: (controller, url) {
-                    setState(() { _isLoading = true; _currentUrl = url.toString(); });
-                    controller.evaluateJavascript(source: MirrorLogic.getStealthShieldJs());
-                  },
-                  onLoadStop: (controller, url) {
-                    setState(() { _isLoading = false; _webViewLoaded = true; _currentUrl = url.toString(); });
-                    controller.evaluateJavascript(source: MirrorLogic.getStealthShieldJs());
-                  },
-                  onProgressChanged: (controller, progress) {
-                    setState(() => _progress = progress / 100);
-                    if (progress > 30) controller.evaluateJavascript(source: MirrorLogic.getStealthShieldJs());
-                  },
                 ),
               ),
               if (!_webViewLoaded) Container(color: FindUXProTheme.primaryPurple, child: const Center(child: CupertinoActivityIndicator(color: Colors.white, radius: 14))),

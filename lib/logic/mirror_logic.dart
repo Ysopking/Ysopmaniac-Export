@@ -41,9 +41,16 @@ class MirrorLogic {
           });
         }
 
-        // 5. UI Cleanup (Consent Killer)
-        const selectors = ['[id*="cookie"]', '[class*="cookie"]', '[id*="consent"]', '[class*="consent"]'];
-        selectors.forEach(s => document.querySelectorAll(s).forEach(el => el.style.display = 'none'));
+        // 5. UI Cleanup (Consent Killer) - Efficient Implementation using MutationObserver
+        const cleanup = () => {
+          const selectors = ['[id*="cookie"]', '[class*="cookie"]', '[id*="consent"]', '[class*="consent"]'];
+          selectors.forEach(s => document.querySelectorAll(s).forEach(el => el.style.display = 'none'));
+        };
+        cleanup();
+        if (window.MutationObserver) {
+          const observer = new MutationObserver(cleanup);
+          observer.observe(document.body, { childList: true, subtree: true });
+        }
       })();
     """;
   }
