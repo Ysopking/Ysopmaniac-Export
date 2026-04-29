@@ -18,7 +18,6 @@ def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '
 android {
     namespace = "com.example.findux"
     compileSdk = 35
-    ndkVersion = "26.1.10909125"
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
