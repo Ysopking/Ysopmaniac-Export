@@ -105,7 +105,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       contextWhy = "$contextWhy $addedGoal";
     }
 
-    final fullQuery = await builder.buildQuery(
+final fullQuery = await builder.buildQuery(
       what: _whatController.text,
       why: contextWhy,
       filters: allFilters,
@@ -115,11 +115,11 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     final url = builder.buildSearchUrl(fullQuery, settings.searchEngine, settingsMap);
 
-setState(() {
-       _viewState = 'results';
-       _webViewLoaded = false;
-       _showDeepAnalysisOverlay = false;
-     });
+    setState(() {
+      _viewState = 'results';
+      _webViewLoaded = false;
+      _showDeepAnalysisOverlay = false;
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final randomUA = MirrorLogic.getRandomUserAgent();
@@ -411,7 +411,7 @@ setState(() {
     );
   }
 
-  Widget _buildDeepAnalysisOverlay() {
+Widget _buildDeepAnalysisOverlay() {
     return Positioned.fill(
       child: GestureDetector(
         onTap: () => setState(() => _showDeepAnalysisOverlay = false),
@@ -425,47 +425,49 @@ setState(() {
                 color: Colors.white,
                 borderRadius: FindUXProTheme.largeSquircleRadius,
               ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.auto_awesome, color: FindUXProTheme.primaryPurple, size: 40),
-              const SizedBox(height: 16),
-              const Text('Präzisierung nötig', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
-              const SizedBox(height: 8),
-              const Text(
-                'Ich habe die ersten 50 Ergebnisse analysiert. Welches Ziel verfolgst du genau?',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.black54, fontSize: 14),
-              ),
-              const SizedBox(height: 24),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _suggestedGoals.map((goal) => GestureDetector(
-                  onTap: () {
-                    HapticFeedback.mediumImpact();
-                    _performSearch(addedGoal: goal);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: FindUXProTheme.primaryPurple.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: FindUXProTheme.primaryPurple.withValues(alpha: 0.2)),
-                    ),
-                    child: Text(goal, style: const TextStyle(color: FindUXProTheme.primaryPurple, fontWeight: FontWeight.w600)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.auto_awesome, color: FindUXProTheme.primaryPurple, size: 40),
+                  const SizedBox(height: 16),
+                  const Text('Präzisierung nötig', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Ich habe die ersten 50 Ergebnisse analysiert. Welches Ziel verfolgst du genau?',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.black54, fontSize: 14),
                   ),
-                )).toList(),
+                  const SizedBox(height: 24),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _suggestedGoals.map((goal) => GestureDetector(
+                      onTap: () {
+                        HapticFeedback.mediumImpact();
+                        _performSearch(addedGoal: goal);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: FindUXProTheme.primaryPurple.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: FindUXProTheme.primaryPurple.withValues(alpha: 0.2)),
+                        ),
+                        child: Text(goal, style: const TextStyle(color: FindUXProTheme.primaryPurple, fontWeight: FontWeight.w600)),
+                      ),
+                    )).toList(),
+                  ),
+                  const SizedBox(height: 24),
+                  TextButton(
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      setState(() => _showDeepAnalysisOverlay = false);
+                    },
+                    child: const Text('Aktuelle Ansicht beibehalten', style: TextStyle(color: Colors.grey)),
+                  ),
+                ],
               ),
-              const SizedBox(height: 24),
-              TextButton(
-                onPressed: () {
-                  HapticFeedback.lightImpact();
-                  setState(() => _showDeepAnalysisOverlay = false);
-                },
-                child: const Text('Aktuelle Ansicht beibehalten', style: TextStyle(color: Colors.grey)),
-              ),
-            ],
+            ),
           ),
         ),
       ),
