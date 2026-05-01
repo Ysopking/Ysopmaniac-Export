@@ -39,7 +39,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   final TextEditingController _feedbackController = TextEditingController();
 
   String _viewState = 'home';
-  String _currentUrl = '';
 
   @override
   void initState() {
@@ -116,12 +115,11 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     final url = builder.buildSearchUrl(fullQuery, settings.searchEngine, settingsMap);
 
-    setState(() {
-      _viewState = 'results';
-      _webViewLoaded = false;
-      _currentUrl = url;
-      _showDeepAnalysisOverlay = false;
-    });
+setState(() {
+       _viewState = 'results';
+       _webViewLoaded = false;
+       _showDeepAnalysisOverlay = false;
+     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final randomUA = MirrorLogic.getRandomUserAgent();
