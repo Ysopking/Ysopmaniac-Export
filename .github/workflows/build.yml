@@ -35,7 +35,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
 
       - name: Get Dependencies
         run: |
@@ -49,10 +49,10 @@ jobs:
         run: flutter analyze --no-fatal-infos
 
       - name: Build APK (Debug)
-        run: flutter build apk --debug --no-tree-shake-icons --no-shrink --android-skip-build-dependency-validation
+        run: flutter build apk --debug --no-tree-shake-icons --no-shrink
 
       - name: Build APK (Release)
-        run: flutter build apk --release --no-tree-shake-icons --no-shrink --android-skip-build-dependency-validation
+        run: flutter build apk --release --no-tree-shake-icons --no-shrink
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4

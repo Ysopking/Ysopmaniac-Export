@@ -17,7 +17,7 @@ def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '
 
 android {
     namespace = "com.example.findux"
-    compileSdk = 36
+    compileSdk = 34
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -35,7 +35,7 @@ android {
     defaultConfig {
         applicationId = "com.example.findux"
         minSdkVersion 21
-        targetSdk = 36
+        targetSdk = 34
         versionCode = flutterVersionCode.toInteger()
         versionName = flutterVersionName
     }
