@@ -1,19 +1,20 @@
 import 'dart:math';
 
 class MirrorLogic {
-  // HOCHWERTIGE MOBILE USER-AGENTS (Premium Devices)
   static const List<String> _userAgents = [
     'Mozilla/5.0 (iPhone; CPU iPhone OS 17_3_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
     'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro Build/UQ1A.240205.002) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.164 Mobile Safari/537.36',
     'Mozilla/5.0 (Linux; Android 14; Samsung SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.164 Mobile Safari/537.36',
   ];
 
-  static String getRandomUserAgent() {
-    return _userAgents[Random().nextInt(_userAgents.length)];
-  }
+  static final String _cachedUserAgent = _userAgents[Random().nextInt(_userAgents.length)];
+  static String getRandomUserAgent() => _cachedUserAgent;
 
-  // MOBILE STEALTH SHIELD: Tarnung optimiert für Handheld-Geräte
-  static String getStealthShieldJs() {
+  static final String _stealthShield = _buildStealthShield();
+
+  static String getStealthShieldJs() => _stealthShield;
+
+  static String _buildStealthShield() {
     return """
       (function() {
         // 1. WebDriver & Automation Flags löschen

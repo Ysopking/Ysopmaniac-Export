@@ -149,7 +149,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   void _startDeepAnalysis() {
     _analysisTimer?.cancel();
-    _analysisTimer = Timer(const Duration(seconds: 60), () async {
+    _analysisTimer = Timer(const Duration(seconds: 30), () async {
       if (_viewState == 'results' && mounted) {
         final results = await DeepAnalyzer.analyzeResults(_whatController.text, {});
         if (mounted) {
@@ -184,18 +184,9 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Widget _buildCurrentView() {
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 400),
-      transitionBuilder: (Widget child, Animation<double> animation) {
-        return FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.96, end: 1.0).animate(
-              CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
-            ),
-            child: child,
-          ),
-        );
-      },
+      duration: const Duration(milliseconds: 200),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
       child: _getViewForState(),
     );
   }
@@ -398,15 +389,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                     ),
                     pullToRefreshController: _pullToRefreshController,
                     onWebViewCreated: (controller) => _webViewController = controller,
-                    onLoadStart: (controller, url) {
-                      controller.evaluateJavascript(source: MirrorLogic.getStealthShieldJs());
-                    },
                     onLoadStop: (controller, url) {
                       setState(() { _webViewLoaded = true; });
                       controller.evaluateJavascript(source: MirrorLogic.getStealthShieldJs());
-                    },
-                    onProgressChanged: (controller, progress) {
-                      if (progress > 30) controller.evaluateJavascript(source: MirrorLogic.getStealthShieldJs());
                     },
                   ),
                 ),
@@ -430,33 +415,18 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Widget _buildDeepAnalysisOverlay() {
     return Positioned.fill(
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0.0, end: 1.0),
-        duration: const Duration(milliseconds: 500),
-        builder: (context, value, child) {
-          return Opacity(
-            opacity: value,
-            child: Container(
-              color: Colors.black.withValues(alpha: 0.6 * value),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 8 * value, sigmaY: 8 * value),
-                child: Center(
-                  child: Transform.translate(
-                    offset: Offset(0, 50 * (1 - value)),
-                    child: child,
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
+      child: GestureDetector(
+        onTap: () => setState(() => _showDeepAnalysisOverlay = false),
         child: Container(
-          margin: const EdgeInsets.all(32),
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: FindUXProTheme.largeSquircleRadius,
-          ),
+          color: Colors.black45,
+          child: Center(
+            child: Container(
+              margin: const EdgeInsets.all(32),
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: FindUXProTheme.largeSquircleRadius,
+              ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -512,11 +482,9 @@ class _HomePageState extends ConsumerState<HomePage> {
           setState(() => _showFeedbackOverlay = false);
         },
         child: Container(
-          color: Colors.black.withValues(alpha: 0.4),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-            child: Center(
-              child: SingleChildScrollView(
+          color: Colors.black45,
+          child: Center(
+            child: SingleChildScrollView(
                 child: Container(
                   margin: const EdgeInsets.all(24),
                   padding: const EdgeInsets.all(24),
