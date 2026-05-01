@@ -39,6 +39,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   final TextEditingController _feedbackController = TextEditingController();
 
   String _viewState = 'home';
+  String _currentUrl = '';
 
   @override
   void initState() {
