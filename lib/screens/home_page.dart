@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -485,51 +484,50 @@ Widget _buildDeepAnalysisOverlay() {
           color: Colors.black45,
           child: Center(
             child: SingleChildScrollView(
-                child: Container(
-                  margin: const EdgeInsets.all(24),
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: FindUXProTheme.largeSquircleRadius,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('Spezifizierung präzise?', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-                      const SizedBox(height: 12),
-                      const Text('Dieses Feedback verfeinert die Gewichtung deiner persönlichen Daten.', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54, fontSize: 14)),
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildFeedbackIcon(Icons.thumb_down_alt_outlined, 'down', Colors.red),
-                          _buildFeedbackIcon(Icons.thumb_up_alt_outlined, 'up', Colors.green),
-                        ],
+              child: Container(
+                margin: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: FindUXProTheme.largeSquircleRadius,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Spezifizierung präzise?', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+                    const SizedBox(height: 12),
+                    const Text('Dieses Feedback verfeinert die Gewichtung deiner persönlichen Daten.', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54, fontSize: 14)),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildFeedbackIcon(Icons.thumb_down_alt_outlined, 'down', Colors.red),
+                        _buildFeedbackIcon(Icons.thumb_up_alt_outlined, 'up', Colors.green),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    CupertinoTextField(
+                      controller: _feedbackController,
+                      placeholder: 'Details zur Sitzung...',
+                      maxLines: 3,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: FindUXProTheme.lightGray.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      const SizedBox(height: 24),
-                      CupertinoTextField(
-                        controller: _feedbackController,
-                        placeholder: 'Details zur Sitzung...',
-                        maxLines: 3,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: FindUXProTheme.lightGray.withValues(alpha: 0.5),
-                          borderRadius: BorderRadius.circular(12),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: FindUXProTheme.primaryButtonStyle.copyWith(
+                          backgroundColor: WidgetStateProperty.all(_selectedRating != null ? FindUXProTheme.primaryPurple : Colors.grey),
                         ),
+                        onPressed: _selectedRating != null ? _submitFeedback : null,
+                        child: const Text('Sitzung bewerten'),
                       ),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          style: FindUXProTheme.primaryButtonStyle.copyWith(
-                            backgroundColor: WidgetStateProperty.all(_selectedRating != null ? FindUXProTheme.primaryPurple : Colors.grey),
-                          ),
-                          onPressed: _selectedRating != null ? _submitFeedback : null,
-                          child: const Text('Sitzung bewerten'),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
