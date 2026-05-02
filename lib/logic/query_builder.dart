@@ -13,7 +13,7 @@ import 'stammdaten_resolver.dart';
 ///   2) WARUM -> Kontext-Tokens, dedupliziert ggn. WAS, Stoppwoerter raus
 ///   3) Stammdaten-Resolver liefert harte/weiche Terme + Source-Bias
 ///   4) Coach-Injection (HardTerms, Phrases, Intitles, Sites, Excludes, after)
-///   5) Lern-Boost (positive Keywords als OR-Erweiterung)
+///   5) Lern-Boost (kontextuell gefilterte Keywords als OR-Erweiterung)
 ///   6) Lern-Demote (negative Keywords + Domains)
 ///   7) site:(...)-Gruppe + filetype:(...)-Gruppe (jeweils EINE)
 ///   8) Smart-Date: after:DATE wenn Intent es nahelegt (kein Coach-after gesetzt)
@@ -214,10 +214,15 @@ class FindUXQueryBuilder {
       coachAfter = coachInjection.after;
     }
 
-    // 7. Lern-Boost: Top-3 positive Keywords als OR-Gruppe
-    final boostKws = _topLearnedKeywords(weights, positive: true, max: 3)
-        .where((k) => !usedTokens.contains(k))
-        .toList();
+    // 7. Lern-Boost: Top positive Keywords — NUR wenn thematisch relevant
+    //    _contextualBoostKws() prueft Prefix-Overlap (>=4 Zeichen) zwischen
+    //    dem keyword und den aktuellen WAS+WARUM-Tokens (usedTokens).
+    //    Fallback auf globale Top-3 wenn kein Keyword passt.
+    final boostKws = _contextualBoostKws(
+      weights: weights,
+      queryTokens: usedTokens,
+      max: 3,
+    ).where((k) => !usedTokens.contains(k)).toList();
     if (boostKws.isNotEmpty && mode != 'precise') {
       if (boostKws.length == 1) {
         parts.add(boostKws.first);
@@ -434,6 +439,80 @@ class FindUXQueryBuilder {
     entries.sort((a, b) =>
         positive ? b.value.compareTo(a.value) : a.value.compareTo(b.value));
     return entries.take(max).map((e) => e.key).toList();
+  }
+
+  /// Gibt positive Lern-Keywords zurueck, die thematisch zur aktuellen
+  /// Suchanfrage passen.
+  ///
+  /// Algorithmus:
+  ///   1. Alle weight_kw_* Eintraege mit Gewicht > 1.05 sammeln.
+  ///   2. Jeden Keyword-String tokenisieren (Leerzeichen + Bindestrich).
+  ///   3. Fuer jeden Keyword-Token pruefen, ob er einen gemeinsamen Prefix
+  ///      (>= [minPrefixLen] = 4 Zeichen) mit einem queryToken teilt.
+  ///      → Das schlaegt an bei Wortstammverwandtschaft (rezept/rezepte,
+  ///        python/pythonkurs, aktie/aktienmarkt) ohne komplexes Stemming.
+  ///   4. Relevante Keywords nach Gewicht absteigend sortieren, max [max] zurueck.
+  ///   5. Fallback: wenn 0 Keywords passen → globale Top-[max] (kein Leerlauf).
+  List<String> _contextualBoostKws({
+    required Map<String, double> weights,
+    required Set<String> queryTokens,
+    int max = 3,
+    int minPrefixLen = 4,
+  }) {
+    // 1) Alle positiven kw-Eintraege (Gewicht > 1.05 = Lern-Schwelle)
+    final candidates = <String, double>{};
+    for (final entry in weights.entries) {
+      if (!entry.key.startsWith('weight_kw_')) continue;
+      if (entry.value <= 1.05) continue;
+      final kw = entry.key.substring('weight_kw_'.length);
+      if (kw.isEmpty) continue;
+      candidates[kw] = entry.value;
+    }
+    if (candidates.isEmpty) return [];
+
+    // Normalisierte queryTokens: lowercase, min 2 Zeichen
+    final normQuery = queryTokens
+        .map((t) => t.toLowerCase())
+        .where((t) => t.length >= 2)
+        .toSet();
+
+    // 2+3) Relevanz pruefen: Prefix-Overlap >= minPrefixLen
+    bool _isRelevant(String kw) {
+      // Keyword tokenisieren: nach Leerzeichen und Bindestrich splitten
+      final kwTokens = kw
+          .toLowerCase()
+          .split(RegExp(r'[s-_]+'))
+          .where((t) => t.length >= 2)
+          .toList();
+      for (final kwTok in kwTokens) {
+        for (final qTok in normQuery) {
+          final pLen = minPrefixLen;
+          if (kwTok.length < pLen || qTok.length < pLen) continue;
+          // Gemeinsamer Prefix >= minPrefixLen?
+          int common = 0;
+          final shorter = kwTok.length < qTok.length ? kwTok.length : qTok.length;
+          for (int i = 0; i < shorter; i++) {
+            if (kwTok[i] == qTok[i]) { common++; } else { break; }
+          }
+          if (common >= pLen) return true;
+        }
+      }
+      return false;
+    }
+
+    // 4) Relevante Keywords nach Gewicht sortieren
+    final relevant = candidates.entries
+        .where((e) => _isRelevant(e.key))
+        .toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    if (relevant.isNotEmpty) {
+      return relevant.take(max).map((e) => e.key).toList();
+    }
+
+    // 5) Fallback: keine thematische Uebereinstimmung → globale Top-N
+    //    (verhindert Regression bei kurzen/obskuren Queries)
+    return _topLearnedKeywords(weights, positive: true, max: max);
   }
 
   List<String> _resolveEffectiveFilters(
