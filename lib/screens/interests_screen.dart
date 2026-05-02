@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/interests_catalog.dart';
 import '../logic/state_provider.dart';
@@ -14,6 +18,9 @@ import '../theme.dart';
 /// Alle Aenderungen schreiben sofort in `settingsProvider.interests`.
 /// Beim ersten Hinzufuegen einer Interesse werden Lern-Bumps angewendet
 /// (siehe SettingsNotifier.updateSettings).
+///
+/// Stage 15: In jeder Sub-Sektion kann der User per Plus-Chip eigene
+/// Eintraege hinzufuegen — siehe _ItemsScreenState.
 class InterestsScreen extends ConsumerWidget {
   const InterestsScreen({super.key});
 
@@ -388,32 +395,179 @@ class _SubRow extends StatelessWidget {
   }
 }
 
-// -------- Ebene 3: Multi-Select Items --------
+// -------- Ebene 3: Multi-Select Items + Stage-15 Custom-Items --------
 
-class _ItemsScreen extends ConsumerWidget {
+/// Stage 15: User-eigene Eintraege pro Sub-Sektion.
+///
+/// Speicher-Format:
+///   * Pfad in `interests`-Liste:  `<top>/<sub>/_c_<slug>`
+///       (z.B. `musik/rap/_c_eigener_kuenstler`).
+///       Der `_c_`-Prefix unterscheidet Custom- von Katalog-Items.
+///       Slug (lowercased + ASCII + underscores) ist gleichzeitig der
+///       Lern-Modell-Token, daher fliessen Custom-Eintraege exakt
+///       genauso in `applyInterestBumps` ein wie Katalog-Eintraege.
+///
+///   * Original-Label (mit Gross-/Kleinschreibung + Spaces):
+///       SharedPreferences-Key `custom_interest_labels` als JSON-Map
+///       `{pfad: label}`. Damit zeigt der Chip "Roger Federer" statt
+///       "roger federer" — die Slug-Form sieht der User nie.
+class _ItemsScreen extends ConsumerStatefulWidget {
   final InterestCategory category;
   final InterestSubcategory sub;
   const _ItemsScreen({required this.category, required this.sub});
 
-  String _path(String itemId) => '${category.id}/${sub.id}/$itemId';
+  @override
+  ConsumerState<_ItemsScreen> createState() => _ItemsScreenState();
+}
+
+class _ItemsScreenState extends ConsumerState<_ItemsScreen> {
+  static const _kLabelsKey = 'custom_interest_labels';
+
+  Map<String, String> _customLabels = <String, String>{};
+  bool _loaded = false;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final selected = ref.watch(settingsProvider).interests;
-    final notifier = ref.read(settingsProvider.notifier);
+  void initState() {
+    super.initState();
+    _loadLabels();
+  }
 
-    void toggle(String itemId) {
-      final p = _path(itemId);
-      final next = List<String>.from(selected);
-      if (next.contains(p)) {
-        next.remove(p);
-        Haptics.tap();
-      } else {
-        next.add(p);
-        Haptics.pick();
+  String _path(String itemId) =>
+      '${widget.category.id}/${widget.sub.id}/$itemId';
+  String _customPathPrefix() =>
+      '${widget.category.id}/${widget.sub.id}/_c_';
+
+  /// Slugify deutscher Text -> ASCII-lowercase + underscores.
+  /// Gleiche Form wie kInterestsCatalog-IDs, damit das Lern-Modell
+  /// diese Tokens identisch behandelt (weight_kw_<token>).
+  String _slugify(String s) {
+    var x = s.toLowerCase().trim();
+    x = x
+        .replaceAll('ä', 'ae')
+        .replaceAll('ö', 'oe')
+        .replaceAll('ü', 'ue')
+        .replaceAll('ß', 'ss');
+    x = x.replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+    x = x.replaceAll(RegExp(r'^_+|_+$'), '');
+    return x;
+  }
+
+  Future<void> _loadLabels() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_kLabelsKey);
+      if (raw != null && raw.isNotEmpty) {
+        final m = json.decode(raw);
+        if (m is Map) {
+          _customLabels = m.map(
+              (k, v) => MapEntry(k.toString(), v.toString()));
+        }
       }
-      notifier.updateField(interests: next);
+    } catch (_) {
+      // ignore - fallback auf leere Map
     }
+    if (mounted) setState(() => _loaded = true);
+  }
+
+  Future<void> _saveLabels() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kLabelsKey, json.encode(_customLabels));
+    } catch (_) {
+      // ignore - non-fatal
+    }
+  }
+
+  void _toggle(String itemId) {
+    final p = _path(itemId);
+    final selected = ref.read(settingsProvider).interests;
+    final next = List<String>.from(selected);
+    if (next.contains(p)) {
+      next.remove(p);
+      Haptics.tap();
+    } else {
+      next.add(p);
+      Haptics.pick();
+    }
+    ref.read(settingsProvider.notifier).updateField(interests: next);
+  }
+
+  Future<void> _addCustom() async {
+    final controller = TextEditingController();
+    final hintItem = widget.sub.items.isNotEmpty
+        ? widget.sub.items.first.label
+        : 'Stichwort';
+    final input = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Eigener Eintrag in ${widget.sub.label}'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          // Stage F Haertung: keine IME-Lerndaten / Auto-Korrektur.
+          autocorrect: false,
+          enableSuggestions: false,
+          smartDashesType: SmartDashesType.disabled,
+          smartQuotesType: SmartQuotesType.disabled,
+          decoration: InputDecoration(
+            hintText: 'z.B. $hintItem',
+            border: const OutlineInputBorder(),
+          ),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Abbrechen'),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Hinzufuegen'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (input == null || input.isEmpty) return;
+    final slug = _slugify(input);
+    if (slug.isEmpty) return;
+    final path = '${_customPathPrefix()}$slug';
+    final selected = ref.read(settingsProvider).interests;
+    if (selected.contains(path)) {
+      // Bereits vorhanden -> nur Label aktualisieren (User hat
+      // moeglicherweise andere Schreibweise eingegeben).
+      _customLabels[path] = input;
+      await _saveLabels();
+      Haptics.tap();
+      if (mounted) setState(() {});
+      return;
+    }
+    final next = List<String>.from(selected)..add(path);
+    _customLabels[path] = input;
+    await _saveLabels();
+    ref.read(settingsProvider.notifier).updateField(interests: next);
+    Haptics.pick();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _removeCustom(String path) async {
+    final selected = ref.read(settingsProvider).interests;
+    final next = List<String>.from(selected)..remove(path);
+    _customLabels.remove(path);
+    await _saveLabels();
+    ref.read(settingsProvider.notifier).updateField(interests: next);
+    Haptics.tap();
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = ref.watch(settingsProvider).interests;
+    final prefix = _customPathPrefix();
+    final customPaths =
+        selected.where((p) => p.startsWith(prefix)).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
@@ -430,7 +584,7 @@ class _ItemsScreen extends ConsumerWidget {
           },
         ),
         title: Text(
-          sub.label,
+          widget.sub.label,
           style: const TextStyle(
             color: Colors.black,
             fontSize: 17,
@@ -446,7 +600,8 @@ class _ItemsScreen extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
             child: Text(
-              'Mehrfachauswahl moeglich. Antippen zum Setzen oder Loesen.',
+              'Mehrfachauswahl moeglich. Antippen zum Setzen oder Loesen. '
+              'Mit + kannst du eigene Eintraege hinzufuegen.',
               style: TextStyle(
                 fontSize: 13.5,
                 color: Colors.black.withValues(alpha: 0.6),
@@ -457,12 +612,24 @@ class _ItemsScreen extends ConsumerWidget {
             spacing: 10,
             runSpacing: 10,
             children: [
-              for (final item in sub.items)
+              for (final item in widget.sub.items)
                 _ItemChip(
                   item: item,
                   selected: selected.contains(_path(item.id)),
-                  onTap: () => toggle(item.id),
+                  onTap: () => _toggle(item.id),
                 ),
+              if (_loaded)
+                for (final p in customPaths)
+                  _CustomChip(
+                    label: _customLabels[p] ??
+                        // Fallback aus Pfad rekonstruieren, falls Label-
+                        // Map verloren ging.
+                        p
+                            .substring(prefix.length)
+                            .replaceAll('_', ' '),
+                    onTap: () => _removeCustom(p),
+                  ),
+              _AddCustomChip(onTap: _addCustom),
             ],
           ),
         ],
@@ -527,6 +694,101 @@ class _ItemChip extends StatelessWidget {
                 fontSize: 14.5,
                 fontWeight: FontWeight.w700,
                 color: selected ? Colors.white : Colors.black87,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Stage 15: User-eigener Interesse-Chip mit X zum Entfernen.
+class _CustomChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _CustomChip({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 11, 10, 11),
+        decoration: BoxDecoration(
+          color: FindUXProTheme.primaryPurple,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: FindUXProTheme.primaryPurple,
+            width: 1.4,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: FindUXProTheme.primaryPurple
+                  .withValues(alpha: 0.25),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Icon(Icons.close_rounded,
+                color: Colors.white, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Stage 15: Plus-Chip am Ende jeder Item-Liste.
+class _AddCustomChip extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AddCustomChip({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: onTap,
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color:
+                FindUXProTheme.primaryPurple.withValues(alpha: 0.55),
+            width: 1.4,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.add_rounded,
+                color: FindUXProTheme.primaryPurple, size: 18),
+            const SizedBox(width: 6),
+            const Text(
+              'Eigener Eintrag',
+              style: TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w700,
+                color: FindUXProTheme.primaryPurple,
                 letterSpacing: -0.2,
               ),
             ),

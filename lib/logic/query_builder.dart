@@ -302,12 +302,25 @@ class FindUXQueryBuilder {
         params.write('&filter=1');
         params.write('&num=20');
         if (isYouthActive) params.write('&safe=active');
-        // Stage 14: nfpr=1 (no fix prediction) verhindert, dass Google
-        // unsere ausgefeilte Suchformel "korrigiert" und ein
-        // "Meinten Sie ..."-Banner einblendet. Damit landen die User
-        // direkt auf den Treffern unserer optimierten Query, nicht auf
-        // einer von Google umformulierten Variante.
+        // Stage 14/15: Doppelt gegen "Meinten Sie ..."-Banner und
+        // Synonym-Expansion absichern.
+        //
+        //   nfpr=1   = "no fix prediction" — Rechtschreib-Korrektur AUS.
+        //              Reicht aber NICHT bei komplexen Queries mit OR /
+        //              Ausschluss-Operatoren — Google wirft dann doch noch
+        //              Korrektur-/Synonym-Vorschlaege ein.
+        //
+        //   tbs=li:1 = "literal: 1" — Verbatim-Modus, dasselbe wie wenn
+        //              der User in Google "Tools -> Alle Ergebnisse ->
+        //              Woertlich" anklickt. Erzwingt EXAKT die Tokens der
+        //              Query, deaktiviert Synonyme, deaktiviert "Meinten
+        //              Sie ...", deaktiviert weiche Treffer.
+        //
+        // Die Kombination ist robust auch gegen die komplexen Queries
+        // mit Quotes, OR-Gruppen und mehreren -site:/-inurl:-Filtern,
+        // die der Query-Builder produziert.
         params.write('&nfpr=1');
+        params.write('&tbs=li:1');
     }
 
     if (query.length > 1800) query = query.substring(0, 1790).trim();
