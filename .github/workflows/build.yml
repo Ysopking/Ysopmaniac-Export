@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK (Debug)
 
 on:
   push:
@@ -10,22 +10,50 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx8g"
+      GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:+UseParallelGC"
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Code auschecken
+        uses: actions/checkout@v4
 
-      - uses: subosito/flutter-action@v2
+      - name: Flutter einrichten
+        uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.41.8'
+          flutter-version: '3.29.3'
+          channel: 'stable'
+          cache: true
 
-      - run: flutter clean
-
-      - run: flutter pub get
-
-      - run: flutter build apk --debug
-
-      - uses: actions/upload-artifact@v4
+      - name: Pub-Cache laden
+        uses: actions/cache@v4
         with:
-          name: debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: pub-${{ hashFiles('pubspec.lock') }}
+          restore-keys: pub-
+
+      - name: Gradle-Cache laden
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            android/.gradle
+          key: gradle-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties') }}-${{ hashFiles('android/app/build.gradle') }}
+          restore-keys: gradle-
+
+      - name: Abhängigkeiten installieren
+        run: flutter pub get
+
+      - name: App analysieren
+        run: flutter analyze --no-fatal-infos
+
+      - name: Debug-APK bauen
+        run: flutter build apk --debug --split-per-abi
+
+      - name: APKs hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk-${{ github.run_number }}
+          path: build/app/outputs/flutter-apk/app-*-debug.apk
+          retention-days: 14
