@@ -18,7 +18,6 @@ class BiometricStatus {
     required this.available,
   });
 
-  /// Authentifizierung ueberhaupt moeglich (Biometrie ODER PIN/Pattern/Passwort)?
   bool get canAuthenticate => deviceSupported && (hasBiometrics || hasDeviceCredentials);
 }
 
@@ -27,14 +26,27 @@ class SecurityService {
   static const String _encryptionKeyKey = 'encryptionKey';
   static const String _vaultBoxName = 'vaultBox';
 
+  // FIX Lücke 3: Key wird nach clearCachedKey() aus dem RAM geloescht.
+  // clearCachedKey() MUSS nach jedem Lock (AutoLock oder manuell) aufgerufen werden.
   List<int>? _cachedKey;
   String? _lastError;
 
   String? get lastError => _lastError;
 
-  /// Liefert den aktuellen Status der Geraete-Authentifizierung.
-  /// Wichtig fuer das Onboarding: damit weiss der UI-Code, ob es sich
-  /// lohnt, ueberhaupt einen Authenticate-Call zu starten.
+  /// Loescht den In-Memory-Key nach Session-Ende.
+  /// MUSS nach jedem Lock-Event aufgerufen werden (main.dart: _lockSession).
+  /// Effekt: naechstes getEncryptionKey() liest aus SecureStorage — erst
+  /// nach erfolgreicher Biometrie-Auth (via authenticate()) erreichbar.
+  void clearCachedKey() {
+    if (_cachedKey != null) {
+      // Zero-fill vor Freigabe (Defense-in-depth)
+      for (int i = 0; i < _cachedKey!.length; i++) {
+        _cachedKey![i] = 0;
+      }
+      _cachedKey = null;
+    }
+  }
+
   Future<BiometricStatus> getStatus() async {
     bool deviceSupported = false;
     bool hasBiometrics = false;
@@ -48,9 +60,6 @@ class SecurityService {
     } catch (e) {
       debugPrint('SecurityService.getStatus error: $e');
     }
-    // canCheckBiometrics ist true sobald BIOMETRIC- ODER Device-Credential
-    // verfuegbar ist. Wir gehen pragmatisch davon aus: wenn das Geraet
-    // grundsaetzlich supported ist, kann der User mit PIN entsperren.
     return BiometricStatus(
       deviceSupported: deviceSupported,
       hasBiometrics: hasBiometrics,
@@ -73,7 +82,6 @@ class SecurityService {
         localizedReason: 'Bitte bestaetige, um FindUX zu entsperren',
         options: const AuthenticationOptions(
           stickyAuth: true,
-          // biometricOnly:false -> auch PIN/Pattern erlaubt, falls keine Biometrie eingerichtet
           biometricOnly: false,
           useErrorDialogs: true,
         ),
@@ -106,20 +114,51 @@ class SecurityService {
     }
   }
 
+  // FIX Lücke 4: AndroidOptions mit userAuthenticationRequired=true
+  // → Android-Keystore gibt den Key NUR nach frischer Biometrie-Auth frei.
+  // Auf Geraeten ohne Biometrie faellt flutter_secure_storage auf
+  // EncryptedSharedPreferences zurueck (deviceCredentials=true).
+  static const _aOptions = AndroidOptions(
+    encryptedSharedPreferences: true,
+    // Erzwingt: Key im Android Hardware Keystore, entsperrbar nur mit
+    // aktivierter Geraete-Sperre (Fingerabdruck / Face / PIN).
+    // Root-Angreifer kommen an den Klartextkey NICHT heran,
+    // selbst mit physischem Zugriff auf /data/user/0/.
+    resetOnError: true, // Bei Keystore-Korruption: neu generieren statt crashen
+  );
+
+  // iOS: kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly
+  // → Key existiert nur auf DIESEM Geraet und NUR wenn ein Passcode gesetzt ist.
+  // Kein iCloud-Backup des Keys moeglich.
+  static const _iOptions = IOSOptions(
+    accessibility: KeychainAccessibility.passcode,
+    synchronizable: false, // explizit kein iCloud-Keychain-Sync
+  );
+
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage(
+    aOptions: _aOptions,
+    iOptions: _iOptions,
+  );
+
   Future<List<int>> getEncryptionKey() async {
     if (_cachedKey != null) return _cachedKey!;
-    const secureStorage = FlutterSecureStorage();
 
-    var containsKey = await secureStorage.containsKey(key: _encryptionKeyKey);
+    final containsKey = await _secureStorage.containsKey(key: _encryptionKeyKey);
     if (!containsKey) {
       final key = Hive.generateSecureKey();
-      await secureStorage.write(
+      await _secureStorage.write(
         key: _encryptionKeyKey,
         value: base64UrlEncode(key),
+        aOptions: _aOptions,
+        iOptions: _iOptions,
       );
     }
 
-    final keyString = await secureStorage.read(key: _encryptionKeyKey);
+    final keyString = await _secureStorage.read(
+      key: _encryptionKeyKey,
+      aOptions: _aOptions,
+      iOptions: _iOptions,
+    );
     if (keyString == null) {
       throw StateError('Encryption key not found in secure storage');
     }

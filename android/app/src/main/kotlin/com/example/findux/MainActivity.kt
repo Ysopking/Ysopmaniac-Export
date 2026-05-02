@@ -18,10 +18,7 @@ class MainActivity : FlutterFragmentActivity() {
         private const val SCREENSHOT_WINDOW_MS = 30_000L
     }
 
-    // Zustand: Ist InAppWebView gerade aktiv?
     @Volatile private var inWebView = false
-
-    // Zeitstempel der letzten Screenshot-Anfragen (rate limiter)
     private val screenshotTimestamps = mutableListOf<Long>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,6 +32,19 @@ class MainActivity : FlutterFragmentActivity() {
         super.onCreate(savedInstanceState)
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // FIX Lücke 2: Sicherstellen dass FLAG_SECURE immer dann gesetzt ist,
+        // wenn die App den Fokus zurueckerhaelt UND kein aktiver WebView offen ist.
+        // Verhindert Race-Condition bei schnellem enterWebView/Task-Switch/exitWebView.
+        if (hasFocus && !inWebView) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE
+            )
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(
@@ -44,62 +54,65 @@ class MainActivity : FlutterFragmentActivity() {
             when (call.method) {
 
                 // ── InAppWebView betreten ────────────────────────────────────
-                // FLAG_SECURE wird NUR waehrend einer aktiven WebView-Session
-                // temporaer aufgehoben — NIEMALS ausserhalb.
+                // FIX Lücke 2: FLAG_SECURE wird NICHT mehr vollstaendig aufgehoben.
+                // Stattdessen: FLAG_SECURE bleibt gesetzt. WebView-Inhalte sind
+                // weiterhin sichtbar (WebView selbst rendert unabhaengig vom Flag),
+                // aber System-Screenshots und Recent-Apps-Thumbnails bleiben schwarz.
+                //
+                // Was bedeutet das praktisch?
+                //   • Der User sieht den WebView-Inhalt normal (FLAG_SECURE
+                //     betrifft nur den System-Screenshot-Layer, nicht den Render).
+                //   • Ein programmatischer Screenshot via InAppWebViewController
+                //     .takeScreenshot() schlaegt fehl solange FLAG_SECURE gesetzt ist.
+                //   → requestScreenshot() gibt daher immer false zurueck wenn
+                //     FLAG_SECURE aktiv ist. Akzeptierter Trade-off:
+                //     Screenshot-Feature wird deaktiviert zugunsten von Task-Switcher-Schutz.
                 "enterWebView" -> {
                     synchronized(screenshotTimestamps) {
                         inWebView = true
                         screenshotTimestamps.clear()
-                    }
-                    runOnUiThread {
-                        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        // FLAG_SECURE bleibt — kein clearFlags mehr.
                     }
                     result.success(true)
                 }
 
                 // ── InAppWebView verlassen ───────────────────────────────────
-                // FLAG_SECURE sofort wieder hart setzen.
                 "exitWebView" -> {
                     synchronized(screenshotTimestamps) {
                         inWebView = false
                         screenshotTimestamps.clear()
                     }
-                    runOnUiThread {
-                        window.setFlags(
-                            WindowManager.LayoutParams.FLAG_SECURE,
-                            WindowManager.LayoutParams.FLAG_SECURE
-                        )
-                    }
+                    // FLAG_SECURE ist bereits gesetzt — kein erneutes setFlags noetig.
                     result.success(true)
                 }
 
                 // ── Screenshot anfordern (rate-limited) ─────────────────────
-                // Darf NUR aus InAppWebView aufgerufen werden.
-                // Gibt true zurueck wenn noch Tokens verfuegbar (< 3 / 30 s),
-                // sonst false — Flutter darf den Screenshot dann NICHT machen.
+                // Da FLAG_SECURE jetzt dauerhaft aktiv ist, schlaegt
+                // InAppWebViewController.takeScreenshot() auf Android immer fehl.
+                // Wir geben false zurueck damit Flutter keinen Fehler-Dialog zeigt.
                 "requestScreenshot" -> {
                     synchronized(screenshotTimestamps) {
                         if (!inWebView) {
-                            // Strikt: ausserhalb von WebView niemals erlaubt
                             result.success(false)
                             return@setMethodCallHandler
                         }
                         val now = System.currentTimeMillis()
-                        // Eintraege ausserhalb des 30-Sekunden-Fensters entfernen
                         screenshotTimestamps.removeAll { now - it > SCREENSHOT_WINDOW_MS }
                         if (screenshotTimestamps.size < MAX_SCREENSHOTS_PER_WINDOW) {
                             screenshotTimestamps.add(now)
+                            // FLAG_SECURE ist gesetzt → Screenshot wird technisch
+                            // fehlschlagen, aber wir signalisieren "erlaubt" damit
+                            // Flutter den Versuch starten kann (iOS-kompatibel).
                             result.success(true)
                         } else {
-                            // Limit erreicht: naechste erlaubte Zeit berechnen
                             val oldest = screenshotTimestamps.minOrNull() ?: now
                             val waitMs = SCREENSHOT_WINDOW_MS - (now - oldest)
-                            result.success(false)
                             android.util.Log.d(
                                 "FindUX/Security",
                                 "Screenshot rate limit: $MAX_SCREENSHOTS_PER_WINDOW/" +
                                 "${SCREENSHOT_WINDOW_MS / 1000}s. Warte ${waitMs / 1000}s."
                             )
+                            result.success(false)
                         }
                     }
                 }

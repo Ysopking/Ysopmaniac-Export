@@ -2,19 +2,37 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
-/// Beobachtet den App-Lifecycle und ruft [onLock] auf, wenn die App
-/// laenger als [timeout] im Hintergrund war (Stage F: 60 Sekunden).
+/// Beobachtet den App-Lifecycle fuer zwei Sicherheitszwecke:
 ///
-/// Wir setzen NICHT direkt sofort beim ersten `paused` zurueck — der User
-/// koennte nur kurz das Notification-Center pruefen. Erst nach Ablauf
-/// des Timers ist die Sitzung verfallen.
+/// 1. SOFORT-SPERRE bei resumed (Lücke 1):
+///    Wenn die Session bereits als "abgelaufen" markiert ist
+///    (d.h. [onLock] wurde durch den Timer ausgeloest), wird beim
+///    naechsten resumed [onLock] nicht nochmal gerufen — er wurde
+///    bereits gerufen. Der UnlockScreen ist dann schon aktiv.
+///
+///    ABER: Wenn die App in < timeout resumet, prueft [onResume]
+///    ob die Session noch gueltig ist. Der Aufrufer kann optional
+///    [onResume] nutzen um sofort eine Re-Auth zu erzwingen.
+///
+/// 2. TIMER-SPERRE nach [timeout] im Hintergrund (bisheriges Verhalten):
+///    Unveraendert: nach 60 Sekunden paused -> [onLock].
+///
+/// Wichtig: [onResume] wird bei JEDEM resumed aufgerufen (auch ohne Timeout).
+/// Der Aufrufer entscheidet selbst ob eine Re-Auth noetig ist.
 class AutoLockObserver with WidgetsBindingObserver {
   AutoLockObserver({
     required this.onLock,
+    this.onResume,
     this.timeout = const Duration(seconds: 60),
   });
 
   final VoidCallback onLock;
+
+  /// Wird bei JEDEM Foreground-Wechsel aufgerufen (resumed).
+  /// Kann genutzt werden um sofort eine Re-Auth-Pruefung auszuloesen,
+  /// BEVOR der Lock-Timer abgelaufen ist.
+  final VoidCallback? onResume;
+
   final Duration timeout;
 
   Timer? _pendingLock;
@@ -47,9 +65,11 @@ class AutoLockObserver with WidgetsBindingObserver {
         });
         break;
       case AppLifecycleState.resumed:
-        // User ist zurueck — laufenden Lock-Countdown abbrechen.
+        // Timer-Countdown abbrechen (User zurueck innerhalb timeout).
         _pendingLock?.cancel();
         _pendingLock = null;
+        // Immer onResume signalisieren — main.dart entscheidet ob Re-Auth noetig.
+        onResume?.call();
         break;
       case AppLifecycleState.inactive:
         // Uebergangszustand (z.B. Permission-Dialog), kein Reset.

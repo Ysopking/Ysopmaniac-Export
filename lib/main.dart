@@ -87,6 +87,10 @@ class _MyAppState extends ConsumerState<MyApp> {
     _autoLock = AutoLockObserver(
       timeout: const Duration(seconds: 60),
       onLock: _lockSession,
+      // FIX Lücke 1: onResume → sofortige Re-Auth wenn Session gesperrt ist.
+      // Verhindert Side-Door-Bypass: App aus Hintergrund per Widget/Button
+      // holen und direkt auf HomeScreen landen — selbst innerhalb des 60s-Fensters.
+      onResume: _onAppResumed,
     )..attach();
     _initApp();
   }
@@ -106,6 +110,21 @@ class _MyAppState extends ConsumerState<MyApp> {
     if (auth) {
       debugPrint('AutoLock: Sitzung nach Inaktivitaet gesperrt.');
       ref.read(authProvider.notifier).state = false;
+      // FIX Lücke 3: Encryption-Key sofort aus RAM loeschen wenn Sitzung endet.
+      // Naechster getEncryptionKey()-Aufruf erfordert neue Biometrie-Auth.
+      ref.read(securityServiceProvider).clearCachedKey();
+    }
+  }
+
+  /// FIX Lücke 1: Wird bei JEDEM resumed aufgerufen.
+  /// Wenn die Session bereits gesperrt ist (authProvider == false),
+  /// sofort Re-Auth starten — kein Warten auf Nutzereingabe.
+  void _onAppResumed() {
+    if (!mounted) return;
+    final isAuth = ref.read(authProvider);
+    if (!isAuth) {
+      debugPrint('AutoLock: App resumed, Session gesperrt → sofortige Re-Auth.');
+      _authenticate();
     }
   }
 
