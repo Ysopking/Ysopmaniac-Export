@@ -372,7 +372,7 @@ class ChromeImportService {
       'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'einen', 'einer',
       'eines', 'ist', 'sind', 'war', 'als', 'wie', 'was', 'wer', 'wann',
       'auf', 'bei', 'aus', 'nach', 'auch', 'noch', 'nur', 'sich', 'man',
-      'the', 'and', 'for', 'with', 'this', 'that', 'from', 'are', 'was',
+      'the', 'and', 'for', 'with', 'this', 'that', 'from', 'are',
       'how', 'why', 'who', 'when', 'where', 'what',
     };
     for (final t in triples) {

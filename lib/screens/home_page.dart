@@ -13,9 +13,9 @@ import '../logic/deep_analyzer.dart';
 import '../theme.dart';
 import '../coach/coach_models.dart';
 import '../coach/coach_screen.dart';
-import '../coach/vagueness_detector.dart';
 import '../coach/theme_detector.dart';
 import '../coach/precision_advisor.dart';
+import 'incognito_browser_screen.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   final LearningService learningService;
@@ -36,6 +36,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   bool _showAdvanced = false;
   List<String> _suggestedGoals = [];
   Timer? _analysisTimer;
+  Timer? _specifyTimer;
+  bool _specifyShown = false;
 
   String? _selectedRating;
   final TextEditingController _feedbackController = TextEditingController();
@@ -95,6 +97,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   void dispose() {
     _analysisTimer?.cancel();
+    _specifyTimer?.cancel();
     _whatController.dispose();
     _whyController.dispose();
     _feedbackController.dispose();
@@ -120,40 +123,9 @@ class _HomePageState extends ConsumerState<HomePage> {
   }) async {
     if (_whatController.text.trim().isEmpty) return;
 
-    // Coach-Trigger nur bei initialer User-Suche (nicht bei Recoach/AddedGoal)
-    if (injection == null && overrideQuery == null && addedGoal == null) {
-      final what = _whatController.text;
-      final why = _whyController.text;
-      if (VaguenessDetector.isVague(what: what, why: why)) {
-        final theme = ThemeDetector.detect(what, why);
-        final s = ref.read(settingsProvider);
-        final adv = _advice;
-        final initialMode = (adv != null && adv.hasData)
-            ? adv.preferredMode
-            : s.mode;
-        if (!mounted) return;
-        final result = await Navigator.push<CoachResult>(
-          context,
-          MaterialPageRoute(
-            builder: (_) => CoachScreen(
-              initialTheme: theme,
-              what: what,
-              why: why,
-              currentMode: initialMode,
-              currentSources: s.sources,
-              currentFiles: s.files,
-            ),
-          ),
-        );
-        if (result == null) return; // User hat Coach abgebrochen
-        if (!result.skipped) {
-          injection = CoachInjection.fromChoices(result.choices);
-          overrideQuery = result.overrideQuery;
-          coachChoices =
-              result.choices.map((c) => c.toJson()).toList();
-        }
-      }
-    }
+    // Bei jeder neuen Suche alten Specify-Popup-Timer abbrechen.
+    _specifyTimer?.cancel();
+    _specifyShown = false;
 
     if (_viewState != 'results') {
       _startDeepAnalysis();
@@ -205,19 +177,22 @@ class _HomePageState extends ConsumerState<HomePage> {
     final uri = Uri.tryParse(url);
     if (uri != null) {
       try {
-        bool ok = false;
         if (settings.openInApp) {
-          ok = await launchUrl(
-            uri,
-            mode: LaunchMode.inAppBrowserView,
-            browserConfiguration:
-                const BrowserConfiguration(showTitle: true),
-          );
+          // IMMER Inkognito (eigener WebView mit incognito:true).
+          if (mounted) {
+            // ignore: discarded_futures
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => IncognitoBrowserScreen(url: url),
+              ),
+            );
+          }
+        } else {
+          final ok = await launchUrl(
+              uri, mode: LaunchMode.externalApplication);
+          if (!ok && mounted) _showLaunchFailedSnack();
         }
-        if (!ok) {
-          ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-        }
-        if (!ok && mounted) _showLaunchFailedSnack();
       } catch (e) {
         debugPrint('launchUrl error: $e');
         if (mounted) _showLaunchFailedSnack();
@@ -239,6 +214,105 @@ class _HomePageState extends ConsumerState<HomePage> {
     PrecisionAdvisor.analyze().then((rec) {
       if (mounted) setState(() => _advice = rec);
     });
+
+    // 30s nach jeder Suche: sanft anbieten, die Suche zu praezisieren.
+    _scheduleSpecifyPopup();
+  }
+
+  /// 30-Sekunden-Timer nach erfolgter Suche. Wird gecancelt, sobald der
+  /// User eine neue Suche startet, zurueck zum Dashboard navigiert oder
+  /// die Seite verlaesst (dispose).
+  void _scheduleSpecifyPopup() {
+    _specifyTimer?.cancel();
+    _specifyTimer = Timer(const Duration(seconds: 30), () {
+      if (!mounted) return;
+      if (_specifyShown) return;
+      if (_viewState != 'results') return;
+      _showSpecifyPopup();
+    });
+  }
+
+  Future<void> _showSpecifyPopup() async {
+    if (!mounted || _specifyShown) return;
+    _specifyShown = true;
+    HapticFeedback.lightImpact();
+    final outcome = await showDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.tips_and_updates_outlined,
+                color: Color(0xFF6A4DFF), size: 22),
+            SizedBox(width: 8),
+            Expanded(
+                child: Text('Suche praezisieren?',
+                    style: TextStyle(fontWeight: FontWeight.w900))),
+          ],
+        ),
+        content: const Text(
+          'Hast du noch nicht gefunden was du suchst? Lass mich dir helfen, '
+          'deine Suche etwas konkreter zu machen.',
+          style: TextStyle(fontSize: 13, height: 1.4),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'no'),
+            child: const Text('Passt schon'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6A4DFF),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+            label: const Text('Praezisieren'),
+            onPressed: () => Navigator.pop(ctx, 'yes'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || outcome != 'yes') return;
+    await _openCoachForCurrent();
+  }
+
+  Future<void> _openCoachForCurrent() async {
+    final what = _whatController.text;
+    final why = _whyController.text;
+    if (what.trim().isEmpty) return;
+    final theme = ThemeDetector.detect(what, why);
+    final s = ref.read(settingsProvider);
+    final adv = _advice;
+    final initialMode =
+        (adv != null && adv.hasData) ? adv.preferredMode : s.mode;
+    if (!mounted) return;
+    final result = await Navigator.push<CoachResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CoachScreen(
+          initialTheme: theme,
+          what: what,
+          why: why,
+          currentMode: initialMode,
+          currentSources: s.sources,
+          currentFiles: s.files,
+        ),
+      ),
+    );
+    if (result == null || result.skipped) return;
+    final inj = CoachInjection.fromChoices(result.choices);
+    await _performSearch(
+      injection: inj,
+      overrideQuery: result.overrideQuery,
+      coachChoices: result.choices.map((c) => c.toJson()).toList(),
+    );
   }
 
   void _showLaunchFailedSnack() {
@@ -819,6 +893,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       const Icon(Icons.close, color: Colors.white, size: 22),
                   onPressed: () async {
                     _analysisTimer?.cancel();
+                    _specifyTimer?.cancel();
                     await _purgeAllSessionData();
                     if (!mounted) return;
                     setState(() => _viewState = 'dashboard');
