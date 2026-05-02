@@ -65,6 +65,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   Set<String> _newTokensThisSearch = const <String>{};
   static const String _seenKwsKey = 'seen_query_kws';
   static const int _seenKwsCap = 5000;
+  static const String _intentFreqPrefix = 'intent_freq_';
 
   String _viewState = 'home';
   String _previousViewState = 'home';
@@ -188,6 +189,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         _intentTimer?.cancel();
         _intentTimer = Timer(const Duration(seconds: 10), () {
           if (mounted && _viewState == 'dashboard') {
+            // ignore: discarded_futures
             _showIntentPopup(word);
           }
         });
@@ -198,93 +200,140 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 
-  void _showIntentPopup(String word) {
+  // ---------- Intent-Lernlogik: SharedPreferences ----------
+
+  /// Normalisiert ein Suchwort auf max. 24 Zeichen für den Prefs-Key.
+  String _intentWordKey(String word) =>
+      word.toLowerCase().trim().replaceAll(RegExp(r'[^\w]'), '').length > 24
+          ? word.toLowerCase().trim().replaceAll(RegExp(r'[^\w]'), '').substring(0, 24)
+          : word.toLowerCase().trim().replaceAll(RegExp(r'[^\w]'), '');
+
+  /// Lädt Nutzungs-Zähler aller Intent-Keys für ein Wort.
+  /// Gibt eine Map {intentKey → count} zurück.
+  Future<Map<String, int>> _loadIntentFreqs(String word) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final wk = _intentWordKey(word);
+      const keys = ['find', 'info', 'buy', 'guide', 'review', 'nearby'];
+      final result = <String, int>{};
+      for (final k in keys) {
+        result[k] = prefs.getInt('$_intentFreqPrefix${wk}_$k') ?? 0;
+      }
+      return result;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Inkrementiert den Zähler für eine gewählte Absicht.
+  Future<void> _saveIntentChoice(String word, String intentKey) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final wk = _intentWordKey(word);
+      final prefKey = '$_intentFreqPrefix${wk}_$intentKey';
+      final current = prefs.getInt(prefKey) ?? 0;
+      await prefs.setInt(prefKey, current + 1);
+    } catch (_) {}
+  }
+
+  Future<void> _showIntentPopup(String word) async {
     if (!mounted) return;
-    const intents = [
-      {
-        'icon': '📍',
-        'label': 'Wo kann ich das finden?',
-        'why': 'finden wo standort'
-      },
-      {
-        'icon': 'ℹ️',
-        'label': 'Informationen / Was ist das?',
-        'why': 'informationen erklärung hintergrund'
-      },
-      {
-        'icon': '💰',
-        'label': 'Kaufen / Preise vergleichen',
-        'why': 'kaufen preis vergleich günstig'
-      },
-      {
-        'icon': '📖',
-        'label': 'Anleitung / Wie geht das?',
-        'why': 'anleitung wie tipps schritt für schritt'
-      },
-      {
-        'icon': '⭐',
-        'label': 'Erfahrungen & Bewertungen',
-        'why': 'erfahrungen bewertungen meinungen empfehlungen'
-      },
-      {
-        'icon': '🗺️',
-        'label': 'In meiner Nähe',
-        'why': 'in meiner nähe regional lokal'
-      },
+
+    // Frequenzen laden und Intents sortieren (häufigste oben).
+    final freqs = await _loadIntentFreqs(word);
+    if (!mounted) return;
+
+    // Definition: key, icon, label, why
+    final baseIntents = [
+      {'key': 'find',   'icon': '📍', 'label': 'Wo kann ich das finden?',        'why': 'finden wo standort'},
+      {'key': 'info',   'icon': 'ℹ️',  'label': 'Informationen / Was ist das?',   'why': 'informationen erklärung hintergrund'},
+      {'key': 'buy',    'icon': '💰', 'label': 'Kaufen / Preise vergleichen',     'why': 'kaufen preis vergleich günstig'},
+      {'key': 'guide',  'icon': '📖', 'label': 'Anleitung / Wie geht das?',      'why': 'anleitung wie tipps schritt für schritt'},
+      {'key': 'review', 'icon': '⭐', 'label': 'Erfahrungen & Bewertungen',       'why': 'erfahrungen bewertungen meinungen empfehlungen'},
+      {'key': 'nearby', 'icon': '🗺️', 'label': 'In meiner Nähe',                 'why': 'in meiner nähe regional lokal'},
     ];
+
+    // Stabile Sortierung: höchster count zuerst, Gleichstand → Originalreihenfolge.
+    final sorted = List<Map<String, String>>.from(baseIntents);
+    sorted.sort((a, b) {
+      final ca = freqs[a['key']!] ?? 0;
+      final cb = freqs[b['key']!] ?? 0;
+      return cb.compareTo(ca);
+    });
 
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => SafeArea(
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Drag-Handle
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.black12,
-                    borderRadius: BorderRadius.circular(2),
+      builder: (ctx) {
+        final topCount = freqs[sorted.first['key']!] ?? 0;
+        return SafeArea(
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Drag-Handle
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.black12,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 18),
-              // Titel
-              Text.rich(
-                TextSpan(
-                  children: [
-                    const TextSpan(text: 'Du suchst nach '),
-                    TextSpan(
-                      text: '"$word"',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: FindUXProTheme.primaryPurple,
+                const SizedBox(height: 18),
+                // Titel
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      const TextSpan(text: 'Du suchst nach '),
+                      TextSpan(
+                        text: '"$word"',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: FindUXProTheme.primaryPurple,
+                        ),
                       ),
+                      const TextSpan(text: '\n— was willst du damit?'),
+                    ],
+                  ),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                    height: 1.35,
+                  ),
+                ),
+                // Personaliseriungs-Hinweis nur zeigen wenn mind. 1 Intent gelernt
+                if (topCount >= 2) ...[
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Deine häufigste Wahl steht oben ✦',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: FindUXProTheme.primaryPurple,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const TextSpan(text: '\n— was willst du damit?'),
-                  ],
-                ),
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black87,
-                  height: 1.35,
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Intent-Optionen
-              ...intents.map((intent) => Padding(
+                  ),
+                ],
+                const SizedBox(height: 16),
+                // Intent-Optionen (sortiert)
+                ...sorted.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final intent = entry.value;
+                  final intentKey = intent['key']!;
+                  final count = freqs[intentKey] ?? 0;
+                  // Top-Intent (index 0) mit count >= 2: stärkerer Rahmen
+                  final isTop = idx == 0 && count >= 2;
+                  return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: Material(
                       color: Colors.transparent,
@@ -293,6 +342,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                         onTap: () {
                           Navigator.pop(ctx);
                           Haptics.tap();
+                          // ignore: discarded_futures
+                          _saveIntentChoice(word, intentKey);
                           setState(() {
                             _whyController.text = intent['why']!;
                             _showWhyField = true;
@@ -300,19 +351,24 @@ class _HomePageState extends ConsumerState<HomePage> {
                         },
                         child: Ink(
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF5F3FF),
+                            color: isTop
+                                ? FindUXProTheme.primaryPurple.withValues(alpha: 0.07)
+                                : const Color(0xFFF5F3FF),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                                color: const Color(0xFFD4C8FF)),
+                              color: isTop
+                                  ? FindUXProTheme.primaryPurple.withValues(alpha: 0.55)
+                                  : const Color(0xFFD4C8FF),
+                              width: isTop ? 1.5 : 1.0,
+                            ),
                           ),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 14),
+                                horizontal: 16, vertical: 13),
                             child: Row(
                               children: [
                                 Text(intent['icon']!,
-                                    style:
-                                        const TextStyle(fontSize: 22)),
+                                    style: const TextStyle(fontSize: 22)),
                                 const SizedBox(width: 14),
                                 Expanded(
                                   child: Text(
@@ -324,6 +380,26 @@ class _HomePageState extends ConsumerState<HomePage> {
                                     ),
                                   ),
                                 ),
+                                // Nutzungs-Badge (ab 2 Mal)
+                                if (count >= 2)
+                                  Container(
+                                    margin: const EdgeInsets.only(right: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: FindUXProTheme.primaryPurple
+                                          .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      '${count}×',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: FindUXProTheme.primaryPurple,
+                                      ),
+                                    ),
+                                  ),
                                 const Icon(
                                     Icons.arrow_forward_ios_rounded,
                                     size: 14,
@@ -334,48 +410,50 @@ class _HomePageState extends ConsumerState<HomePage> {
                         ),
                       ),
                     ),
-                  )),
-              // "Selbst beschreiben" Option
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    Haptics.tap();
-                    setState(() => _showWhyField = true);
-                  },
-                  child: Ink(
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                      child: Row(
-                        children: [
-                          Text('✍️', style: TextStyle(fontSize: 22)),
-                          SizedBox(width: 14),
-                          Text(
-                            'Selbst beschreiben...',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.black54,
+                  );
+                }),
+                // "Selbst beschreiben" Option
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      Haptics.tap();
+                      setState(() => _showWhyField = true);
+                    },
+                    child: Ink(
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                        child: Row(
+                          children: [
+                            Text('✍️', style: TextStyle(fontSize: 22)),
+                            SizedBox(width: 14),
+                            Text(
+                              'Selbst beschreiben...',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black54,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
