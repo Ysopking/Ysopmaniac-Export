@@ -501,10 +501,35 @@ class ChromeImportService {
       'how', 'why', 'who', 'when', 'where', 'what',
     };
 
-    // Erst alle Kandidaten zaehlen, dann nur Top-N bumpen
-    final kwCounts = <String, int>{};
-    final domainCounts = <String, int>{};
+    // Recency-gewichtetes Scoring: neuere Eintraege zaehlen mehr als alte.
+    // Recency-Multiplikator: ≤4 Wochen=1.0, 5-12=0.60, 13-26=0.30, >26=0.15
+    final now = DateTime.now();
+    final nowYear = now.year;
+    final nowDow = now.weekday;
+    final nowThursday = now.add(Duration(days: 4 - nowDow));
+    final nowYearStart = DateTime(nowThursday.year, 1, 1);
+    final nowWeekNum = ((nowThursday.difference(nowYearStart).inDays) ~/ 7) + 1;
+    final nowAbsWeek = nowThursday.year * 52 + nowWeekNum;
+
+    double _recency(String week) {
+      try {
+        final p = week.split('-W');
+        if (p.length != 2) return 0.30;
+        final wYear = int.parse(p[0]);
+        final wNum = int.parse(p[1]);
+        final weeksAgo = nowAbsWeek - (wYear * 52 + wNum);
+        if (weeksAgo <= 4) return 1.00;
+        if (weeksAgo <= 12) return 0.60;
+        if (weeksAgo <= 26) return 0.30;
+        return 0.15;
+      } catch (_) { return 0.30; }
+    }
+
+    // Recency-gewichteter Score pro Keyword und Domain
+    final kwScores = <String, double>{};
+    final domainScores = <String, double>{};
     for (final t in triples) {
+      final r = _recency(t.week);
       final words = t.query
           .toLowerCase()
           .replaceAll(RegExp(r'["\(\)\[\]]'), ' ')
@@ -514,33 +539,38 @@ class ChromeImportService {
           .where((w) => w.length >= 4 && w.length <= 32 && !stop.contains(w))
           .toSet();
       for (final w in words) {
-        kwCounts[w] = (kwCounts[w] ?? 0) + 1;
+        kwScores[w] = (kwScores[w] ?? 0) + r;
       }
       if (t.domain.isNotEmpty && _domainSafe(t.domain)) {
-        domainCounts[t.domain] = (domainCounts[t.domain] ?? 0) + 1;
+        domainScores[t.domain] = (domainScores[t.domain] ?? 0) + r;
       }
     }
 
-    final topKws = kwCounts.entries.toList()
+    // Sortiert nach gewichtetem Score absteigend, dann Top-N bumpen
+    final topKws = kwScores.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final topDomains = domainCounts.entries.toList()
+    final topDomains = domainScores.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
+    // Bump-Skalierung: Basis * clamp(score/3.0, 1.0, 3.0)
+    // Haeufige+aktuelle Keywords bekommen bis zu 3x den Basis-Bump.
     for (final e in topKws.take(_maxKwBumpsPerImport)) {
+      final scale = (e.value / 3.0).clamp(1.0, 3.0);
       final k = 'weight_kw_${e.key}';
       final cur = prefs.getDouble(k) ?? 1.0;
-      final next = (cur + _kwBump).clamp(_kwMin, _kwMax);
+      final next = (cur + _kwBump * scale).clamp(_kwMin, _kwMax);
       await prefs.setDouble(k, next);
     }
     for (final e in topDomains.take(_maxDomainBumpsPerImport)) {
+      final scale = (e.value / 3.0).clamp(1.0, 3.0);
       final k = 'weight_domain_${e.key}';
       final cur = prefs.getDouble(k) ?? 1.0;
-      final next = (cur + _domainBump).clamp(_domainMin, _domainMax);
+      final next = (cur + _domainBump * scale).clamp(_domainMin, _domainMax);
       await prefs.setDouble(k, next);
     }
   }
 
-  /// Stage G: Bump-Helper fuer das Interessen-Feature. Jedes Token
+  /// Stage G: Bump-Helper fuer das Interessen-Feature  /// Stage G: Bump-Helper fuer das Interessen-Feature. Jedes Token
   /// (top-cat, sub-cat, item) wird einzeln als weight_kw_<token>
   /// gebumpt. Bewusst auch fuer kurze Tokens (>=3 Zeichen), weil
   /// "Rap" oder "EDM" kuerzer sind als das normale Verlaufs-Filter.

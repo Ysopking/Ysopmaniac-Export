@@ -236,8 +236,15 @@ class FindUXQueryBuilder {
     final effectiveFilters = _resolveEffectiveFilters(filters, stamm);
     final sortedFilters = _sortFiltersByWeight(effectiveFilters, weights);
     final filterSiteDomains = _collectSiteDomains(sortedFilters);
-    // TrustDomains (Rentner: stiftung-warentest etc.) haben Vorrang im site:-Block
-    final mergedSites = <String>{...stamm.trustDomains, ...filterSiteDomains, ...coachSites};
+    // TrustDomains (Stammdaten) + gelernte positive Domains (Chronik/Feedback)
+    // Learned trust domains: weight_domain_X > 1.35 -> in site:-Gruppe aufnehmen (max 2)
+    final learnedTrustDomains = _topLearnedDomains(weights, positive: true, max: 2);
+    final mergedSites = <String>{
+      ...stamm.trustDomains,
+      ...filterSiteDomains,
+      ...coachSites,
+      ...learnedTrustDomains,
+    };
     final siteGroup = _buildSiteGroupFromDomains(mergedSites);
     if (siteGroup != null) parts.add(siteGroup);
     // Stammdaten-FileTypeHints als Fallback wenn kein User-Filetype gesetzt

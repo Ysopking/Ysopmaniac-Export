@@ -537,6 +537,50 @@ class LearningService {
     }
   }
 
+  /// Setzt kategorie-semantische Filter/Modus-Gewichte basierend auf
+  /// ausgewaehlten Interessen. Ergaenzt [ChromeImportService.applyInterestBumps]
+  /// (Token-Ebene) um Quellen-Filter-, Modus- und Domain-Boosts auf Kategorie-Ebene.
+  /// Bewusst statisch und mild (0.06–0.12) — echtes Lernen passiert per Chronik.
+  ///
+  /// Aufruf: bei Onboarding-Abschluss + jedes Mal wenn neue Interessen gesetzt werden.
+  static Future<void> applyInterestCategoryWeights(List<String> paths) async {
+    if (paths.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+
+    // Top-Kategorie aus Pfad-Prefix extrahieren (z.B. "musik/rap/sido" -> "musik")
+    final categories = paths.map((p) => p.split('/').first).toSet();
+
+    // Kategorie -> semantische Filter/Modus-Gewichte (spec-aligned, sanft)
+    const categoryMap = <String, Map<String, double>>{
+      'musik':        { 'weight_filter_blogs': 0.08, 'weight_filter_foren': 0.06,        'weight_mode_discover': 0.08 },
+      'sport':        { 'weight_filter_news':  0.10, 'weight_filter_blogs': 0.06,        'weight_mode_standard': 0.06 },
+      'wissenschaft': { 'weight_filter_academic': 0.12, 'weight_filter_wikipedia': 0.08, 'weight_mode_precise': 0.10 },
+      'mathe':        { 'weight_filter_academic': 0.10, 'weight_filter_docs': 0.08,      'weight_mode_precise': 0.10 },
+      'tech':         { 'weight_filter_docs': 0.12, 'weight_filter_foren': 0.08,         'weight_mode_precise': 0.08 },
+      'gaming':       { 'weight_filter_foren': 0.10, 'weight_filter_blogs': 0.06,        'weight_mode_discover': 0.06 },
+      'film':         { 'weight_filter_blogs': 0.08, 'weight_filter_reddit': 0.08,       'weight_mode_discover': 0.08 },
+      'kochen':       { 'weight_filter_blogs': 0.10,                                     'weight_mode_discover': 0.08 },
+      'reisen':       { 'weight_filter_blogs': 0.08, 'weight_filter_reddit': 0.06,       'weight_mode_discover': 0.10 },
+      'sprachen':     { 'weight_filter_docs': 0.08, 'weight_filter_wikipedia': 0.08,     'weight_mode_standard': 0.06 },
+      'garten':       { 'weight_filter_blogs': 0.10,                                     'weight_mode_discover': 0.06 },
+      'auto':         { 'weight_filter_foren': 0.10, 'weight_filter_blogs': 0.06,        'weight_mode_standard': 0.06 },
+    };
+
+    for (final cat in categories) {
+      final boosts = categoryMap[cat];
+      if (boosts == null) continue;
+      for (final entry in boosts.entries) {
+        final cur = prefs.getDouble(entry.key) ?? 1.0;
+        final next = (cur + entry.value).clamp(0.2, 4.0);
+        await prefs.setDouble(entry.key, next);
+      }
+    }
+
+    if (kDebugMode) {
+      debugPrint('applyInterestCategoryWeights: ' + categories.join(', ') + ' — ' + categories.length.toString() + ' Kategorie-Boosts gesetzt.');
+    }
+  }
+
   Future<void> clearAllFeedback() async {
     if (!Hive.isBoxOpen(_feedbackBoxName)) return;
     await Hive.box<dynamic>(_feedbackBoxName).clear();

@@ -297,7 +297,10 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
         .toList(growable: false);
     if (added.isNotEmpty) {
       try {
+        // Token-Ebene: weight_kw_<token> fuer jeden Pfad-Abschnitt
         await ChromeImportService.applyInterestBumps(added);
+        // Kategorie-Ebene: Filter/Modus-Boosts pro Top-Kategorie
+        await LearningService.applyInterestCategoryWeights(added);
       } catch (e) {
         debugPrint('Interest bumps failed: $e');
       }
