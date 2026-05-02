@@ -4,6 +4,8 @@
 /// Eingabe:
 ///   - Settings-Map (employmentType, beruf, plz, language, country, jahr)
 ///   - WAS- und WARUM-Text (zur Intent-Erkennung)
+///   - employmentWeight: gelerntes Gewicht aus SharedPreferences
+///                       (weight_employment_<type>, Default 1.0)
 ///
 /// Ausgabe (StammdatenContext):
 ///   - softTerms:        Begriffe, die per OR-Boost optional eingefuegt werden
@@ -36,13 +38,28 @@ class StammdatenContext {
 
 class StammdatenResolver {
   /// Empfohlene Quellen pro Beschaeftigungstyp (Soft-Bias).
+  /// Reihenfolge = Prioritaet. Wird durch employmentWeight skaliert:
+  ///   < 0.7  → 0 Quellen (Preset ignoriert)
+  ///   0.7–1.2 → erste 2 Quellen
+  ///   > 1.2  → alle Quellen des Presets
+  ///
+  /// Aenderungen ggue. v1:
+  ///   - teilzeit: eigenes Profil (news + offiziell + ratgeber) statt = vollzeit
+  ///   - erwerbslos: stellenboersen an erster Stelle
   static const Map<String, List<String>> _employmentSourcePresets = {
-    'student': ['academic', 'wikipedia', 'docs'],
-    'vollzeit': ['docs', 'foren', 'blogs'],
-    'teilzeit': ['docs', 'foren', 'blogs'],
-    'rentner': ['wikipedia', 'news', 'offiziell'],
-    'erwerbslos': ['offiziell', 'foren', 'news'],
+    'student':    ['academic', 'wikipedia', 'docs'],
+    'vollzeit':   ['docs', 'foren', 'blogs'],
+    'teilzeit':   ['news', 'offiziell', 'blogs'],
+    'rentner':    ['wikipedia', 'news', 'offiziell'],
+    'erwerbslos': ['stellenboersen', 'offiziell', 'foren', 'news'],
   };
+
+  /// Stellenbörsen-spezifische Job-Intent-Trigger nur fuer erwerbslos
+  static const List<String> _jobSearchIntentWords = [
+    'job', 'jobs', 'stelle', 'stellen', 'stellenanzeige', 'stellenanzeigen',
+    'bewerbung', 'bewerben', 'lebenslauf', 'cv', 'arbeit', 'arbeitssuche',
+    'karriere', 'arbeitsamt', 'arbeitsagentur', 'foerderung',
+  ];
 
   /// Intent-Trigger-Worte: WAS oder WARUM enthaelt einen dieser Begriffe?
   static const List<String> _locationIntentWords = [
@@ -69,6 +86,7 @@ class StammdatenResolver {
     required String what,
     required String why,
     required Map<String, dynamic> settings,
+    double employmentWeight = 1.0,
   }) {
     final softTerms = <String>[];
     final hardTerms = <String>[];
@@ -79,6 +97,7 @@ class StammdatenResolver {
     final hasJob = _containsAny(fullText, _jobIntentWords);
     final hasAcademic = _containsAny(fullText, _academicIntentWords);
     final hasNews = _containsAny(fullText, _newsIntentWords);
+    final hasJobSearch = _containsAny(fullText, _jobSearchIntentWords);
 
     final employmentType =
         ((settings['employmentType'] as String?) ?? 'student').trim();
@@ -88,10 +107,14 @@ class StammdatenResolver {
     final country = ((settings['country'] as String?) ?? 'de').trim();
     final jahr = (settings['jahr'] as int?) ?? 1990;
 
-    // 1) Beschaeftigungs-Preset als Quellen-Bias
+    // 1) Beschaeftigungs-Preset als Quellen-Bias (skaliert durch employmentWeight)
     final preset = _employmentSourcePresets[employmentType];
-    if (preset != null) {
-      preferredSources.addAll(preset);
+    if (preset != null && employmentWeight >= 0.7) {
+      // Anzahl der aktivierten Preset-Quellen haengt vom gelernten Gewicht ab
+      final count = employmentWeight >= 1.4
+          ? preset.length          // alles aktivieren
+          : (employmentWeight >= 1.0 ? 2 : 1); // Standard oder reduziert
+      preferredSources.addAll(preset.take(count));
     }
 
     // 2) Job-Intent: Jobrichtung + employmentType-Marker zwingend rein
@@ -108,35 +131,43 @@ class StammdatenResolver {
       softTerms.add(beruf.toLowerCase().split(' ').first);
     }
 
-    // 3) Lokal-Intent: PLZ + Land in die Query
+    // 3) Erwerbslos + Job-Suche-Intent: Stellenboersen explizit nach vorne
+    if (employmentType == 'erwerbslos' && hasJobSearch) {
+      if (!preferredSources.contains('stellenboersen')) {
+        preferredSources.insert(0, 'stellenboersen');
+      }
+      // Arbeitsagentur-Tipp als SoftTerm
+      softTerms.add('Stellenanzeige');
+    }
+
+    // 4) Lokal-Intent: PLZ + Land in die Query
     if (hasLocation && plz.isNotEmpty && plz != '0') {
       hardTerms.add(plz);
       // Bundeslaender-/Stadt-Hint via Country-Code
       hardTerms.add(country == 'de' ? 'Deutschland' : country.toUpperCase());
     }
 
-    // 4) Academic-Intent: zusaetzlich Academic-Quellen vorne
+    // 5) Academic-Intent: zusaetzlich Academic-Quellen vorne
     if (hasAcademic) {
       preferredSources.insertAll(0, ['academic', 'docs']);
-      // Studenten zusaetzlich Wiki-bias raus, weil Studien wichtiger
     }
 
-    // 5) News-Intent
+    // 6) News-Intent
     if (hasNews) {
       preferredSources.insertAll(0, ['news']);
     }
 
-    // 6) Senioren / Rentner: Klartext bevorzugen, Foren raus
+    // 7) Senioren / Rentner: Klartext bevorzugen, Foren raus
     if (employmentType == 'rentner') {
       preferredSources.removeWhere((s) => s == 'foren' || s == 'reddit');
     }
 
-    // 7) Sprache als Hint fuer Google `lr=`
+    // 8) Sprache als Hint fuer Google `lr=`
     final languageHint = (language == 'de' || language == 'en')
         ? 'lang_$language'
         : null;
 
-    // 8) Aktualitaets-Boost: News-Intent ODER User <30 Jahre
+    // 9) Aktualitaets-Boost: News-Intent ODER User <30 Jahre
     final age = DateTime.now().year - jahr;
     final boostRecent = hasNews || (age >= 0 && age <= 30);
 
@@ -163,4 +194,3 @@ class StammdatenResolver {
     return false;
   }
 }
-
