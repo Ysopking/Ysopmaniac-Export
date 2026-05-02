@@ -8,7 +8,6 @@ import 'package:findux_mobile/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:flutter_windowmanager/flutter_windowmanager.dart';
 
 import 'services/security_service.dart';
 import 'services/learning_service.dart';
@@ -36,16 +35,10 @@ Future<void> main() async {
       return true;
     };
 
-    // Stage F Haertung: blockt Screenshots und das Recents-Thumbnail.
-    // FLAG_SECURE wird so frueh wie moeglich gesetzt, damit der Splash
-    // nicht in den App-Switcher gerendert wird.
-    if (Platform.isAndroid) {
-      try {
-        await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
-      } catch (e) {
-        debugPrint('FLAG_SECURE konnte nicht gesetzt werden: $e');
-      }
-    }
+    // Stage F Haertung: FLAG_SECURE wird nativ in MainActivity.kt im
+    // onCreate() gesetzt — frueher als Flutter rendert. Damit ist
+    // bereits der allererste Frame (Splash, Recents-Thumbnail)
+    // geschuetzt. Hier nichts mehr zu tun.
 
     final SecurityService securityService = SecurityService();
     final LearningService learningService = LearningService();
