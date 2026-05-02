@@ -43,6 +43,22 @@ android {
 
     buildTypes {
         release {
+            // R8/ProGuard: Kotlin + Dart-Boilerplate entfernen, Namen verschleiern.
+            // Dart-eigener Algorithmus (taxonomy_weights, intent_analyzer etc.) wird
+            // durch Flutters AOT-Kompilierung in libapp.so gebacken — fuer maximalen
+            // Schutz zusaetzlich mit:
+            //   flutter build apk --release --obfuscate --split-debug-info=./debug_info
+            // Das debug_info-Verzeichnis NICHT veroeffentlichen!
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles(
+                getDefaultProguardFile('proguard-android-optimize.txt'),
+                'proguard-rules.pro'
+            )
+        }
+        debug {
+            // Kein Minify im Debug-Build — aber FLAG_SECURE gilt trotzdem
+            // (gesetzt in MainActivity.kt, unabhaengig vom Build-Typ).
             minifyEnabled false
             shrinkResources false
         }
