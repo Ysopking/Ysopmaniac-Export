@@ -110,6 +110,11 @@ class FindUXQueryBuilder {
       'stepstone.de', 'indeed.com', 'monster.de', 'arbeitsagentur.de',
       'xing.com', 'linkedin.com', 'jobware.de', 'stellenanzeigen.de',
     ],
+    'ratgeber': [
+      'stiftung-warentest.de',
+      'verbraucherzentrale.de',
+      'chip.de',
+    ],
   };
 
   static const Map<String, List<String>> fileExtensions = {
@@ -598,7 +603,7 @@ class FindUXQueryBuilder {
       // Keyword tokenisieren: nach Leerzeichen und Bindestrich splitten
       final kwTokens = kw
           .toLowerCase()
-          .split(RegExp(r'[s-_]+'))
+          .split(RegExp(r'[\s\-_]+'))
           .where((t) => t.length >= 2)
           .toList();
       for (final kwTok in kwTokens) {
