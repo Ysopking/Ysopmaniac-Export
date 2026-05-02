@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../logic/state_provider.dart';
 import '../theme.dart';
+import 'chrome_import_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -139,6 +140,16 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           _sectionLabel('Datenschutz'),
+          _optionTile(
+            icon: Icons.history_rounded,
+            title: 'Chrome-Verlauf importieren',
+            subtitle: 'Reduziert auf 4 Felder, Datei wird geloescht',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const ChromeImportScreen()),
+            ),
+          ),
           _optionTile(
             icon: Icons.security_rounded,
             title: AppLocalizations.of(context)!.reviewFeedback,
