@@ -1,9 +1,52 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/findux_stopwords.dart';
 import '../coach/coach_models.dart';
 import '../coach/phrase_detector.dart';
 import '../coach/smart_date.dart';
 import 'stammdaten_resolver.dart';
+
+/// Debug-Schnappschuss einer buildQuery()-Ausfuehrung.
+/// [QueryDebugInfo.notifier] wird AUSSCHLIESSLICH in kDebugMode befuellt;
+/// im Release-Build bleibt der Wert null — kein Overhead, kein Leak.
+class QueryDebugInfo {
+  final List<String> trustDomains;
+  final bool hasStrongTrust;
+  final String mode;
+  final List<String> softTerms;
+  final List<String> hardTerms;
+  final List<String> excludeDomains;
+  final String? dateAfter;
+  final bool preferIntitle;
+  final bool boostRecent;
+  final List<String> interests;
+  final List<String> boostKws;
+  final List<String> demoteKws;
+  final List<String> learnedTrustDomains;
+  final String builtQuery;
+
+  QueryDebugInfo({
+    required this.trustDomains,
+    required this.hasStrongTrust,
+    required this.mode,
+    required this.softTerms,
+    required this.hardTerms,
+    required this.excludeDomains,
+    this.dateAfter,
+    required this.preferIntitle,
+    required this.boostRecent,
+    required this.interests,
+    required this.boostKws,
+    required this.demoteKws,
+    required this.learnedTrustDomains,
+    required this.builtQuery,
+  });
+
+  /// TrustDebugOverlay abonniert diesen Notifier.
+  /// Wert ist immer null wenn !kDebugMode.
+  static final ValueNotifier<QueryDebugInfo?> notifier =
+      ValueNotifier<QueryDebugInfo?>(null);
+}
 
 /// FindUX Query-Builder (v3, Coach-aware).
 ///
@@ -342,7 +385,29 @@ class FindUXQueryBuilder {
     if (isYouthActive) parts.addAll(explicitExclusions);
 
     // 14. Build + sanitize
-    return _sanitize(parts);
+    final sanitized = _sanitize(parts);
+
+    // Debug-Overlay: ONLY kDebugMode — null im Release, kein Overhead
+    if (kDebugMode) {
+      QueryDebugInfo.notifier.value = QueryDebugInfo(
+        trustDomains: stamm.trustDomains,
+        hasStrongTrust: hasStrongTrust,
+        mode: mode,
+        softTerms: stamm.softTerms,
+        hardTerms: stamm.hardTerms,
+        excludeDomains: stamm.excludeDomains,
+        dateAfter: stamm.dateAfter,
+        preferIntitle: stamm.preferIntitle,
+        boostRecent: stamm.boostRecent,
+        interests: interests,
+        boostKws: boostKws,
+        demoteKws: demoteKws,
+        learnedTrustDomains: learnedTrustDomains.toList(),
+        builtQuery: sanitized,
+      );
+    }
+
+    return sanitized;
   }
 
   String buildSearchUrl(

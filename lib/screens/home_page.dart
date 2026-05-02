@@ -20,6 +20,7 @@ import '../coach/coach_models.dart';
 import '../coach/precision_advisor.dart';
 import 'incognito_browser_screen.dart';
 import 'widgets/inline_coach_section.dart';
+import 'widgets/trust_debug_overlay.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   final LearningService learningService;
@@ -394,22 +395,37 @@ class _HomePageState extends ConsumerState<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (child, animation) {
-          final forward = _viewRank(_viewState) >= _viewRank(_previousViewState);
-          final slide = Tween<Offset>(
-            begin: Offset(forward ? 0.06 : -0.06, 0),
-            end: Offset.zero,
-          ).animate(animation);
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(position: slide, child: child),
-          );
-        },
-        child: _getViewForState(),
+      body: Stack(
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final forward =
+                  _viewRank(_viewState) >= _viewRank(_previousViewState);
+              final slide = Tween<Offset>(
+                begin: Offset(forward ? 0.06 : -0.06, 0),
+                end: Offset.zero,
+              ).animate(animation);
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(position: slide, child: child),
+              );
+            },
+            child: _getViewForState(),
+          ),
+          // Debug-Overlay: nur in Debug-Builds sichtbar.
+          // Im Release-Build wird dieser Block vom Compiler
+          // vollstaendig eliminiert (kDebugMode = const false).
+          if (kDebugMode)
+            ValueListenableBuilder<QueryDebugInfo?>(
+              valueListenable: QueryDebugInfo.notifier,
+              builder: (_, info, __) => info == null
+                  ? const SizedBox.shrink()
+                  : TrustDebugOverlay(info: info),
+            ),
+        ],
       ),
     );
   }
