@@ -9,7 +9,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  GRADLE_OPTS: -Xmx16g -Dorg.gradle.daemon=false
+  GRADLE_OPTS: -Xmx20g -Dorg.gradle.daemon=false
 
 jobs:
   build:
@@ -32,10 +32,10 @@ jobs:
           channel: 'stable'
           cache: false
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+       - name: Setup Android SDK
+         uses: android-actions/setup-android@v3
+         with:
+           packages: 'platform-tools platforms;android-34 build-tools;34.0.0 ndk;28.2.13676358'
 
        - name: Clear Gradle Cache
          run: rm -rf ~/.gradle/caches
