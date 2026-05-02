@@ -15,7 +15,6 @@ class SecurityService {
     final canCheckBiometrics = await auth.canCheckBiometrics;
     final isDeviceSupported = await auth.isDeviceSupported();
     if (!canCheckBiometrics && !isDeviceSupported) {
-      // Kein Auth-Mittel verfügbar -> bewusst ablehnen.
       return false;
     }
 
@@ -57,17 +56,17 @@ class SecurityService {
   Future<void> initSecureBox() async {
     if (Hive.isBoxOpen(_vaultBoxName)) return;
     final key = await getEncryptionKey();
-    await Hive.openBox(
+    await Hive.openBox<dynamic>(
       _vaultBoxName,
       encryptionCipher: HiveAesCipher(key),
     );
   }
 
-  Box get vaultBox => Hive.box(_vaultBoxName);
+  Box<dynamic> get vaultBox => Hive.box<dynamic>(_vaultBoxName);
 
   Future<void> closeBox() async {
     if (Hive.isBoxOpen(_vaultBoxName)) {
-      await Hive.box(_vaultBoxName).close();
+      await Hive.box<dynamic>(_vaultBoxName).close();
     }
   }
 }

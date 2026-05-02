@@ -99,8 +99,20 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
 
   SettingsNotifier(this._security) : super(_defaultSettings);
 
-  // Sensible PII-Felder werden im verschluesselten Hive-Vault abgelegt.
-  static const _piiFields = {'plz', 'beruf', 'jahr'};
+  // Alle SharedPreferences-Keys, die zum App-Settings-Modell gehoeren.
+  static const _allPrefsKeys = <String>[
+    'plz',
+    'beruf',
+    'jahr',
+    'searchengine',
+    'language',
+    'country',
+    'allowFeedback',
+    'enableYouthProtection',
+    'sources',
+    'files',
+    'mode',
+  ];
 
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -207,15 +219,29 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     return updateSettings(newState);
   }
 
-  // Komplettes Loeschen aller persistenten Settings (Privacy "Notbremse").
+  // Komplettes Loeschen ALLER persistenten Settings (Privacy-"Notbremse").
+  // - Vault wird komplett geleert (PII)
+  // - alle Settings-Keys aus SharedPreferences entfernt
+  // - State wird auf Defaults zurueckgesetzt
   Future<void> wipeAll() async {
     try {
       final box = _security.vaultBox;
       await box.clear();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Vault clear failed: $e');
+    }
     final prefs = await SharedPreferences.getInstance();
-    for (final key in _piiFields) {
+    for (final key in _allPrefsKeys) {
       await prefs.remove(key);
+    }
+    // Such-Historie / Lern-Gewichte ebenfalls entfernen
+    final allKeys = prefs.getKeys().toList();
+    for (final key in allKeys) {
+      if (key.startsWith('weight_') ||
+          key == 'searchHistory' ||
+          key == 'last_analysis') {
+        await prefs.remove(key);
+      }
     }
     state = _defaultSettings;
   }

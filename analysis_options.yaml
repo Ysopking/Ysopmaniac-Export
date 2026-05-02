@@ -1,12 +1,11 @@
 # Konfiguration des Dart-Analyzers fuer FindUX.
+# Hinweis: strict-casts / strict-raw-types absichtlich NICHT aktiviert,
+# damit Bestandsdateien (z. B. dynamische Hive-Maps) nicht brechen. Neue
+# Module bleiben trotzdem strikt typisiert (siehe Code-Reviews).
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
-  language:
-    strict-casts: true
-    strict-raw-types: true
   errors:
-    # Konsistenz: oeffentliche APIs duerfen keine privaten State-Klassen leaken.
     library_private_types_in_public_api: warning
 
 linter:

@@ -9,19 +9,19 @@ class LearningService {
 
   bool _initialized = false;
 
-  /// Öffnet alle Lern-Boxen verschlüsselt mit dem übergebenen Cipher-Key.
+  /// Oeffnet alle Lern-Boxen verschluesselt mit dem uebergebenen Cipher-Key.
   Future<void> init(List<int> cipherKey) async {
     if (_initialized) return;
     final cipher = HiveAesCipher(cipherKey);
 
     if (!Hive.isBoxOpen(_boxName)) {
-      await Hive.openBox(_boxName, encryptionCipher: cipher);
+      await Hive.openBox<dynamic>(_boxName, encryptionCipher: cipher);
     }
     if (!Hive.isBoxOpen(_logBoxName)) {
-      await Hive.openBox(_logBoxName, encryptionCipher: cipher);
+      await Hive.openBox<dynamic>(_logBoxName, encryptionCipher: cipher);
     }
     if (!Hive.isBoxOpen(_feedbackBoxName)) {
-      await Hive.openBox(_feedbackBoxName, encryptionCipher: cipher);
+      await Hive.openBox<dynamic>(_feedbackBoxName, encryptionCipher: cipher);
     }
     _initialized = true;
   }
@@ -35,9 +35,9 @@ class LearningService {
     required String mode,
   }) async {
     if (!Hive.isBoxOpen(_boxName)) return;
-    final box = Hive.box(_boxName);
+    final box = Hive.box<dynamic>(_boxName);
     final key = DateTime.now().millisecondsSinceEpoch.toString();
-    await box.put(key, {
+    await box.put(key, <String, dynamic>{
       'query': query,
       'url': url,
       'timestamp': DateTime.now().toIso8601String(),
@@ -49,8 +49,8 @@ class LearningService {
 
   Future<void> trackFeedback(String rating, {String? comment}) async {
     if (!Hive.isBoxOpen(_feedbackBoxName) || !Hive.isBoxOpen(_boxName)) return;
-    final box = Hive.box(_feedbackBoxName);
-    final searchBox = Hive.box(_boxName);
+    final box = Hive.box<dynamic>(_feedbackBoxName);
+    final searchBox = Hive.box<dynamic>(_boxName);
 
     String? lastSearchId;
     if (searchBox.isNotEmpty) {
@@ -58,7 +58,7 @@ class LearningService {
     }
 
     final key = DateTime.now().millisecondsSinceEpoch.toString();
-    await box.put(key, {
+    await box.put(key, <String, dynamic>{
       'search_id': lastSearchId,
       'rating': rating,
       'comment': comment ?? '',
@@ -78,32 +78,31 @@ class LearningService {
 
   Future<void> _analyzeAndOptimize() async {
     if (!Hive.isBoxOpen(_boxName) || !Hive.isBoxOpen(_feedbackBoxName)) return;
-    final searchBox = Hive.box(_boxName);
-    final feedbackBox = Hive.box(_feedbackBoxName);
+    final searchBox = Hive.box<dynamic>(_boxName);
+    final feedbackBox = Hive.box<dynamic>(_feedbackBoxName);
 
-    final searchData = searchBox.toMap();
-    final feedbackData = feedbackBox.toMap();
+    final searchData = Map<dynamic, dynamic>.from(searchBox.toMap());
+    final feedbackData = Map<dynamic, dynamic>.from(feedbackBox.toMap());
     final prefs = await SharedPreferences.getInstance();
 
-    // Sequentiell await statt fire-and-forget innerhalb forEach.
     for (final entry in feedbackData.entries) {
-      final fValue = entry.value as Map;
+      final fValue = Map<String, dynamic>.from(entry.value as Map);
       final searchId = fValue['search_id'];
       final rating = fValue['rating'];
       final multiplier = (rating == 'up') ? 1.1 : 0.85;
 
       if (searchId == null || !searchData.containsKey(searchId)) continue;
-      final search = searchData[searchId] as Map;
+      final search = Map<String, dynamic>.from(searchData[searchId] as Map);
 
-      final mode = search['mode'] as String? ?? 'standard';
+      final mode = (search['mode'] as String?) ?? 'standard';
       final currentModeWeight = prefs.getDouble('weight_mode_$mode') ?? 1.0;
       await prefs.setDouble(
         'weight_mode_$mode',
         (currentModeWeight * multiplier).clamp(0.1, 5.0),
       );
 
-      final sources = (search['sources'] as List?) ?? const [];
-      final files = (search['files'] as List?) ?? const [];
+      final sources = (search['sources'] as List<dynamic>?) ?? const <dynamic>[];
+      final files = (search['files'] as List<dynamic>?) ?? const <dynamic>[];
       for (final filter in [...sources, ...files]) {
         final currentFilterWeight =
             prefs.getDouble('weight_filter_$filter') ?? 1.0;
@@ -113,11 +112,10 @@ class LearningService {
         );
       }
 
-      final query = search['query'] as String? ?? '';
+      final query = (search['query'] as String?) ?? '';
       await _extractAndWeightKeywords(query, multiplier, prefs);
     }
 
-    // Verlaufs-Hygiene: Roh-Verlauf löschen, Feedback bleibt für Review.
     await searchBox.clear();
     await _logPrivacyAction(
         'Interessen-Modell verfeinert. Verlaufs-Hygiene durchgefuehrt.');
@@ -125,8 +123,8 @@ class LearningService {
 
   Future<void> _logPrivacyAction(String message) async {
     if (!Hive.isBoxOpen(_logBoxName)) return;
-    final logBox = Hive.box(_logBoxName);
-    await logBox.add({
+    final logBox = Hive.box<dynamic>(_logBoxName);
+    await logBox.add(<String, dynamic>{
       'timestamp': DateTime.now().toIso8601String(),
       'action': 'interest_model_refinement',
       'message': message,
@@ -134,16 +132,16 @@ class LearningService {
   }
 
   List<Map<String, dynamic>> getFeedbackForReview() {
-    if (!Hive.isBoxOpen(_feedbackBoxName)) return const [];
-    final box = Hive.box(_feedbackBoxName);
+    if (!Hive.isBoxOpen(_feedbackBoxName)) return const <Map<String, dynamic>>[];
+    final box = Hive.box<dynamic>(_feedbackBoxName);
     return box.values
-        .map((e) => Map<String, dynamic>.from(e as Map))
+        .map((dynamic e) => Map<String, dynamic>.from(e as Map))
         .toList();
   }
 
   Future<void> clearAllFeedback() async {
     if (!Hive.isBoxOpen(_feedbackBoxName)) return;
-    await Hive.box(_feedbackBoxName).clear();
+    await Hive.box<dynamic>(_feedbackBoxName).clear();
   }
 
   Future<void> _extractAndWeightKeywords(
