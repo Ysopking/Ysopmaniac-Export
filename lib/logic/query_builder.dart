@@ -251,21 +251,55 @@ class FindUXQueryBuilder {
       parts.add('-$kw');
     }
 
-    // 9. Quellen-Bias: User + Stammdaten + Coach-Sites in EINE site-Gruppe
+    // 9. Quellen-Bias: Starker Trust-Intent → dedizierte Trust-Site-Gruppe
+    //               Normaler Intent  → gemischte Quellen-Gruppe
+    //
+    // Starker Trust (stamm.trustDomains.length >= 2):
+    //   Der Stammdaten-Resolver hat einen hochspezifischen Trust-Intent erkannt
+    //   (Bsp: Rentner + medizinische Frage → apotheken-umschau.de, stiftung-warentest.de, rki.de)
+    //         Erwerbslos + Rechts-Intent → arbeitsagentur.de, bund.de, gesetze-im-internet.de
+    //         Alleinerziehend + Finanz → bmfsfj.de, arbeitsagentur.de, bundesregierung.de
+    //
+    //   Verhalten: NUR Trust-Domains (max 4) + Coach-Override in die site:-Gruppe.
+    //   Filter- und Lern-Domains werden NICHT gemischt — Trust-Signal bleibt rein.
+    //   Effekt in der Query: (site:apotheken-umschau.de OR site:stiftung-warentest.de OR site:rki.de)
+    //
+    // Normaler Intent (trustDomains.length < 2 ODER discover-Mode):
+    //   Alle Quellen zusammengefuehrt (Trust + Filter + Coach + Learned).
     final effectiveFilters = _resolveEffectiveFilters(filters, stamm);
     final sortedFilters = _sortFiltersByWeight(effectiveFilters, weights);
     final filterSiteDomains = _collectSiteDomains(sortedFilters);
-    // TrustDomains (Stammdaten) + gelernte positive Domains (Chronik/Feedback)
-    // Learned trust domains: weight_domain_X > 1.35 -> in site:-Gruppe aufnehmen (max 2)
+    // Learned trust domains: weight_domain_X > 1.35 → in site:-Gruppe (max 2)
     final learnedTrustDomains = _topLearnedDomains(weights, positive: true, max: 2);
-    final mergedSites = <String>{
-      ...stamm.trustDomains,
-      ...filterSiteDomains,
-      ...coachSites,
-      ...learnedTrustDomains,
-    };
-    final siteGroup = _buildSiteGroupFromDomains(mergedSites);
-    if (siteGroup != null) parts.add(siteGroup);
+
+    // Schwelle: >= 2 explizite Trust-Domains vom Resolver (nicht discover-Mode,
+    // discover braucht Breite, kein Trust-Filter)
+    final hasStrongTrust = stamm.trustDomains.length >= 2 && mode != 'discover';
+
+    if (hasStrongTrust) {
+      // Dedizierte Trust-Gruppe: Stammdaten-Trust (max 4) + Coach-Override (immer)
+      final trustSites = <String>{
+        ...stamm.trustDomains.take(4),
+        ...coachSites, // Coach-Injection hat immer Vorrang
+      };
+      final trustGroup = _buildSiteGroupFromDomains(trustSites);
+      if (trustGroup != null) parts.add(trustGroup);
+      // Gelernte positive Domains werden als eigenstaendige site:-Terme angehaengt,
+      // sofern sie NICHT schon in trustSites enthalten sind.
+      for (final d in learnedTrustDomains) {
+        if (!trustSites.contains(d)) parts.add('site:$d');
+      }
+    } else {
+      // Normalfall: alle Quellen in einer OR-Gruppe
+      final mergedSites = <String>{
+        ...stamm.trustDomains,
+        ...filterSiteDomains,
+        ...coachSites,
+        ...learnedTrustDomains,
+      };
+      final siteGroup = _buildSiteGroupFromDomains(mergedSites);
+      if (siteGroup != null) parts.add(siteGroup);
+    }
     // Stammdaten-FileTypeHints als Fallback wenn kein User-Filetype gesetzt
     final fileGroup = _buildFiletypeGroup(sortedFilters) ??
         (stamm.fileTypeHints.isNotEmpty
