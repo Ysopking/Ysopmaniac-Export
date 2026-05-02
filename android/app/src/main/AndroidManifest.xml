@@ -1,14 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.findux">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Internet-Berechtigung für WebView -->
+    <!-- Internet-Berechtigung fuer externes Oeffnen der Suchergebnisse -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
+    <!-- Damit url_launcher mit Custom Tabs / Browser-Apps reden kann -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" />
+        </intent>
+    </queries>
+
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="FindUX"
         android:theme="@style/LaunchTheme">
@@ -17,7 +30,7 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- Performance: Enable Impeller Rendering Engine for 60/120 FPS -->
+        <!-- Performance: Impeller Rendering Engine -->
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"
             android:value="true" />
@@ -31,10 +44,6 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
-            <!-- Specifies an Android theme to apply to this Activity as soon as
-                 the Android process has started. This theme is visible to the user
-                 while the Flutter UI initializes. After that, this theme continues
-                 to determine the Window background behind the Flutter UI. -->
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
@@ -59,11 +68,12 @@
             </intent-filter>
         </service>
 
-        <!-- Accessibility Service -->
+        <!-- Accessibility Service: muss exported=true sein, damit das System
+             bindet (BIND_ACCESSIBILITY_SERVICE schuetzt vor Missbrauch). -->
         <service
             android:name=".FindUxAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>

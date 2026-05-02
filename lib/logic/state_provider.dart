@@ -1,22 +1,28 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/security_service.dart';
 import '../services/learning_service.dart';
 
-// Providers for Services
-final securityServiceProvider = Provider((ref) => SecurityService());
-final learningServiceProvider = Provider((ref) => LearningService());
+// Diese Provider werden in main.dart per overrideWithValue mit den
+// initialisierten Service-Instanzen ueberschrieben.
+final securityServiceProvider = Provider<SecurityService>((ref) {
+  throw UnimplementedError(
+      'securityServiceProvider muss in main() per ProviderScope override gesetzt werden.');
+});
 
-// Auth State
+final learningServiceProvider = Provider<LearningService>((ref) {
+  throw UnimplementedError(
+      'learningServiceProvider muss in main() per ProviderScope override gesetzt werden.');
+});
+
+final initFailedProvider = StateProvider<bool>((ref) => false);
+
 final authProvider = StateProvider<bool>((ref) => false);
-
-// Onboarding State
+final authErrorProvider = StateProvider<String?>((ref) => null);
 final onboardingDoneProvider = StateProvider<bool>((ref) => false);
-
-// First Launch State
 final firstLaunchProvider = StateProvider<bool>((ref) => true);
 
-// Settings State
 class SettingsState {
   final String plz;
   final String beruf;
@@ -30,7 +36,7 @@ class SettingsState {
   final List<String> files;
   final String mode;
 
-  SettingsState({
+  const SettingsState({
     required this.plz,
     required this.beruf,
     required this.searchEngine,
@@ -64,7 +70,8 @@ class SettingsState {
       language: language ?? this.language,
       country: country ?? this.country,
       allowFeedback: allowFeedback ?? this.allowFeedback,
-      enableYouthProtection: enableYouthProtection ?? this.enableYouthProtection,
+      enableYouthProtection:
+          enableYouthProtection ?? this.enableYouthProtection,
       jahr: jahr ?? this.jahr,
       sources: sources ?? this.sources,
       files: files ?? this.files,
@@ -73,55 +80,105 @@ class SettingsState {
   }
 }
 
+const SettingsState _defaultSettings = SettingsState(
+  plz: '',
+  beruf: '',
+  searchEngine: 'google',
+  language: 'de',
+  country: 'de',
+  allowFeedback: false,
+  enableYouthProtection: true,
+  jahr: 1990,
+  sources: ['alle'],
+  files: ['alle'],
+  mode: 'standard',
+);
+
 class SettingsNotifier extends StateNotifier<SettingsState> {
-  SettingsNotifier() : super(SettingsState(
-    plz: '',
-    beruf: '',
-    searchEngine: 'google',
-    language: 'de',
-    country: 'de',
-    allowFeedback: false,
-    enableYouthProtection: true,
-    jahr: 1990,
-    sources: ['alle'],
-    files: ['alle'],
-    mode: 'standard',
-  ));
+  final SecurityService _security;
+
+  SettingsNotifier(this._security) : super(_defaultSettings);
+
+  // Sensible PII-Felder werden im verschluesselten Hive-Vault abgelegt.
+  static const _piiFields = {'plz', 'beruf', 'jahr'};
 
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // Einmal-Migration: alte Klartext-PII aus SharedPreferences in den Vault
+    // verschieben und danach aus Prefs entfernen.
+    try {
+      final box = _security.vaultBox;
+      final needsMigration = !box.containsKey('plz') &&
+          (prefs.containsKey('plz') ||
+              prefs.containsKey('beruf') ||
+              prefs.containsKey('jahr'));
+      if (needsMigration) {
+        await box.put('plz', prefs.getString('plz') ?? '');
+        await box.put('beruf', prefs.getString('beruf') ?? '');
+        await box.put('jahr', prefs.getInt('jahr') ?? 1990);
+        await prefs.remove('plz');
+        await prefs.remove('beruf');
+        await prefs.remove('jahr');
+        debugPrint('PII migration to encrypted vault completed.');
+      }
+    } catch (e) {
+      debugPrint('PII migration skipped: $e');
+    }
+
+    String pPlz = '';
+    String pBeruf = '';
+    int pJahr = 1990;
+    try {
+      final box = _security.vaultBox;
+      pPlz = (box.get('plz') as String?) ?? '';
+      pBeruf = (box.get('beruf') as String?) ?? '';
+      pJahr = (box.get('jahr') as int?) ?? 1990;
+    } catch (_) {
+      // Vault nicht verfuegbar -> Defaults verwenden, KEIN Klartext-Fallback.
+    }
+
     state = SettingsState(
-      plz: prefs.getString('plz') ?? '',
-      beruf: prefs.getString('beruf') ?? '',
+      plz: pPlz,
+      beruf: pBeruf,
+      jahr: pJahr,
       searchEngine: prefs.getString('searchengine') ?? 'google',
       language: prefs.getString('language') ?? 'de',
       country: prefs.getString('country') ?? 'de',
       allowFeedback: prefs.getBool('allowFeedback') ?? false,
       enableYouthProtection: prefs.getBool('enableYouthProtection') ?? true,
-      jahr: prefs.getInt('jahr') ?? 1990,
-      sources: prefs.getStringList('sources') ?? ['alle'],
-      files: prefs.getStringList('files') ?? ['alle'],
+      sources: prefs.getStringList('sources') ?? const ['alle'],
+      files: prefs.getStringList('files') ?? const ['alle'],
       mode: prefs.getString('mode') ?? 'standard',
     );
   }
 
   Future<void> updateSettings(SettingsState newState) async {
     state = newState;
+
+    // PII -> Vault (verschluesselt)
+    try {
+      final box = _security.vaultBox;
+      await box.put('plz', newState.plz);
+      await box.put('beruf', newState.beruf);
+      await box.put('jahr', newState.jahr);
+    } catch (e) {
+      debugPrint('Vault write failed: $e');
+    }
+
+    // Nicht-PII -> SharedPreferences (Klartext, da unkritisch)
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('plz', state.plz);
-    await prefs.setString('beruf', state.beruf);
-    await prefs.setString('searchengine', state.searchEngine);
-    await prefs.setString('language', state.language);
-    await prefs.setString('country', state.country);
-    await prefs.setBool('allowFeedback', state.allowFeedback);
-    await prefs.setBool('enableYouthProtection', state.enableYouthProtection);
-    await prefs.setInt('jahr', state.jahr);
-    await prefs.setStringList('sources', state.sources);
-    await prefs.setStringList('files', state.files);
-    await prefs.setString('mode', state.mode);
+    await prefs.setString('searchengine', newState.searchEngine);
+    await prefs.setString('language', newState.language);
+    await prefs.setString('country', newState.country);
+    await prefs.setBool('allowFeedback', newState.allowFeedback);
+    await prefs.setBool('enableYouthProtection', newState.enableYouthProtection);
+    await prefs.setStringList('sources', newState.sources);
+    await prefs.setStringList('files', newState.files);
+    await prefs.setString('mode', newState.mode);
   }
 
-  void updateField({
+  Future<void> updateField({
     String? plz,
     String? beruf,
     String? searchEngine,
@@ -147,8 +204,24 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       files: files,
       mode: mode,
     );
-    updateSettings(newState);
+    return updateSettings(newState);
+  }
+
+  // Komplettes Loeschen aller persistenten Settings (Privacy "Notbremse").
+  Future<void> wipeAll() async {
+    try {
+      final box = _security.vaultBox;
+      await box.clear();
+    } catch (_) {}
+    final prefs = await SharedPreferences.getInstance();
+    for (final key in _piiFields) {
+      await prefs.remove(key);
+    }
+    state = _defaultSettings;
   }
 }
 
-final settingsProvider = StateNotifierProvider<SettingsNotifier, SettingsState>((ref) => SettingsNotifier());
+final settingsProvider =
+    StateNotifierProvider<SettingsNotifier, SettingsState>(
+  (ref) => SettingsNotifier(ref.read(securityServiceProvider)),
+);

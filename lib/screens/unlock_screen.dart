@@ -3,45 +3,43 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:findux_mobile/l10n/app_localizations.dart';
+import '../logic/state_provider.dart';
 import '../theme.dart';
 
-class UnlockScreen extends StatefulWidget {
+class UnlockScreen extends ConsumerStatefulWidget {
   final Future<void> Function() onUnlock;
 
   const UnlockScreen({super.key, required this.onUnlock});
 
   @override
-  _UnlockScreenState createState() => _UnlockScreenState();
+  ConsumerState<UnlockScreen> createState() => _UnlockScreenState();
 }
 
-class _UnlockScreenState extends State<UnlockScreen> {
+class _UnlockScreenState extends ConsumerState<UnlockScreen> {
   bool _isAuthenticating = false;
 
   @override
   void initState() {
     super.initState();
-    // Auto-trigger authentication on load
     WidgetsBinding.instance.addPostFrameCallback((_) => _handleUnlock());
   }
 
-  void _handleUnlock() async {
+  Future<void> _handleUnlock() async {
     if (_isAuthenticating) return;
-
     HapticFeedback.selectionClick();
-    setState(() {
-      _isAuthenticating = true;
-    });
-    await widget.onUnlock();
-    if (mounted) {
-      setState(() {
-        _isAuthenticating = false;
-      });
+    setState(() => _isAuthenticating = true);
+    try {
+      await widget.onUnlock();
+    } finally {
+      if (mounted) setState(() => _isAuthenticating = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final authError = ref.watch(authErrorProvider);
     return Scaffold(
       backgroundColor: Colors.black,
       body: Container(
@@ -53,11 +51,15 @@ class _UnlockScreenState extends State<UnlockScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // PREMIUM BRANDING ON UNLOCK
               Image.asset(
                 'assets/logo.png',
                 width: 180,
                 height: 180,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.shield_moon,
+                  size: 120,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 20),
               Text(
@@ -69,7 +71,6 @@ class _UnlockScreenState extends State<UnlockScreen> {
                 ),
               ),
               const SizedBox(height: 40),
-
               ClipRRect(
                 borderRadius: BorderRadius.circular(20),
                 child: BackdropFilter(
@@ -91,14 +92,16 @@ class _UnlockScreenState extends State<UnlockScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            Platform.isIOS ? CupertinoIcons.lock_shield_fill : Icons.fingerprint,
+                            Platform.isIOS
+                                ? CupertinoIcons.lock_shield_fill
+                                : Icons.fingerprint,
                             size: 64,
                             color: Colors.white,
                           ),
                           const SizedBox(height: 20),
                           Text(
-                            _isAuthenticating 
-                                ? AppLocalizations.of(context)!.authenticating 
+                            _isAuthenticating
+                                ? AppLocalizations.of(context)!.authenticating
                                 : AppLocalizations.of(context)!.unlockHardware,
                             style: const TextStyle(
                               fontSize: 16,
@@ -116,7 +119,21 @@ class _UnlockScreenState extends State<UnlockScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 24),
+              if (authError != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    'Auth nicht moeglich. Bitte Geraete-Sperre einrichten.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 16),
               Text(
                 '${AppLocalizations.of(context)!.zeroDataPolicy}\n${AppLocalizations.of(context)!.secureAccess}',
                 textAlign: TextAlign.center,

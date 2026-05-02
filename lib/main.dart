@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -17,42 +19,57 @@ import 'screens/home_page.dart';
 import 'logic/state_provider.dart';
 import 'theme.dart';
 
+Future<void> main() async {
+  // Globaler Error-Handler: keine stillen Crashes mehr
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint('FlutterError: ${details.exceptionAsString()}');
+  };
 
+  runZonedGuarded<Future<void>>(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+    PlatformDispatcher.instance.onError = (error, stack) {
+      debugPrint('PlatformDispatcher error: $error');
+      return true;
+    };
 
-  // Vereinfachte Initialisierung für stabileren Start
-  try {
-    await Hive.initFlutter();
+    final SecurityService securityService = SecurityService();
+    final LearningService learningService = LearningService();
+    bool initOk = false;
 
-    final securityService = SecurityService();
-    await securityService.initSecureBox();
+    try {
+      await Hive.initFlutter();
+      await securityService.initSecureBox();
+      // LearningService verwendet denselben Encryption-Key wie der Vault
+      final cipherKey = await securityService.getEncryptionKey();
+      await learningService.init(cipherKey);
+      initOk = true;
+    } catch (e, st) {
+      debugPrint('Initialisierungsfehler: $e\n$st');
+    }
 
-    // LearningService optional machen
-    final learningService = LearningService();
-    await learningService.init();
-    // await learningService.checkAndAnalyze(); // Temporär deaktiviert
-
-  } catch (e) {
-    // Bei Fehlern trotzdem starten
-    debugPrint('Initialisierungsfehler: $e');
-  }
-
-
-
-  runApp(
-    ProviderScope(
-      child: const MyApp(),
-    ),
-  );
+    // Provider-Overrides: dieselbe Service-Instanz wie in main()
+    runApp(
+      ProviderScope(
+        overrides: [
+          securityServiceProvider.overrideWithValue(securityService),
+          learningServiceProvider.overrideWithValue(learningService),
+          initFailedProvider.overrideWith((ref) => !initOk),
+        ],
+        child: const MyApp(),
+      ),
+    );
+  }, (error, stack) {
+    debugPrint('Uncaught zone error: $error\n$stack');
+  });
 }
 
 class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  _MyAppState createState() => _MyAppState();
+  ConsumerState<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends ConsumerState<MyApp> {
@@ -66,8 +83,10 @@ class _MyAppState extends ConsumerState<MyApp> {
     try {
       final prefs = await SharedPreferences.getInstance();
       if (!mounted) return;
-      ref.read(onboardingDoneProvider.notifier).state = prefs.getBool('onboarding_done') ?? false;
-      ref.read(firstLaunchProvider.notifier).state = prefs.getBool('first_launch') ?? true;
+      ref.read(onboardingDoneProvider.notifier).state =
+          prefs.getBool('onboarding_done') ?? false;
+      ref.read(firstLaunchProvider.notifier).state =
+          prefs.getBool('first_launch') ?? true;
       await ref.read(settingsProvider.notifier).loadSettings();
     } catch (e) {
       debugPrint('initApp error: $e');
@@ -83,10 +102,12 @@ class _MyAppState extends ConsumerState<MyApp> {
         ref.read(authProvider.notifier).state = authenticated;
       }
     } catch (e) {
-      // Bei Auth-Fehlern trotzdem entsperren für Demo-Zwecke
+      // KEIN automatisches Entsperren bei Auth-Fehler.
+      // User muss explizit erneut auf "Entsperren" tippen.
       debugPrint('Auth error: $e');
       if (mounted) {
-        ref.read(authProvider.notifier).state = true;
+        ref.read(authProvider.notifier).state = false;
+        ref.read(authErrorProvider.notifier).state = e.toString();
       }
     }
   }
@@ -94,8 +115,8 @@ class _MyAppState extends ConsumerState<MyApp> {
   Future<void> _completeSetup() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('first_launch', false);
+    if (!mounted) return;
     ref.read(firstLaunchProvider.notifier).state = false;
-    // Nach Setup direkt authentifizieren
     _authenticate();
   }
 
@@ -106,9 +127,8 @@ class _MyAppState extends ConsumerState<MyApp> {
         builder: (context, ref, _) {
           final onboardingDone = ref.watch(onboardingDoneProvider);
           final authenticated = ref.watch(authProvider);
-
-          // Launch-Lock: Require passkey setup on first launch
           final firstLaunch = ref.watch(firstLaunchProvider);
+
           if (firstLaunch) {
             return PasskeySetupScreen(onSetupComplete: _completeSetup);
           } else if (!authenticated) {
@@ -116,13 +136,15 @@ class _MyAppState extends ConsumerState<MyApp> {
           }
 
           if (settings.name == '/settings') {
-            return SettingsScreen();
+            return const SettingsScreen();
           } else if (!onboardingDone) {
             return OnboardingScreen(onComplete: () {
               ref.read(onboardingDoneProvider.notifier).state = true;
             });
           } else {
-            return HomePage(learningService: ref.read(learningServiceProvider));
+            return HomePage(
+              learningService: ref.read(learningServiceProvider),
+            );
           }
         },
       ),
@@ -132,7 +154,6 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
-    // Defensive: nur unterstützte Locales setzen, sonst Fallback auf Deutsch
     const supported = {'de', 'en', 'fr', 'es', 'it'};
     final lang = supported.contains(settings.language) ? settings.language : 'de';
     final locale = Locale(lang);
@@ -157,7 +178,7 @@ class _MyAppState extends ConsumerState<MyApp> {
       return MaterialApp(
         title: 'FindYouX',
         theme: FindUXProTheme.materialTheme,
-        darkTheme: ThemeData.dark(),
+        darkTheme: FindUXProTheme.materialDarkTheme,
         themeMode: ThemeMode.system,
         localizationsDelegates: const [
           AppLocalizations.delegate,

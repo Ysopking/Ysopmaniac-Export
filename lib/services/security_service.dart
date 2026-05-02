@@ -1,5 +1,6 @@
-import 'package:local_auth/local_auth.dart';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hive/hive.dart';
 
@@ -8,40 +9,58 @@ class SecurityService {
   static const String _encryptionKeyKey = 'encryptionKey';
   static const String _vaultBoxName = 'vaultBox';
 
+  List<int>? _cachedKey;
+
   Future<bool> authenticate() async {
-    bool canCheckBiometrics = await auth.canCheckBiometrics;
-    if (!canCheckBiometrics) return false;
+    final canCheckBiometrics = await auth.canCheckBiometrics;
+    final isDeviceSupported = await auth.isDeviceSupported();
+    if (!canCheckBiometrics && !isDeviceSupported) {
+      // Kein Auth-Mittel verfügbar -> bewusst ablehnen.
+      return false;
+    }
 
     try {
       return await auth.authenticate(
         localizedReason: 'Bitte verifizieren, um FindUX zu entsperren',
         options: const AuthenticationOptions(
           stickyAuth: true,
-          biometricOnly: false, // Erlaubt PIN-Fallback für iPhone 6
+          biometricOnly: false,
         ),
       );
     } catch (e) {
+      debugPrint('SecurityService.authenticate error: $e');
       return false;
     }
   }
 
-  Future<void> initSecureBox() async {
+  Future<List<int>> getEncryptionKey() async {
+    if (_cachedKey != null) return _cachedKey!;
     const secureStorage = FlutterSecureStorage();
 
-    // Schlüssel prüfen oder neu erstellen
-    var containsEncryptionKey = await secureStorage.containsKey(key: _encryptionKeyKey);
-    if (!containsEncryptionKey) {
-      var key = Hive.generateSecureKey();
-      await secureStorage.write(key: _encryptionKeyKey, value: base64UrlEncode(key));
+    var containsKey = await secureStorage.containsKey(key: _encryptionKeyKey);
+    if (!containsKey) {
+      final key = Hive.generateSecureKey();
+      await secureStorage.write(
+        key: _encryptionKeyKey,
+        value: base64UrlEncode(key),
+      );
     }
 
-    // Schlüssel auslesen und Box verschlüsselt öffnen
-    var keyString = await secureStorage.read(key: _encryptionKeyKey);
+    final keyString = await secureStorage.read(key: _encryptionKeyKey);
     if (keyString == null) {
-      throw Exception('Encryption key not found in secure storage');
+      throw StateError('Encryption key not found in secure storage');
     }
-    var key = base64Url.decode(keyString);
-    await Hive.openBox(_vaultBoxName, encryptionCipher: HiveAesCipher(key));
+    _cachedKey = base64Url.decode(keyString);
+    return _cachedKey!;
+  }
+
+  Future<void> initSecureBox() async {
+    if (Hive.isBoxOpen(_vaultBoxName)) return;
+    final key = await getEncryptionKey();
+    await Hive.openBox(
+      _vaultBoxName,
+      encryptionCipher: HiveAesCipher(key),
+    );
   }
 
   Box get vaultBox => Hive.box(_vaultBoxName);

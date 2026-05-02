@@ -3,30 +3,42 @@ import 'package:shared_preferences/shared_preferences.dart';
 class FindUXQueryBuilder {
   // Mapping interner Filter auf Googles native 'Advanced Search' Operatoren
   final Map<String, String> sourceOperators = {
-    'foren': ' (site:reddit.com OR site:stackoverflow.com OR inurl:forum OR inurl:community)',
+    'foren':
+        ' (site:reddit.com OR site:stackoverflow.com OR inurl:forum OR inurl:community)',
     'reddit': ' site:reddit.com',
-    'news': ' (site:spiegel.de OR site:zeit.de OR site:heise.de OR site:bbc.com)',
+    'news':
+        ' (site:spiegel.de OR site:zeit.de OR site:heise.de OR site:bbc.com)',
     'wikipedia': ' site:wikipedia.org',
     'offiziell': ' (site:.gov OR site:.edu OR site:.org)',
     'academic': ' (site:.edu OR site:.ac.uk OR inurl:scholar)',
-    'video': ' site:youtube.com OR site:vimeo.com',
-    'blogs': ' inurl:blog OR site:medium.com',
+    'video': ' (site:youtube.com OR site:vimeo.com)',
+    'blogs': ' (inurl:blog OR site:medium.com)',
     'shops': ' (site:amazon.de OR site:ebay.de OR site:otto.de)',
-    'social': ' (site:twitter.com OR site:facebook.com OR site:linkedin.com)',
+    'social':
+        ' (site:twitter.com OR site:facebook.com OR site:linkedin.com)',
   };
 
   final Map<String, String> fileOperators = {
     'pdf': ' filetype:pdf',
-    'ppt': ' filetype:pptx OR filetype:ppt',
-    'doc': ' filetype:docx OR filetype:doc',
-    'xls': ' filetype:xlsx OR filetype:xls',
+    'ppt': ' (filetype:pptx OR filetype:ppt)',
+    'doc': ' (filetype:docx OR filetype:doc)',
+    'xls': ' (filetype:xlsx OR filetype:xls)',
     'code': ' (site:github.com OR site:gitlab.com)',
-    'images': ' filetype:jpg OR filetype:png',
+    'images': ' (filetype:jpg OR filetype:png)',
   };
 
-  // Google native exclusions für Jugendschutz und Rauschunterdrückung
-  static const List<String> noiseExclusions = ['-inurl:ads', '-inurl:promo', '-intitle:sponsored'];
-  static const List<String> explicitExclusions = ['-sex', '-porn', '-nude', '-gambling', '-betting'];
+  static const List<String> noiseExclusions = [
+    '-inurl:ads',
+    '-inurl:promo',
+    '-intitle:sponsored'
+  ];
+  static const List<String> explicitExclusions = [
+    '-sex',
+    '-porn',
+    '-nude',
+    '-gambling',
+    '-betting'
+  ];
 
   double _getLearnedWeight(String key, Map<String, double> weights) {
     return weights['weight_$key'] ?? 1.0;
@@ -37,27 +49,30 @@ class FindUXQueryBuilder {
     required String why,
     required List<String> filters,
     required Map<String, dynamic> settings,
-    String mode = 'standard'
+    String mode = 'standard',
   }) async {
     String googleDork = '';
     final prefs = await SharedPreferences.getInstance();
 
-    // Cache alle Gewichte für Performance
     final Map<String, double> weights = {};
-    final allKeys = prefs.getKeys();
-    for (var key in allKeys) {
+    for (final key in prefs.getKeys()) {
       if (key.startsWith('weight_')) {
         weights[key] = prefs.getDouble(key) ?? 1.0;
       }
     }
 
-    // 1. WAS (Das exakte Suchziel - Google "exact phrase" logic)
+    // 1. WAS: exakte Phrase
     if (what.isNotEmpty) {
-      String cleanedWhat = what.replaceAll(RegExp(r'[“”„‟]'), '"').replaceAll(RegExp(r'\s+'), ' ').trim();
-      googleDork = (cleanedWhat.contains(' ') && !cleanedWhat.contains('"')) ? '"$cleanedWhat"' : cleanedWhat;
+      String cleanedWhat = what
+          .replaceAll(RegExp(r'[“”„‟]'), '"')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      googleDork = (cleanedWhat.contains(' ') && !cleanedWhat.contains('"'))
+          ? '"$cleanedWhat"'
+          : cleanedWhat;
     }
 
-    // 1.1 LERN-ERWEITERUNG: Stark gewichtete Keywords einfließen lassen (NEU)
+    // 1.1 Lern-Boost: stark gewichtete Keywords
     final List<String> learnedBoosts = [];
     weights.forEach((key, weight) {
       if (key.startsWith('weight_kw_') && weight > 1.5) {
@@ -68,42 +83,51 @@ class FindUXQueryBuilder {
       googleDork += ' (${learnedBoosts.take(3).join(' OR ')})';
     }
 
-    // 2. WARUM (Kontextuelle Erweiterung - Google "allintext" logic)
+    // 2. WARUM: Kontext-Keywords als einfache Begriffe (NICHT allintext:,
+    // weil das mit nachfolgenden site:/filetype: Operatoren kollidiert).
     if (why.isNotEmpty) {
-      List<String> contextKeywords = why.split(RegExp(r'[,;\s]+')).where((kw) => kw.length > 2).toList();
+      final contextKeywords = why
+          .split(RegExp(r'[,;\s]+'))
+          .where((kw) => kw.length > 2)
+          .toList();
       if (contextKeywords.isNotEmpty) {
-        googleDork += ' allintext:${contextKeywords.join(' ')}';
+        googleDork += ' ${contextKeywords.join(' ')}';
       }
     }
 
-    // 3. PERSÖNLICHE GEWICHTUNG (Googles native Standort/Beruf-Operatoren)
-    if (settings['beruf'] != null && settings['beruf'].isNotEmpty) {
-      googleDork += ' ${settings['beruf']}';
+    // 3. Persoenliche Gewichtung
+    final beruf = settings['beruf'];
+    if (beruf is String && beruf.isNotEmpty) {
+      googleDork += ' $beruf';
     }
-    if (settings['plz'] != null && settings['plz'].isNotEmpty && settings['plz'] != '0') {
-      googleDork += ' location:${settings['plz']}';
+    // KEIN fiktiver location:-Operator. PLZ als reiner Suchbegriff.
+    final plz = settings['plz'];
+    if (plz is String && plz.isNotEmpty && plz != '0') {
+      googleDork += ' $plz';
     }
 
-    // 4. LERN-OPTIMIERTE FILTER (Nutzung von Googles 'site:' und 'filetype:')
-    Map<String, double> filterWeights = {};
-    for (var f in filters) {
+    // 4. Lern-optimierte Filter
+    final Map<String, double> filterWeights = {};
+    for (final f in filters) {
       filterWeights[f] = _getLearnedWeight('filter_$f', weights);
     }
+    final sortedFilters = List<String>.from(filters)
+      ..sort((a, b) => filterWeights[b]!.compareTo(filterWeights[a]!));
 
-    List<String> sortedFilters = List.from(filters);
-    sortedFilters.sort((a, b) => filterWeights[b]!.compareTo(filterWeights[a]!));
-
-    for (var filter in sortedFilters) {
-      // Nur Filter einbeziehen, die eine positive Google-Gewichtung (lokal gelernt) haben
+    for (final filter in sortedFilters) {
       if (filterWeights[filter]! >= 0.8) {
-        if (sourceOperators.containsKey(filter)) googleDork += sourceOperators[filter]!;
-        if (fileOperators.containsKey(filter)) googleDork += fileOperators[filter]!;
+        if (sourceOperators.containsKey(filter)) {
+          googleDork += sourceOperators[filter]!;
+        }
+        if (fileOperators.containsKey(filter)) {
+          googleDork += fileOperators[filter]!;
+        }
       }
     }
 
-    // 5. JUGENDSCHUTZ & ANTI-ADS (Googles native Exclusions)
+    // 5. Jugendschutz & Anti-Ads
     googleDork += ' ${noiseExclusions.join(' ')}';
-    final bool isYouthActive = settings['enableYouthProtection'] ?? true;
+    final isYouthActive = (settings['enableYouthProtection'] as bool?) ?? true;
     if (isYouthActive) {
       googleDork += ' ${explicitExclusions.join(' ')}';
     }
@@ -111,20 +135,26 @@ class FindUXQueryBuilder {
     return googleDork.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
-  String buildSearchUrl(String query, String engine, Map<String, dynamic> settings) {
+  String buildSearchUrl(
+      String query, String engine, Map<String, dynamic> settings) {
     String base;
     String params = '';
-    final bool isYouthActive = settings['enableYouthProtection'] ?? true;
+    final isYouthActive = (settings['enableYouthProtection'] as bool?) ?? true;
 
     switch (engine) {
       case 'bing':
         base = 'https://www.bing.com/search?q=';
-        if (isYouthActive) params = '&adlt=strict';
+        // Korrekter Bing-Parameter fuer SafeSearch.
+        if (isYouthActive) params = '&safeSearch=Strict';
+        break;
+      case 'duckduckgo':
+        base = 'https://duckduckgo.com/?q=';
+        if (isYouthActive) params = '&kp=1';
         break;
       default:
         base = 'https://www.google.com/search?q=';
-        // Google native Parameter für maximale Präzision und Jugendschutz
-        params = '&filter=0'; // Verhindert das Weglassen "ähnlicher" Ergebnisse
+        // filter=1 = duplikate dedupliziert (hoehere Praezision).
+        params = '&filter=1';
         if (isYouthActive) params += '&safe=active';
     }
 

@@ -1,15 +1,14 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../services/learning_service.dart';
 import '../logic/query_builder.dart';
 import '../logic/state_provider.dart';
-import '../logic/mirror_logic.dart';
 import '../logic/deep_analyzer.dart';
 import '../theme.dart';
 
@@ -19,14 +18,13 @@ class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key, required this.learningService});
 
   @override
-  _HomePageState createState() => _HomePageState();
+  ConsumerState<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends ConsumerState<HomePage> {
   final TextEditingController _whatController = TextEditingController();
   final TextEditingController _whyController = TextEditingController();
 
-  bool _searchPerformed = false;
   bool _showFeedbackOverlay = false;
   bool _showDeepAnalysisOverlay = false;
   List<String> _suggestedGoals = [];
@@ -38,11 +36,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   String _viewState = 'home';
 
   @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
   void dispose() {
     _analysisTimer?.cancel();
     _whatController.dispose();
@@ -51,14 +44,21 @@ class _HomePageState extends ConsumerState<HomePage> {
     super.dispose();
   }
 
+  /// Loescht fluechtige Sitzungsdaten im Speicher.
+  /// Externer Browser haelt seinen eigenen Cache; den koennen wir nicht steuern.
   Future<void> _purgeAllSessionData() async {
-    // External browser handles its own cache
+    if (!mounted) return;
+    setState(() {
+      _suggestedGoals = const [];
+      _selectedRating = null;
+      _feedbackController.clear();
+      _showDeepAnalysisOverlay = false;
+      _showFeedbackOverlay = false;
+    });
   }
 
   Future<void> _performSearch({String? addedGoal}) async {
     if (_whatController.text.trim().isEmpty) return;
-
-    await _purgeAllSessionData();
 
     if (_viewState != 'results') {
       _startDeepAnalysis();
@@ -79,10 +79,10 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     String contextWhy = _whyController.text;
     if (addedGoal != null) {
-      contextWhy = "$contextWhy $addedGoal";
+      contextWhy = '$contextWhy $addedGoal';
     }
 
-final fullQuery = await builder.buildQuery(
+    final fullQuery = await builder.buildQuery(
       what: _whatController.text,
       why: contextWhy,
       filters: allFilters,
@@ -94,14 +94,24 @@ final fullQuery = await builder.buildQuery(
 
     setState(() {
       _viewState = 'results';
-      _searchPerformed = true;
       _showDeepAnalysisOverlay = false;
     });
 
-    // URL generated successfully - no external opening due to build constraints
-    debugPrint('FindUX Query: $url');
+    // Suchanfrage tatsaechlich im externen Browser oeffnen.
+    final uri = Uri.tryParse(url);
+    if (uri != null) {
+      try {
+        final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (!ok && mounted) {
+          _showLaunchFailedSnack();
+        }
+      } catch (e) {
+        debugPrint('launchUrl error: $e');
+        if (mounted) _showLaunchFailedSnack();
+      }
+    }
 
-    widget.learningService.trackSearch(
+    await widget.learningService.trackSearch(
       query: fullQuery,
       url: url,
       settings: settingsMap,
@@ -111,11 +121,21 @@ final fullQuery = await builder.buildQuery(
     );
   }
 
+  void _showLaunchFailedSnack() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Suchergebnis konnte nicht geoeffnet werden.'),
+        backgroundColor: Colors.redAccent,
+      ),
+    );
+  }
+
   void _startDeepAnalysis() {
     _analysisTimer?.cancel();
     _analysisTimer = Timer(const Duration(seconds: 30), () async {
       if (_viewState == 'results' && mounted) {
-        final results = await DeepAnalyzer.analyzeResults(_whatController.text, {});
+        final results =
+            await DeepAnalyzer.analyzeResults(_whatController.text, {});
         if (mounted) {
           setState(() {
             _suggestedGoals = results;
@@ -130,7 +150,8 @@ final fullQuery = await builder.buildQuery(
   void _submitFeedback() {
     if (_selectedRating == null) return;
     HapticFeedback.mediumImpact();
-    widget.learningService.trackFeedback(_selectedRating!, comment: _feedbackController.text.trim());
+    widget.learningService
+        .trackFeedback(_selectedRating!, comment: _feedbackController.text.trim());
     setState(() {
       _showFeedbackOverlay = false;
       _selectedRating = null;
@@ -157,10 +178,14 @@ final fullQuery = await builder.buildQuery(
 
   Widget _getViewForState() {
     switch (_viewState) {
-      case 'home': return _buildPremiumHomeScreen(key: const ValueKey('home'));
-      case 'dashboard': return _buildSearchDashboard(key: const ValueKey('dashboard'));
-      case 'results': return _buildWebViewResults(key: const ValueKey('results'));
-      default: return _buildPremiumHomeScreen(key: const ValueKey('home'));
+      case 'home':
+        return _buildPremiumHomeScreen(key: const ValueKey('home'));
+      case 'dashboard':
+        return _buildSearchDashboard(key: const ValueKey('dashboard'));
+      case 'results':
+        return _buildWebViewResults(key: const ValueKey('results'));
+      default:
+        return _buildPremiumHomeScreen(key: const ValueKey('home'));
     }
   }
 
@@ -177,28 +202,52 @@ final fullQuery = await builder.buildQuery(
               physics: const ClampingScrollPhysics(),
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: IntrinsicHeight(
-                  child: Column(
-                    children: [
-                      const Spacer(flex: 1),
-                      Image.asset('assets/logo.png', width: 220, height: 220),
-                      const SizedBox(height: 10),
-                      Text('FindYouX', style: FindUXProTheme.headlineStyle.copyWith(fontSize: 42, color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: -1)),
-                      const Icon(Icons.face_retouching_natural, size: 40, color: Colors.white38),
-                      const Spacer(flex: 1),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 40),
-                        child: Column(
-                          children: [
-                            _buildMenuButton(title: l10n.startSearch, icon: Icons.search_rounded, onTap: () => setState(() => _viewState = 'dashboard')),
-                            const SizedBox(height: 16),
-                            _buildMenuButton(title: l10n.settingsTitle, icon: Icons.settings_rounded, onTap: () => Navigator.pushNamed(context, '/settings')),
-                          ],
-                        ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    const SizedBox(height: 40),
+                    Image.asset(
+                      'assets/logo.png',
+                      width: 220,
+                      height: 220,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.search,
+                        size: 160,
+                        color: Colors.white70,
                       ),
-                      const Spacer(flex: 2),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'FindYouX',
+                      style: FindUXProTheme.headlineStyle.copyWith(
+                        fontSize: 42,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -1,
+                      ),
+                    ),
+                    const Icon(Icons.face_retouching_natural,
+                        size: 40, color: Colors.white38),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 40),
+                      child: Column(
+                        children: [
+                          _buildMenuButton(
+                            title: l10n.startSearch,
+                            icon: Icons.search_rounded,
+                            onTap: () => setState(() => _viewState = 'dashboard'),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildMenuButton(
+                            title: l10n.settingsTitle,
+                            icon: Icons.settings_rounded,
+                            onTap: () => Navigator.pushNamed(context, '/settings'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 60),
+                  ],
                 ),
               ),
             );
@@ -208,7 +257,8 @@ final fullQuery = await builder.buildQuery(
     );
   }
 
-  Widget _buildMenuButton({required String title, required IconData icon, required VoidCallback onTap}) {
+  Widget _buildMenuButton(
+      {required String title, required IconData icon, required VoidCallback onTap}) {
     return _AnimatedScaleButton(
       onTap: onTap,
       child: Container(
@@ -224,7 +274,10 @@ final fullQuery = await builder.buildQuery(
               child: Text(
                 title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500),
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500),
               ),
             ),
             Icon(icon, color: Colors.white, size: 22),
@@ -250,26 +303,43 @@ final fullQuery = await builder.buildQuery(
                 children: [
                   Row(
                     children: [
-                      IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20), onPressed: () => setState(() => _viewState = 'home')),
-                      Text(l10n.knowledgeSession, style: FindUXProTheme.titleStyle.copyWith(color: Colors.white, fontSize: 24)),
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back_ios,
+                            color: Colors.white, size: 20),
+                        onPressed: () => setState(() => _viewState = 'home'),
+                      ),
+                      Text(l10n.knowledgeSession,
+                          style: FindUXProTheme.titleStyle
+                              .copyWith(color: Colors.white, fontSize: 24)),
                     ],
                   ),
                   const SizedBox(height: 32),
-                  _buildMissionInput(controller: _whatController, label: l10n.whatSearch, hint: l10n.topicHint),
+                  _buildMissionInput(
+                      controller: _whatController,
+                      label: l10n.whatSearch,
+                      hint: l10n.topicHint),
                   const SizedBox(height: 20),
-                  _buildMissionInput(controller: _whyController, label: l10n.whySearch, hint: l10n.reasonHint),
+                  _buildMissionInput(
+                      controller: _whyController,
+                      label: l10n.whySearch,
+                      hint: l10n.reasonHint),
                   const SizedBox(height: 32),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       style: FindUXProTheme.primaryButtonStyle.copyWith(
-                        backgroundColor: WidgetStateProperty.all(Colors.white),
-                        foregroundColor: WidgetStateProperty.all(FindUXProTheme.primaryPurple),
-                        padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 18)),
+                        backgroundColor:
+                            WidgetStateProperty.all(Colors.white),
+                        foregroundColor: WidgetStateProperty.all(
+                            FindUXProTheme.primaryPurple),
+                        padding: WidgetStateProperty.all(
+                            const EdgeInsets.symmetric(vertical: 18)),
                       ),
                       onPressed: () => _performSearch(),
                       icon: const Icon(Icons.bolt_rounded),
-                      label: Text(l10n.startAnalysis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                      label: Text(l10n.startAnalysis,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w900, fontSize: 18)),
                     ),
                   ),
                 ],
@@ -278,11 +348,22 @@ final fullQuery = await builder.buildQuery(
             Expanded(
               child: Container(
                 width: double.infinity,
-                decoration: const BoxDecoration(color: Color(0xFFF5F5F7), borderRadius: BorderRadius.only(topLeft: Radius.circular(30), topRight: Radius.circular(30))),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF5F5F7),
+                  borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(30),
+                      topRight: Radius.circular(30)),
+                ),
                 child: const Center(
                   child: Padding(
                     padding: EdgeInsets.all(40),
-                    child: Text('Incognito Mobile Mirror aktiv.\nOptimiert für Handheld-Präzision.', textAlign: TextAlign.center, style: TextStyle(color: Colors.black26, fontSize: 14, fontWeight: FontWeight.w500)),
+                    child: Text(
+                        'Suchanfrage wird im externen Browser geoeffnet.\nFindUX speichert keine Browsing-Historie.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            color: Colors.black26,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500)),
                   ),
                 ),
               ),
@@ -293,19 +374,32 @@ final fullQuery = await builder.buildQuery(
     );
   }
 
-  Widget _buildMissionInput({required TextEditingController controller, required String label, required String hint}) {
+  Widget _buildMissionInput(
+      {required TextEditingController controller,
+      required String label,
+      required String hint}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold)),
+        Text(label,
+            style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+                fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: FindUXProTheme.largeSquircleRadius, border: Border.all(color: Colors.white10)),
+          decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.1),
+              borderRadius: FindUXProTheme.largeSquircleRadius,
+              border: Border.all(color: Colors.white10)),
           child: TextField(
             controller: controller,
             style: const TextStyle(color: Colors.white, fontSize: 16),
-            decoration: InputDecoration(hintText: hint, hintStyle: const TextStyle(color: Colors.white30), border: InputBorder.none),
+            decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: const TextStyle(color: Colors.white30),
+                border: InputBorder.none),
           ),
         ),
       ],
@@ -313,25 +407,39 @@ final fullQuery = await builder.buildQuery(
   }
 
   Widget _buildWebViewResults({Key? key}) {
-    final l10n = AppLocalizations.of(context)!;
     return Column(
       key: key,
       children: [
         Container(
-          padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top, bottom: 8),
+          padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top, bottom: 8),
           decoration: const BoxDecoration(color: FindUXProTheme.primaryPurple),
           child: Row(
             children: [
-              IconButton(icon: const Icon(Icons.close, color: Colors.white, size: 22), onPressed: () async {
-                _analysisTimer?.cancel();
-                await _purgeAllSessionData();
-                _viewState = 'dashboard';
-                setState(() {});
-              }),
-              Expanded(child: Text('Suchergebnisse: ${_whatController.text}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14), overflow: TextOverflow.ellipsis)),
-              IconButton(icon: const Icon(Icons.info_outline, color: Colors.white, size: 22), onPressed: () {
-                // Show FindUX demo info
-              }),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 22),
+                onPressed: () async {
+                  _analysisTimer?.cancel();
+                  await _purgeAllSessionData();
+                  if (!mounted) return;
+                  setState(() => _viewState = 'dashboard');
+                },
+              ),
+              Expanded(
+                child: Text(
+                  'Suche: ${_whatController.text}',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh, color: Colors.white, size: 22),
+                onPressed: () => _performSearch(),
+                tooltip: 'Im Browser erneut oeffnen',
+              ),
             ],
           ),
         ),
@@ -341,67 +449,118 @@ final fullQuery = await builder.buildQuery(
               Container(
                 color: Colors.white,
                 child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.open_in_browser, size: 64, color: FindUXProTheme.primaryPurple),
-                      const SizedBox(height: 16),
-                      Text(
-                        'FindUX Suchanfrage erstellt!',
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Die intelligente Query wurde erfolgreich generiert.\nDiese Demo zeigt die komplette FindUX-Logik.',
-                        style: const TextStyle(color: Colors.grey, fontSize: 16),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 24),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: FindUXProTheme.primaryPurple.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: FindUXProTheme.primaryPurple.withValues(alpha: 0.2)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.open_in_browser,
+                            size: 64, color: FindUXProTheme.primaryPurple),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Im Browser geoeffnet',
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
                         ),
-                        child: Column(
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Deine optimierte Suchanfrage laeuft jetzt in deiner Standard-Browser-App.\nKomme zurueck und gib Feedback.',
+                          style: TextStyle(color: Colors.grey, fontSize: 14),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 24),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: FindUXProTheme.primaryPurple
+                                .withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: FindUXProTheme.primaryPurple
+                                    .withValues(alpha: 0.2)),
+                          ),
+                          child: Column(
+                            children: [
+                              const Text('Deine Suchanfrage:',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 8),
+                              Text(
+                                '"${_whatController.text}"',
+                                style: const TextStyle(
+                                    fontSize: 16, fontStyle: FontStyle.italic),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 30,
+                left: 20,
+                right: 20,
+                child: SafeArea(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: FindUXProTheme.primaryPurple
+                              .withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Row(
                           children: [
-                            Text(
-                              'Ihre Suchanfrage:',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '"${_whatController.text}"',
-                              style: const TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
-                              textAlign: TextAlign.center,
+                            IconButton(
+                              icon: const Icon(Icons.arrow_back_ios_new,
+                                  color: Colors.white, size: 20),
+                              onPressed: () =>
+                                  setState(() => _viewState = 'dashboard'),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        '✨ FindUX generiert intelligente Suchanfragen\n🧠 Das System lernt aus Ihrem Feedback\n🔒 Alle Daten bleiben lokal gespeichert',
-                        style: const TextStyle(color: Colors.grey, fontSize: 14),
-                        textAlign: TextAlign.center,
+                      GestureDetector(
+                        onTap: () => setState(() =>
+                            _showFeedbackOverlay = !_showFeedbackOverlay),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: FindUXProTheme.primaryPurple,
+                            borderRadius: BorderRadius.circular(30),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.3),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 5))
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.psychology,
+                                  color: Colors.white, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                AppLocalizations.of(context)!.learningMode,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
-
-              Positioned(bottom: 30, left: 20, right: 20, child: SafeArea(child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Container(padding: const EdgeInsets.all(4), decoration: BoxDecoration(color: FindUXProTheme.primaryPurple.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(30)), child: Row(children: [
-                  IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20), onPressed: () {
-                    setState(() => _viewState = 'dashboard');
-                  }),
-                  IconButton(icon: const Icon(Icons.info, color: Colors.white, size: 20), onPressed: () {
-                    // Show FindUX info
-                  }),
-                ])),
-                GestureDetector(onTap: () => setState(() => _showFeedbackOverlay = !_showFeedbackOverlay), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: FindUXProTheme.primaryPurple, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 5))]), child: Row(children: [const Icon(Icons.psychology, color: Colors.white, size: 20), const SizedBox(width: 8),                 Text(l10n.learningMode, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))]))),
-              ]))),
               if (_showDeepAnalysisOverlay) _buildDeepAnalysisOverlay(),
               if (_showFeedbackOverlay) _buildEnhancedFeedbackOverlay(),
             ],
@@ -411,7 +570,7 @@ final fullQuery = await builder.buildQuery(
     );
   }
 
-Widget _buildDeepAnalysisOverlay() {
+  Widget _buildDeepAnalysisOverlay() {
     return Positioned.fill(
       child: GestureDetector(
         onTap: () => setState(() => _showDeepAnalysisOverlay = false),
@@ -428,12 +587,15 @@ Widget _buildDeepAnalysisOverlay() {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.auto_awesome, color: FindUXProTheme.primaryPurple, size: 40),
+                  const Icon(Icons.auto_awesome,
+                      color: FindUXProTheme.primaryPurple, size: 40),
                   const SizedBox(height: 16),
-                  const Text('Präzisierung nötig', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
+                  const Text('Praezisierung noetig',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 22)),
                   const SizedBox(height: 8),
                   const Text(
-                    'Ich habe die ersten 50 Ergebnisse analysiert. Welches Ziel verfolgst du genau?',
+                    'Welches Ziel verfolgst du genau?',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.black54, fontSize: 14),
                   ),
@@ -441,21 +603,30 @@ Widget _buildDeepAnalysisOverlay() {
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: _suggestedGoals.map((goal) => GestureDetector(
-                      onTap: () {
-                        HapticFeedback.mediumImpact();
-                        _performSearch(addedGoal: goal);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: FindUXProTheme.primaryPurple.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: FindUXProTheme.primaryPurple.withValues(alpha: 0.2)),
-                        ),
-                        child: Text(goal, style: const TextStyle(color: FindUXProTheme.primaryPurple, fontWeight: FontWeight.w600)),
-                      ),
-                    )).toList(),
+                    children: _suggestedGoals
+                        .map((goal) => GestureDetector(
+                              onTap: () {
+                                HapticFeedback.mediumImpact();
+                                _performSearch(addedGoal: goal);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: FindUXProTheme.primaryPurple
+                                      .withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                      color: FindUXProTheme.primaryPurple
+                                          .withValues(alpha: 0.2)),
+                                ),
+                                child: Text(goal,
+                                    style: const TextStyle(
+                                        color: FindUXProTheme.primaryPurple,
+                                        fontWeight: FontWeight.w600)),
+                              ),
+                            ))
+                        .toList(),
                   ),
                   const SizedBox(height: 24),
                   TextButton(
@@ -463,7 +634,8 @@ Widget _buildDeepAnalysisOverlay() {
                       HapticFeedback.lightImpact();
                       setState(() => _showDeepAnalysisOverlay = false);
                     },
-                    child: const Text('Aktuelle Ansicht beibehalten', style: TextStyle(color: Colors.grey)),
+                    child: const Text('Aktuelle Ansicht beibehalten',
+                        style: TextStyle(color: Colors.grey)),
                   ),
                 ],
               ),
@@ -495,15 +667,23 @@ Widget _buildDeepAnalysisOverlay() {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('Spezifizierung präzise?', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+                    const Text('Spezifizierung praezise?',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 20)),
                     const SizedBox(height: 12),
-                    const Text('Dieses Feedback verfeinert die Gewichtung deiner persönlichen Daten.', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54, fontSize: 14)),
+                    const Text(
+                        'Dieses Feedback verfeinert die Gewichtung deiner persoenlichen Daten.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.black54, fontSize: 14)),
                     const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        _buildFeedbackIcon(Icons.thumb_down_alt_outlined, 'down', Colors.red),
-                        _buildFeedbackIcon(Icons.thumb_up_alt_outlined, 'up', Colors.green),
+                        _buildFeedbackIcon(Icons.thumb_down_alt_outlined,
+                            'down', Colors.red),
+                        _buildFeedbackIcon(
+                            Icons.thumb_up_alt_outlined, 'up', Colors.green),
                       ],
                     ),
                     const SizedBox(height: 24),
@@ -522,9 +702,13 @@ Widget _buildDeepAnalysisOverlay() {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: FindUXProTheme.primaryButtonStyle.copyWith(
-                          backgroundColor: WidgetStateProperty.all(_selectedRating != null ? FindUXProTheme.primaryPurple : Colors.grey),
+                          backgroundColor: WidgetStateProperty.all(
+                              _selectedRating != null
+                                  ? FindUXProTheme.primaryPurple
+                                  : Colors.grey),
                         ),
-                        onPressed: _selectedRating != null ? _submitFeedback : null,
+                        onPressed:
+                            _selectedRating != null ? _submitFeedback : null,
                         child: const Text('Sitzung bewerten'),
                       ),
                     ),
@@ -539,7 +723,7 @@ Widget _buildDeepAnalysisOverlay() {
   }
 
   Widget _buildFeedbackIcon(IconData icon, String rating, Color color) {
-    bool isSelected = _selectedRating == rating;
+    final isSelected = _selectedRating == rating;
     return GestureDetector(
       onTap: () {
         HapticFeedback.selectionClick();
@@ -549,9 +733,12 @@ Widget _buildDeepAnalysisOverlay() {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha: 0.2) : color.withValues(alpha: 0.05),
+          color: isSelected
+              ? color.withValues(alpha: 0.2)
+              : color.withValues(alpha: 0.05),
           shape: BoxShape.circle,
-          border: Border.all(color: isSelected ? color : Colors.transparent, width: 2),
+          border: Border.all(
+              color: isSelected ? color : Colors.transparent, width: 2),
         ),
         child: Icon(icon, color: color, size: 36),
       ),
@@ -566,17 +753,19 @@ class _AnimatedScaleButton extends StatefulWidget {
   const _AnimatedScaleButton({required this.child, required this.onTap});
 
   @override
-  __AnimatedScaleButtonState createState() => __AnimatedScaleButtonState();
+  State<_AnimatedScaleButton> createState() => _AnimatedScaleButtonState();
 }
 
-class __AnimatedScaleButtonState extends State<_AnimatedScaleButton> with SingleTickerProviderStateMixin {
+class _AnimatedScaleButtonState extends State<_AnimatedScaleButton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 100));
+    _controller = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 100));
     _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(_controller);
   }
 

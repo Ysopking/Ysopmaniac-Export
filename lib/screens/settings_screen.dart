@@ -8,6 +8,7 @@ import '../theme.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
@@ -25,20 +26,27 @@ class SettingsScreen extends ConsumerWidget {
         ),
         title: Text(
           AppLocalizations.of(context)!.settingsTitle.toUpperCase(),
-          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w900, letterSpacing: 1.2, fontSize: 18),
+          style: const TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.2,
+              fontSize: 18),
         ),
       ),
       body: Column(
         children: [
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
               children: [
                 _buildOptionTile(
                   icon: Icons.person_outline,
-                  title: 'Autoren',
-                  subtitle: settings.beruf.isNotEmpty ? settings.beruf : 'Profile oder Autoren',
-                  onTap: () {},
+                  title: 'Beruf',
+                  subtitle: settings.beruf.isNotEmpty
+                      ? settings.beruf
+                      : 'Nicht festgelegt',
+                  onTap: () => _showBerufDialog(context, ref),
                 ),
                 _buildOptionTile(
                   icon: Icons.language,
@@ -52,7 +60,8 @@ class SettingsScreen extends ConsumerWidget {
                 _buildOptionTile(
                   icon: Icons.location_on_outlined,
                   title: AppLocalizations.of(context)!.zipLabel,
-                  subtitle: settings.plz.isEmpty ? 'Nicht festgelegt' : settings.plz,
+                  subtitle:
+                      settings.plz.isEmpty ? 'Nicht festgelegt' : settings.plz,
                   onTap: () => _showZipDialog(context, ref),
                 ),
                 _buildOptionTile(
@@ -65,52 +74,18 @@ class SettingsScreen extends ConsumerWidget {
                   },
                 ),
                 _buildOptionTile(
-                  icon: Icons.settings_outlined,
-                  title: 'Einstellungen',
-                  subtitle: 'App-Präferenzen verwalten',
-                  onTap: () {},
-                ),
-                _buildOptionTile(
-                  icon: Icons.description_outlined,
-                  title: 'Bedingungen',
-                  subtitle: 'Rechtliche Hinweise',
-                  onTap: () {},
-                ),
-                _buildOptionTile(
-                  icon: Icons.help_outline,
-                  title: 'Unterstützung',
-                  subtitle: 'Hilfe und Support',
-                  onTap: () {},
-                ),
-                _buildOptionTile(
                   icon: Icons.security_rounded,
                   title: AppLocalizations.of(context)!.reviewFeedback,
                   subtitle: 'Datenexport manuell freigeben',
                   onTap: () => _showFeedbackExportDialog(context, ref),
                 ),
+                _buildOptionTile(
+                  icon: Icons.delete_forever_outlined,
+                  title: 'Alle persoenlichen Daten loeschen',
+                  subtitle: 'Vault zuruecksetzen (Notbremse)',
+                  onTap: () => _confirmWipe(context, ref),
+                ),
               ],
-            ),
-          ),
-          // "Finde mehr heraus" Button
-          Padding(
-            padding: const EdgeInsets.all(32),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: FindUXProTheme.primaryPurple,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: FindUXProTheme.largeSquircleRadius),
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                ),
-                onPressed: () {
-                  HapticFeedback.heavyImpact();
-                },
-                child: const Text(
-                  'Finde mehr heraus',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-              ),
             ),
           ),
         ],
@@ -131,15 +106,23 @@ class SettingsScreen extends ConsumerWidget {
         borderRadius: FindUXProTheme.largeSquircleRadius,
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         leading: Container(
           padding: const EdgeInsets.all(10),
-          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+          decoration: const BoxDecoration(
+              color: Colors.white, shape: BoxShape.circle),
           child: Icon(icon, color: Colors.black, size: 24),
         ),
-        title: Text(title, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
-        subtitle: Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 13)),
-        trailing: const Icon(Icons.arrow_forward_ios, color: Colors.black26, size: 16),
+        title: Text(title,
+            style: const TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+                fontSize: 16)),
+        subtitle: Text(subtitle,
+            style: const TextStyle(color: Colors.black54, fontSize: 13)),
+        trailing: const Icon(Icons.arrow_forward_ios,
+            color: Colors.black26, size: 16),
         onTap: () {
           HapticFeedback.selectionClick();
           onTap();
@@ -149,8 +132,9 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   void _showZipDialog(BuildContext context, WidgetRef ref) {
-    final controller = TextEditingController(text: ref.read(settingsProvider).plz);
-    showDialog(
+    final controller =
+        TextEditingController(text: ref.read(settingsProvider).plz);
+    showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(AppLocalizations.of(context)!.zipLabel),
@@ -160,13 +144,70 @@ class SettingsScreen extends ConsumerWidget {
           decoration: const InputDecoration(hintText: 'z.B. 10115'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Abbrechen')),
           TextButton(
             onPressed: () {
-              ref.read(settingsProvider.notifier).updateField(plz: controller.text);
+              ref.read(settingsProvider.notifier).updateField(
+                    plz: controller.text.trim(),
+                  );
               Navigator.pop(context);
             },
             child: Text(AppLocalizations.of(context)!.saveButton),
+          ),
+        ],
+      ),
+    ).whenComplete(controller.dispose);
+  }
+
+  void _showBerufDialog(BuildContext context, WidgetRef ref) {
+    final controller =
+        TextEditingController(text: ref.read(settingsProvider).beruf);
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Beruf'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(hintText: 'z.B. Softwareentwickler'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Abbrechen')),
+          TextButton(
+            onPressed: () {
+              ref.read(settingsProvider.notifier).updateField(
+                    beruf: controller.text.trim(),
+                  );
+              Navigator.pop(context);
+            },
+            child: Text(AppLocalizations.of(context)!.saveButton),
+          ),
+        ],
+      ),
+    ).whenComplete(controller.dispose);
+  }
+
+  void _confirmWipe(BuildContext context, WidgetRef ref) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Wirklich loeschen?'),
+        content: const Text(
+            'Alle persoenlichen Daten (Beruf, PLZ, Jahrgang, Lern-Modell) werden unwiderruflich entfernt.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Abbrechen')),
+          TextButton(
+            onPressed: () async {
+              await ref.read(settingsProvider.notifier).wipeAll();
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Loeschen',
+                style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -177,25 +218,31 @@ class SettingsScreen extends ConsumerWidget {
     final learningService = ref.read(learningServiceProvider);
     final feedbacks = learningService.getFeedbackForReview();
 
-    showCupertinoModalPopup(
+    showCupertinoModalPopup<void>(
       context: context,
       builder: (context) => Container(
         height: MediaQuery.of(context).size.height * 0.7,
         padding: const EdgeInsets.all(24),
         decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.only(topLeft: Radius.circular(30), topRight: Radius.circular(30)),
+          borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(30),
+              topRight: Radius.circular(30)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(AppLocalizations.of(context)!.feedbackTitle, style: FindUXProTheme.titleStyle),
+            Text(AppLocalizations.of(context)!.feedbackTitle,
+                style: FindUXProTheme.titleStyle),
             const SizedBox(height: 8),
-            Text(AppLocalizations.of(context)!.feedbackDesc, style: const TextStyle(color: Colors.black54)),
+            Text(AppLocalizations.of(context)!.feedbackDesc,
+                style: const TextStyle(color: Colors.black54)),
             const SizedBox(height: 20),
             Expanded(
               child: feedbacks.isEmpty
-                  ? Center(child: Text(AppLocalizations.of(context)!.noFeedback))
+                  ? Center(
+                      child:
+                          Text(AppLocalizations.of(context)!.noFeedback))
                   : ListView.builder(
                       itemCount: feedbacks.length,
                       itemBuilder: (context, i) {
@@ -203,22 +250,38 @@ class SettingsScreen extends ConsumerWidget {
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(color: const Color(0xFFF0F0F5), borderRadius: BorderRadius.circular(16)),
+                          decoration: BoxDecoration(
+                              color: const Color(0xFFF0F0F5),
+                              borderRadius: BorderRadius.circular(16)),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [
-                                  Icon(f['rating'] == 'up' ? Icons.thumb_up : Icons.thumb_down, 
-                                       color: f['rating'] == 'up' ? Colors.green : Colors.red, size: 18),
+                                  Icon(
+                                      f['rating'] == 'up'
+                                          ? Icons.thumb_up
+                                          : Icons.thumb_down,
+                                      color: f['rating'] == 'up'
+                                          ? Colors.green
+                                          : Colors.red,
+                                      size: 18),
                                   const SizedBox(width: 8),
-                                  Text(f['timestamp'].toString().substring(0, 10), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  Text(
+                                      f['timestamp']
+                                          .toString()
+                                          .substring(0, 10),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold)),
                                 ],
                               ),
-                              if (f['comment'] != null && f['comment'].toString().isNotEmpty)
+                              if (f['comment'] != null &&
+                                  f['comment'].toString().isNotEmpty)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 8),
-                                  child: Text(f['comment'], style: const TextStyle(fontStyle: FontStyle.italic)),
+                                  child: Text(f['comment'],
+                                      style: const TextStyle(
+                                          fontStyle: FontStyle.italic)),
                                 ),
                             ],
                           ),
@@ -234,24 +297,10 @@ class SettingsScreen extends ConsumerWidget {
                     style: FindUXProTheme.outlinePurpleButtonStyle,
                     onPressed: () async {
                       await learningService.clearAllFeedback();
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                      }
+                      if (context.mounted) Navigator.pop(context);
                     },
-                    child: Text(AppLocalizations.of(context)!.deleteFeedback),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: ElevatedButton(
-                    style: FindUXProTheme.primaryButtonStyle,
-                    onPressed: feedbacks.isEmpty ? null : () {
-                      // Hier würde der tatsächliche verschlüsselte Versand stattfinden
-                      HapticFeedback.heavyImpact();
-                      learningService.clearAllFeedback();
-                      Navigator.pop(context);
-                    },
-                    child: Text(AppLocalizations.of(context)!.sendFeedbackSafe),
+                    child:
+                        Text(AppLocalizations.of(context)!.deleteFeedback),
                   ),
                 ),
               ],

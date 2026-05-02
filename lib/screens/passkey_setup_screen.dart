@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
-import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../theme.dart';
 
 class PasskeySetupScreen extends StatefulWidget {
@@ -9,14 +7,14 @@ class PasskeySetupScreen extends StatefulWidget {
   const PasskeySetupScreen({super.key, required this.onSetupComplete});
 
   @override
-  _PasskeySetupScreenState createState() => _PasskeySetupScreenState();
+  State<PasskeySetupScreen> createState() => _PasskeySetupScreenState();
 }
 
 class _PasskeySetupScreenState extends State<PasskeySetupScreen> {
+  bool _busy = false;
+
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-
     return Scaffold(
       backgroundColor: Colors.black,
       body: Container(
@@ -30,15 +28,15 @@ class _PasskeySetupScreenState extends State<PasskeySetupScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
+                const Icon(
                   Icons.security,
                   size: 80,
                   color: Colors.white,
                 ),
                 const SizedBox(height: 32),
-                Text(
+                const Text(
                   'Sicherheit einrichten',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
@@ -46,53 +44,54 @@ class _PasskeySetupScreenState extends State<PasskeySetupScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  'Um FindUX zu verwenden, richten Sie bitte eine Sicherheitsmethode ein:\n\n'
-                  '1. Gehen Sie zu den Einstellungen Ihres Geräts\n'
-                  '2. Suchen Sie nach "Sicherheit" oder "Biometrie"\n'
-                  '3. Richten Sie Fingerabdruck, Gesichtserkennung oder PIN ein\n\n'
-                  'Danach können Sie FindUX sicher verwenden.',
-                  style: const TextStyle(
+                const Text(
+                  'FindUX schützt deine Daten ausschließlich auf diesem Gerät.\n'
+                  'Bevor du fortfahren kannst, richte bitte eine Geräte-Sperre ein:\n\n'
+                  '1. Öffne die Einstellungen deines Smartphones\n'
+                  '2. Aktiviere Fingerabdruck, Gesichtserkennung oder PIN\n'
+                  '3. Komme dann hierher zurück und tippe unten auf "Weiter"\n\n'
+                  'Ohne Geräte-Sperre lässt sich FindUX nicht starten.',
+                  style: TextStyle(
                     fontSize: 16,
-                    color: Color(0xE6FFFFFF), // Weiß mit 90% Alpha (const-fähig)
+                    color: Color(0xE6FFFFFF),
                     height: 1.5,
                   ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 48),
                 ElevatedButton(
-                  onPressed: () async {
-                    await widget.onSetupComplete();
-                  },
+                  onPressed: _busy
+                      ? null
+                      : () async {
+                          setState(() => _busy = true);
+                          try {
+                            await widget.onSetupComplete();
+                          } finally {
+                            if (mounted) setState(() => _busy = false);
+                          }
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: FindUXProTheme.primaryPurple,
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 32, vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
                     ),
                   ),
-                  child: const Text(
-                    'Ich habe es eingerichtet',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () async {
-                    // Für Demo-Zwecke trotzdem fortfahren
-                    await widget.onSetupComplete();
-                  },
-                  child: Text(
-                    'Überspringen (Demo)',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
-                  ),
+                  child: _busy
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text(
+                          'Weiter',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ],
             ),
