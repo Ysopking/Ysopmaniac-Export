@@ -140,8 +140,8 @@ class FindUXQueryBuilder {
       usedTokens.addAll(_lowercaseTokens(cleanWhat));
     }
 
-    // 2. Top-Keyword als intitle: nur im precise-Mode
-    if (mode == 'precise') {
+    // 2. Top-Keyword als intitle: im precise-Mode ODER bei stamm.preferIntitle (Vollzeit)
+    if (mode == 'precise' || stamm.preferIntitle) {
       final topKw = _extractTopKeyword(cleanWhat, stopwords);
       if (topKw != null && topKw.length >= 4) {
         parts.add('intitle:$topKw');
@@ -236,10 +236,15 @@ class FindUXQueryBuilder {
     final effectiveFilters = _resolveEffectiveFilters(filters, stamm);
     final sortedFilters = _sortFiltersByWeight(effectiveFilters, weights);
     final filterSiteDomains = _collectSiteDomains(sortedFilters);
-    final mergedSites = <String>{...filterSiteDomains, ...coachSites};
+    // TrustDomains (Rentner: stiftung-warentest etc.) haben Vorrang im site:-Block
+    final mergedSites = <String>{...stamm.trustDomains, ...filterSiteDomains, ...coachSites};
     final siteGroup = _buildSiteGroupFromDomains(mergedSites);
     if (siteGroup != null) parts.add(siteGroup);
-    final fileGroup = _buildFiletypeGroup(sortedFilters);
+    // Stammdaten-FileTypeHints als Fallback wenn kein User-Filetype gesetzt
+    final fileGroup = _buildFiletypeGroup(sortedFilters) ??
+        (stamm.fileTypeHints.isNotEmpty
+            ? _buildFiletypeGroupFromList(stamm.fileTypeHints)
+            : null);
     if (fileGroup != null) parts.add(fileGroup);
 
     // 10. Lern-Domain-Demote
@@ -247,16 +252,22 @@ class FindUXQueryBuilder {
     for (final d in badDomains) {
       parts.add('-site:$d');
     }
+    // Beschaeftigungstyp-spezifische Ausschluesse (Pinterest fuer Rentner, gutefrage fuer Vollzeit)
+    for (final d in stamm.excludeDomains) {
+      parts.add('-site:$d');
+    }
 
     // 11. Datum: Coach-after > recent-Mode > Stammdaten-boostRecent > Smart-Date-Heuristik
     if (coachAfter != null && coachAfter.isNotEmpty) {
       parts.add('after:$coachAfter');
+    } else if (stamm.dateAfter != null && stamm.dateAfter!.isNotEmpty) {
+      // Beschaeftigungstyp-spezifisch (z.B. Vollzeit: after:2024-01-01)
+      parts.add('after:${stamm.dateAfter}');
     } else if (mode == 'recent' ||
         (stamm.boostRecent && mode == 'standard')) {
       final cutoff = DateTime.now().subtract(const Duration(days: 365));
       parts.add('after:${_isoDate(cutoff)}');
     } else if (mode != 'precise') {
-      // Smart-Date nur wenn nichts anderes datiert UND Mode nicht precise
       final smartAfter = SmartDate.formatAfterOperator(what, why);
       if (smartAfter != null) parts.add(smartAfter);
     }
@@ -456,6 +467,14 @@ class FindUXQueryBuilder {
     if (domains.length == 1) return 'site:${domains.first}';
     final parts = domains.take(8).map((d) => 'site:$d').toList();
     return '(${parts.join(' OR ')})';
+  }
+
+  /// Baut filetype:(...)-Gruppe aus Stammdaten-Hints (wenn kein User-Filter gesetzt).
+  String? _buildFiletypeGroupFromList(List<String> hints) {
+    if (hints.isEmpty) return null;
+    final parts = hints.map((h) => 'filetype:' + h).toList();
+    if (parts.length == 1) return parts.first;
+    return '(' + parts.join(' OR ') + ')';
   }
 
   String? _buildFiletypeGroup(List<String> filters) {
