@@ -396,7 +396,10 @@ class FindUXQueryBuilder {
     final hasExplicit =
         userFilters.where((f) => f != 'alle').isNotEmpty;
     if (hasExplicit) return userFilters.where((f) => f != 'alle').toList();
-    return stamm.preferredSources.take(2).toList();
+    // KEIN Stammdaten-Fallback mehr: wenn der User "alle" gewaehlt hat,
+    // wird auch wirklich alles durchsucht — keine versteckte site:-Whitelist.
+    // Das verhindert dass z.B. "Rezepte" an reddit/stackoverflow gebunden wird.
+    return const [];
   }
 
   List<String> _sortFiltersByWeight(

@@ -54,6 +54,8 @@ class SettingsState {
   /// true = Suchergebnisse in Custom Tabs / SFSafariViewController (in-app)
   /// false = im externen Browser oeffnen
   final bool openInApp;
+  /// Doppel-Druck der Lauter-Taste startet die Suche (nur Home-Page).
+  final bool enableVolumeShortcut;
 
   const SettingsState({
     required this.plz,
@@ -69,6 +71,7 @@ class SettingsState {
     required this.files,
     required this.mode,
     required this.openInApp,
+    required this.enableVolumeShortcut,
   });
 
   SettingsState copyWith({
@@ -85,6 +88,7 @@ class SettingsState {
     List<String>? files,
     String? mode,
     bool? openInApp,
+    bool? enableVolumeShortcut,
   }) {
     return SettingsState(
       plz: plz ?? this.plz,
@@ -101,6 +105,8 @@ class SettingsState {
       files: files ?? this.files,
       mode: mode ?? this.mode,
       openInApp: openInApp ?? this.openInApp,
+      enableVolumeShortcut:
+          enableVolumeShortcut ?? this.enableVolumeShortcut,
     );
   }
 }
@@ -119,6 +125,7 @@ const SettingsState _defaultSettings = SettingsState(
   files: ['alle'],
   mode: 'standard',
   openInApp: true,
+  enableVolumeShortcut: false,
 );
 
 class SettingsNotifier extends StateNotifier<SettingsState> {
@@ -141,6 +148,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     'files',
     'mode',
     'openInApp',
+    'enableVolumeShortcut',
   ];
 
   Future<void> loadSettings() async {
@@ -195,6 +203,8 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       files: prefs.getStringList('files') ?? const ['alle'],
       mode: prefs.getString('mode') ?? 'standard',
       openInApp: prefs.getBool('openInApp') ?? true,
+      enableVolumeShortcut:
+          prefs.getBool('enableVolumeShortcut') ?? false,
     );
   }
 
@@ -223,6 +233,8 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     await prefs.setStringList('files', newState.files);
     await prefs.setString('mode', newState.mode);
     await prefs.setBool('openInApp', newState.openInApp);
+    await prefs.setBool(
+        'enableVolumeShortcut', newState.enableVolumeShortcut);
   }
 
   Future<void> updateField({
@@ -239,6 +251,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     List<String>? files,
     String? mode,
     bool? openInApp,
+    bool? enableVolumeShortcut,
   }) {
     final newState = state.copyWith(
       plz: plz,
@@ -254,6 +267,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       files: files,
       mode: mode,
       openInApp: openInApp,
+      enableVolumeShortcut: enableVolumeShortcut,
     );
     return updateSettings(newState);
   }

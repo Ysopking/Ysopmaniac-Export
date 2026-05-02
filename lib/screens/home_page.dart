@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:volume_controller/volume_controller.dart';
 
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../services/learning_service.dart';
@@ -44,6 +46,15 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   String _viewState = 'home';
   PrecisionRecommendation? _advice;
+
+  // ---------- Hardware-Trigger: Doppel-Lauter-Taste ----------
+  // Wir nutzen volume_controller, weil Flutter's HardwareKeyboard die
+  // Volume-Tasten auf Android nicht zuverlaessig durchreicht. Wir hoeren
+  // also auf Volume-AENDERUNGEN: zwei aufeinanderfolgende Volume-up-Pulse
+  // innerhalb von 600ms loesen die Suche aus. Down-Drueke werden ignoriert.
+  double? _lastVolume;
+  DateTime? _lastUpAt;
+  bool _volumeListenerActive = false;
 
   // Quellen-Optionen (Label + interner Key)
   static const List<Map<String, String>> _sourceOptions = [
@@ -87,6 +98,49 @@ class _HomePageState extends ConsumerState<HomePage> {
   void initState() {
     super.initState();
     _loadAdvice();
+    _maybeStartVolumeListener();
+  }
+
+  Future<void> _maybeStartVolumeListener() async {
+    if (kIsWeb) return;
+    try {
+      // Aktuelle Lautstaerke einmal lesen, damit unser "rising"-Vergleich
+      // nicht beim ersten Event faelschlich auslost.
+      final v = await VolumeController().getVolume();
+      _lastVolume = v;
+    } catch (_) {}
+    if (!mounted) return;
+    VolumeController().listener((volume) {
+      // Setting darf live umgeschaltet werden
+      final enabled =
+          ref.read(settingsProvider).enableVolumeShortcut;
+      if (!enabled) {
+        _lastVolume = volume;
+        return;
+      }
+      // Nur reagieren wenn wir auf der Home-/Dashboard-Ansicht sind,
+      // NICHT in einem In-App-Browser oder modal Dialog.
+      if (_viewState == 'results') {
+        _lastVolume = volume;
+        return;
+      }
+      if (_lastVolume != null && volume > _lastVolume! + 0.001) {
+        final now = DateTime.now();
+        if (_lastUpAt != null &&
+            now.difference(_lastUpAt!).inMilliseconds < 600) {
+          _lastUpAt = null;
+          if (_whatController.text.trim().isNotEmpty) {
+            HapticFeedback.mediumImpact();
+            // ignore: discarded_futures
+            _performSearch();
+          }
+        } else {
+          _lastUpAt = now;
+        }
+      }
+      _lastVolume = volume;
+    });
+    _volumeListenerActive = true;
   }
 
   Future<void> _loadAdvice() async {
@@ -98,6 +152,11 @@ class _HomePageState extends ConsumerState<HomePage> {
   void dispose() {
     _analysisTimer?.cancel();
     _specifyTimer?.cancel();
+    if (_volumeListenerActive) {
+      try {
+        VolumeController().removeListener();
+      } catch (_) {}
+    }
     _whatController.dispose();
     _whyController.dispose();
     _feedbackController.dispose();

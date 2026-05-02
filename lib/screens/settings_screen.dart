@@ -114,10 +114,20 @@ class SettingsScreen extends ConsumerWidget {
             icon: Icons.open_in_browser,
             title: 'Ergebnisse in der App oeffnen',
             subtitle: settings.openInApp
-                ? 'Custom Tabs / In-App Browser-View'
+                ? 'Privater In-App-Browser (alles weg beim Schliessen)'
                 : 'Externer Browser',
             value: settings.openInApp,
             onChanged: (v) => notifier.updateField(openInApp: v),
+          ),
+          _toggleTile(
+            icon: Icons.volume_up_outlined,
+            title: 'Doppel-Lauter-Taste startet Suche',
+            subtitle: settings.enableVolumeShortcut
+                ? '2x Lauter-Taste innerhalb 600ms loest Suche aus'
+                : 'Aus',
+            value: settings.enableVolumeShortcut,
+            onChanged: (v) =>
+                notifier.updateField(enableVolumeShortcut: v),
           ),
           _toggleTile(
             icon: Icons.shield_outlined,

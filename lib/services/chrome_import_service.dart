@@ -74,6 +74,24 @@ class ChromeImportService {
   static const int _maxTriples = 1000;
   static const Duration _landingWindow = Duration(minutes: 10);
 
+  // ---------- Anti-Infiltration Limits ----------
+  /// Datei groesser als 50 MB wird ohne Parsen verworfen.
+  static const int _maxFileBytes = 50 * 1024 * 1024;
+  /// Mehr als 200_000 Roh-Eintraege werden hart abgeschnitten.
+  static const int _maxRawEntries = 200000;
+  /// URL laenger als 2000 Zeichen -> Eintrag verworfen.
+  static const int _maxUrlLen = 2000;
+  /// Query laenger als 200 Zeichen -> Eintrag verworfen.
+  static const int _maxQueryLen = 200;
+  /// Domain laenger als 253 Zeichen oder mit Sonderzeichen -> verworfen.
+  static const int _maxDomainLen = 253;
+  static final RegExp _domainOk =
+      RegExp(r'^[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?)+$');
+  /// Pro Import maximal 100 unique Keyword-Bumps.
+  static const int _maxKwBumpsPerImport = 100;
+  /// Pro Import maximal 50 unique Domain-Bumps.
+  static const int _maxDomainBumpsPerImport = 50;
+
   // gleiche Hard-Limits wie LearningService
   static const double _kwMin = 0.4;
   static const double _kwMax = 2.5;
@@ -134,11 +152,16 @@ class ChromeImportService {
           const [];
       if (entries is! List) return out;
       for (final e in entries) {
+        if (out.length >= _maxRawEntries) break;
         if (e is! Map) continue;
         final url = (e['url'] ?? '').toString();
+        if (url.isEmpty || url.length > _maxUrlLen) continue;
+        // Nur http(s) — keine file://, javascript:, data:, chrome://
+        final lo = url.toLowerCase();
+        if (!lo.startsWith('http://') && !lo.startsWith('https://')) continue;
         final title = (e['title'] ?? '').toString();
         final t = e['time_usec'] ?? e['time'] ?? e['timestamp'];
-        if (url.isEmpty || t == null) continue;
+        if (t == null) continue;
         DateTime? dt = _parseTime(t);
         if (dt == null) continue;
         out.add(_RawEntry(url, title, dt));
@@ -186,12 +209,15 @@ class ChromeImportService {
         r'''(?:add_date|last_visit|time_added|last_modified)="(\d+)"''',
         caseSensitive: false);
     for (final m in aRe.allMatches(content)) {
+      if (out.length >= _maxRawEntries) break;
       final attrs = m.group(1) ?? '';
       final title = (m.group(2) ?? '').trim();
       final hrefM = hrefRe.firstMatch(attrs);
       if (hrefM == null) continue;
       final url = hrefM.group(1) ?? '';
-      if (url.isEmpty) continue;
+      if (url.isEmpty || url.length > _maxUrlLen) continue;
+      final lo = url.toLowerCase();
+      if (!lo.startsWith('http://') && !lo.startsWith('https://')) continue;
       final dateM = dateRe.firstMatch(attrs);
       DateTime? dt;
       if (dateM != null) {
@@ -234,6 +260,12 @@ class ChromeImportService {
     return '${thursday.year}-W${week.toString().padLeft(2, '0')}';
   }
 
+  static bool _domainSafe(String d) {
+    if (d.isEmpty) return true; // leer = "keine landing", auch ok
+    if (d.length > _maxDomainLen) return false;
+    return _domainOk.hasMatch(d);
+  }
+
   static List<HistoryTriple> _reduceToTriples(List<_RawEntry> raw) {
     raw.sort((a, b) => a.time.compareTo(b.time));
     final triples = <HistoryTriple>[];
@@ -245,6 +277,9 @@ class ChromeImportService {
       if (url == null) continue;
       final query = _extractSerpQuery(url);
       if (query == null) continue;
+      // Anti-Infiltration: Query muss sauber sein
+      if (query.length > _maxQueryLen) continue;
+      if (query.codeUnits.any((c) => c < 32 && c != 9)) continue;
 
       // Erste echte Landing innerhalb der Session-Window
       String landingDomain = '';
@@ -257,6 +292,7 @@ class ChromeImportService {
         if (nu.scheme != 'http' && nu.scheme != 'https') continue;
         final nh = _normalizeHost(nu.host);
         if (nh.isEmpty) continue;
+        if (!_domainSafe(nh)) continue;
         if (_serpEngines.containsKey(nh)) continue;
         landingDomain = nh;
         landingTitle = n.title;
@@ -290,7 +326,14 @@ class ChromeImportService {
     String content = '';
     try {
       if (await f.exists()) {
-        content = await f.readAsString();
+        // Anti-DoS: zu grosse Dateien werden gar nicht erst geladen
+        final size = await f.length();
+        if (size > _maxFileBytes) {
+          debugPrint('ChromeImport.skip: file too large ($size bytes)');
+          // Datei trotzdem loeschen unten
+        } else {
+          content = await f.readAsString();
+        }
       }
     } catch (e) {
       debugPrint('ChromeImport.read: $e');
@@ -366,6 +409,7 @@ class ChromeImportService {
     }
 
     // Lern-Bumps in SharedPreferences (gleiche Keys wie LearningService)
+    // Mit Per-Import-Caps gegen "Modell-Vergiftung" durch praeparierte Files.
     final prefs = await SharedPreferences.getInstance();
     const stop = <String>{
       'und', 'oder', 'aber', 'mit', 'fuer', 'fur', 'von', 'zum', 'der',
@@ -375,6 +419,10 @@ class ChromeImportService {
       'the', 'and', 'for', 'with', 'this', 'that', 'from', 'are',
       'how', 'why', 'who', 'when', 'where', 'what',
     };
+
+    // Erst alle Kandidaten zaehlen, dann nur Top-N bumpen
+    final kwCounts = <String, int>{};
+    final domainCounts = <String, int>{};
     for (final t in triples) {
       final words = t.query
           .toLowerCase()
@@ -382,20 +430,32 @@ class ChromeImportService {
           .replaceAll(RegExp(r'-\S+'), ' ')
           .replaceAll(RegExp(r'[^\w\s]'), ' ')
           .split(RegExp(r'\s+'))
-          .where((w) => w.length >= 4 && !stop.contains(w))
+          .where((w) => w.length >= 4 && w.length <= 32 && !stop.contains(w))
           .toSet();
       for (final w in words) {
-        final k = 'weight_kw_$w';
-        final cur = prefs.getDouble(k) ?? 1.0;
-        final next = (cur + _kwBump).clamp(_kwMin, _kwMax);
-        await prefs.setDouble(k, next);
+        kwCounts[w] = (kwCounts[w] ?? 0) + 1;
       }
-      if (t.domain.isNotEmpty) {
-        final k = 'weight_domain_${t.domain}';
-        final cur = prefs.getDouble(k) ?? 1.0;
-        final next = (cur + _domainBump).clamp(_domainMin, _domainMax);
-        await prefs.setDouble(k, next);
+      if (t.domain.isNotEmpty && _domainSafe(t.domain)) {
+        domainCounts[t.domain] = (domainCounts[t.domain] ?? 0) + 1;
       }
+    }
+
+    final topKws = kwCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final topDomains = domainCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    for (final e in topKws.take(_maxKwBumpsPerImport)) {
+      final k = 'weight_kw_${e.key}';
+      final cur = prefs.getDouble(k) ?? 1.0;
+      final next = (cur + _kwBump).clamp(_kwMin, _kwMax);
+      await prefs.setDouble(k, next);
+    }
+    for (final e in topDomains.take(_maxDomainBumpsPerImport)) {
+      final k = 'weight_domain_${e.key}';
+      final cur = prefs.getDouble(k) ?? 1.0;
+      final next = (cur + _domainBump).clamp(_domainMin, _domainMax);
+      await prefs.setDouble(k, next);
     }
   }
 

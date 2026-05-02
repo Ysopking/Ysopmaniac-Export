@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../logic/state_provider.dart';
 import '../theme.dart';
+import 'chrome_import_screen.dart';
 
 /// Schlankes 4-Schritt-Onboarding im Light-Card-Stil (Option 3 aus dem
 /// Mock-Up). Quellen-/Dateitypen-/Suchmaschinen-Auswahl ist bewusst raus –
@@ -21,7 +22,8 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   int _page = 1;
-  static const int _totalPages = 4;
+  static const int _totalPages = 5;
+  bool _chronikDone = false;
 
   // Schritt 1: Beschaeftigung
   String _employmentType = 'student';
@@ -250,10 +252,119 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       case 3:
         return _buildPageRegion();
       case 4:
+        return _buildPageChronik();
+      case 5:
         return _buildPageFinish();
       default:
         return const SizedBox.shrink();
     }
+  }
+
+  Widget _buildPageChronik() {
+    return _section(
+      title: 'Chronik importieren',
+      subtitle:
+          'Damit FindUX deine Suchen besser priorisieren kann, empfehlen '
+          'wir, deinen Chrome-Verlauf einmalig lokal zu importieren. '
+          'Die Datei wird auf 4 Felder reduziert (Query, Domain, Titel, '
+          'Wochenbucket) und sofort geloescht. Nichts verlaesst dein Geraet.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _whiteCard(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        _chronikDone
+                            ? Icons.check_circle_rounded
+                            : Icons.shield_outlined,
+                        color: _chronikDone
+                            ? Colors.green
+                            : FindUXProTheme.primaryPurple,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _chronikDone
+                              ? 'Chronik wurde importiert'
+                              : 'Schutz: max. 50 MB, nur http(s), '
+                                  '200 k Eintraege harter Cap, '
+                                  'keine Ausreisser-Bumps',
+                          style: const TextStyle(
+                              fontSize: 13, color: Colors.black87),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: FindUXProTheme.primaryPurple,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.history_rounded),
+                    label: Text(_chronikDone
+                        ? 'Erneut importieren'
+                        : 'Verlauf jetzt importieren'),
+                    onPressed: () async {
+                      HapticFeedback.selectionClick();
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ChromeImportScreen(),
+                        ),
+                      );
+                      if (mounted) {
+                        setState(() => _chronikDone = true);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.black54,
+              ),
+              onPressed: () {
+                HapticFeedback.selectionClick();
+                setState(() => _chronikDone = true);
+                _go(_page + 1);
+              },
+              child: const Text(
+                'Habe keinen Chrome-Verlauf — ueberspringen',
+                style: TextStyle(
+                  fontSize: 13,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Center(
+            child: Text(
+              'Du kannst das spaeter in den Einstellungen jederzeit nachholen.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.black.withValues(alpha: 0.5),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildPageBeruf() {
@@ -634,32 +745,46 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final initial = years.indexOf(_geburtsjahr);
     showCupertinoModalPopup<void>(
       context: context,
-      builder: (ctx) => Container(
-        height: 280,
-        color: Colors.white,
-        child: SafeArea(
-          child: Column(
-            children: [
-              SizedBox(
-                height: 220,
-                child: CupertinoPicker(
-                  scrollController: FixedExtentScrollController(
-                      initialItem: initial < 0 ? 0 : initial),
-                  itemExtent: 36,
-                  onSelectedItemChanged: (i) =>
-                      setState(() => _geburtsjahr = years[i]),
-                  children:
-                      years.map((y) => Center(child: Text('$y'))).toList(),
+      builder: (ctx) {
+        // Bottom-Insets (Gesten-Bar / Tastatur) miteinrechnen, damit der
+        // OK-Button auch auf kleinen Screens nicht ueber den unteren Rand
+        // hinaus schiebt. Picker-Hoehe bewusst klein gehalten (180).
+        final bottom = MediaQuery.of(ctx).viewInsets.bottom +
+            MediaQuery.of(ctx).viewPadding.bottom;
+        return Container(
+          color: Colors.white,
+          padding: EdgeInsets.only(bottom: bottom),
+          child: SafeArea(
+            top: false,
+            bottom: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  height: 180,
+                  child: CupertinoPicker(
+                    scrollController: FixedExtentScrollController(
+                        initialItem: initial < 0 ? 0 : initial),
+                    itemExtent: 32,
+                    onSelectedItemChanged: (i) =>
+                        setState(() => _geburtsjahr = years[i]),
+                    children: years
+                        .map((y) => Center(child: Text('$y')))
+                        .toList(),
+                  ),
                 ),
-              ),
-              CupertinoButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('OK'),
-              ),
-            ],
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: CupertinoButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('OK'),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -668,31 +793,43 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final initialIndex = data.indexWhere((d) => d[0] == currentValue);
     showCupertinoModalPopup<void>(
       context: context,
-      builder: (ctx) => Container(
-        height: 260,
-        color: Colors.white,
-        child: SafeArea(
-          child: Column(
-            children: [
-              SizedBox(
-                height: 200,
-                child: CupertinoPicker(
-                  scrollController: FixedExtentScrollController(
-                      initialItem: initialIndex < 0 ? 0 : initialIndex),
-                  itemExtent: 40,
-                  onSelectedItemChanged: (i) => onSave(data[i][0]),
-                  children:
-                      data.map((d) => Center(child: Text(d[1]))).toList(),
+      builder: (ctx) {
+        final bottom = MediaQuery.of(ctx).viewInsets.bottom +
+            MediaQuery.of(ctx).viewPadding.bottom;
+        return Container(
+          color: Colors.white,
+          padding: EdgeInsets.only(bottom: bottom),
+          child: SafeArea(
+            top: false,
+            bottom: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  height: 180,
+                  child: CupertinoPicker(
+                    scrollController: FixedExtentScrollController(
+                        initialItem:
+                            initialIndex < 0 ? 0 : initialIndex),
+                    itemExtent: 36,
+                    onSelectedItemChanged: (i) => onSave(data[i][0]),
+                    children: data
+                        .map((d) => Center(child: Text(d[1])))
+                        .toList(),
+                  ),
                 ),
-              ),
-              CupertinoButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('OK'),
-              ),
-            ],
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: CupertinoButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('OK'),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

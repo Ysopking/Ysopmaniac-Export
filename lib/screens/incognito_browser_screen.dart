@@ -3,14 +3,23 @@ import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart' as ext;
 
-/// Eingebauter Inkognito-Browser. Verwendet flutter_inappwebview mit
-/// incognito:true, d.h. der WebView nutzt eine private BrowserContext-
-/// Instanz: keine Cookies, kein Cache, keine LocalStorage-Persistenz,
-/// kein History-Eintrag. Wird beim Schliessen automatisch verworfen.
+/// Privater In-App-Browser. Verwendet flutter_inappwebview ohne den
+/// `incognito:true`-Flag, weil dieser Flag den Cookie-Store so isoliert
+/// dass wir keine Consent-Cookies vor-injizieren koennen.
 ///
-/// Bewusst kein url_launcher mit LaunchMode.inAppBrowserView (Android
-/// Custom Tabs), weil Custom Tabs Cookies/Login mit dem Default-Browser
-/// teilen — das widerspricht der Zero-Tracking-Garantie.
+/// Stattdessen:
+///  1. initState: ALLE Cookies + WebStorage werden geleert
+///  2. Google-Consent-Cookies werden VOR dem URL-Load gesetzt
+///     (CONSENT, SOCS) — damit Google den AGB-Banner gar nicht erst zeigt
+///  3. Beim Laden: cacheEnabled:false, clearCache:true,
+///     thirdPartyCookiesEnabled:false
+///  4. dispose: ALLE Cookies + WebStorage werden wieder geleert
+///
+/// Effekt: Waehrend einer Browse-Session funktioniert die Seite normal,
+/// nach dem Schliessen bleibt nichts uebrig — keine Cookies, keine
+/// LocalStorage, kein Cache. Aus User-Sicht echtes Inkognito, aber
+/// Google sieht ein "schon zugestimmt"-Cookie (das nach dem Schliessen
+/// wieder weg ist).
 class IncognitoBrowserScreen extends StatefulWidget {
   final String url;
   const IncognitoBrowserScreen({super.key, required this.url});
@@ -26,11 +35,62 @@ class _IncognitoBrowserScreenState extends State<IncognitoBrowserScreen> {
   String _title = '';
   bool _canGoBack = false;
   bool _canGoForward = false;
+  bool _ready = false;
 
   @override
   void initState() {
     super.initState();
     _currentUrl = widget.url;
+    // ignore: discarded_futures
+    _prepareSession();
+  }
+
+  Future<void> _prepareSession() async {
+    try {
+      // 1. Vor jedem Start: alles wegputzen
+      await CookieManager.instance().deleteAllCookies();
+      await InAppWebViewController.clearAllCache();
+    } catch (_) {}
+
+    // 2. Google-Consent-Cookies setzen (Banner verschwindet)
+    try {
+      final cm = CookieManager.instance();
+      const consentDomains = ['.google.com', '.google.de'];
+      for (final d in consentDomains) {
+        await cm.setCookie(
+          url: WebUri('https://www.google.com'),
+          name: 'CONSENT',
+          value: 'YES+cb.20210720-07-p0.de+FX+410',
+          domain: d,
+          path: '/',
+          isSecure: true,
+        );
+        await cm.setCookie(
+          url: WebUri('https://www.google.com'),
+          name: 'SOCS',
+          value: 'CAESHAgBEhJnd3NfMjAyMTA3MjAtMF9SQzIaAmRlIAEaBgiAo7-IBg',
+          domain: d,
+          path: '/',
+          isSecure: true,
+        );
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+    setState(() => _ready = true);
+  }
+
+  @override
+  void dispose() {
+    // 4. Beim Schliessen: alle Spuren der Browse-Session weg
+    // ignore: discarded_futures
+    () async {
+      try {
+        await CookieManager.instance().deleteAllCookies();
+        await InAppWebViewController.clearAllCache();
+      } catch (_) {}
+    }();
+    super.dispose();
   }
 
   Future<void> _openExternally() async {
@@ -78,7 +138,7 @@ class _IncognitoBrowserScreenState extends State<IncognitoBrowserScreen> {
                 const SizedBox(width: 4),
                 Flexible(
                   child: Text(
-                    _title.isEmpty ? 'Inkognito' : _title,
+                    _title.isEmpty ? 'Privat' : _title,
                     style: const TextStyle(
                         fontSize: 14, fontWeight: FontWeight.w800),
                     overflow: TextOverflow.ellipsis,
@@ -137,7 +197,7 @@ class _IncognitoBrowserScreenState extends State<IncognitoBrowserScreen> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Inkognito: keine Cookies, kein Cache, keine Speicherung',
+                      'Privat: nichts wird ueber das Schliessen hinaus gespeichert',
                       style: TextStyle(
                         color: Colors.amber.withValues(alpha: 0.9),
                         fontSize: 11,
@@ -148,49 +208,58 @@ class _IncognitoBrowserScreenState extends State<IncognitoBrowserScreen> {
               ),
             ),
             Expanded(
-              child: InAppWebView(
-                initialUrlRequest:
-                    URLRequest(url: WebUri(widget.url)),
-                initialSettings: InAppWebViewSettings(
-                  incognito: true,
-                  cacheEnabled: false,
-                  clearCache: true,
-                  clearSessionCache: true,
-                  javaScriptEnabled: true,
-                  thirdPartyCookiesEnabled: false,
-                  supportZoom: true,
-                  builtInZoomControls: true,
-                  displayZoomControls: false,
-                  mediaPlaybackRequiresUserGesture: true,
-                  useHybridComposition: true,
-                ),
-                onWebViewCreated: (c) => _webController = c,
-                onLoadStart: (c, url) {
-                  if (!mounted) return;
-                  setState(() {
-                    _currentUrl = url?.toString() ?? _currentUrl;
-                    _progress = 0;
-                  });
-                },
-                onLoadStop: (c, url) async {
-                  final t = await c.getTitle();
-                  if (!mounted) return;
-                  setState(() {
-                    _currentUrl = url?.toString() ?? _currentUrl;
-                    _title = t ?? '';
-                    _progress = 1.0;
-                  });
-                  await _refreshNav();
-                },
-                onProgressChanged: (c, p) {
-                  if (!mounted) return;
-                  setState(() => _progress = p / 100.0);
-                },
-                onTitleChanged: (c, title) {
-                  if (!mounted) return;
-                  setState(() => _title = title ?? '');
-                },
-              ),
+              child: !_ready
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: Colors.amber,
+                      ),
+                    )
+                  : InAppWebView(
+                      initialUrlRequest:
+                          URLRequest(url: WebUri(widget.url)),
+                      initialSettings: InAppWebViewSettings(
+                        // KEIN incognito:true — sonst kann unsere
+                        // Consent-Cookie-Injection nicht greifen.
+                        cacheEnabled: false,
+                        clearCache: true,
+                        clearSessionCache: true,
+                        javaScriptEnabled: true,
+                        thirdPartyCookiesEnabled: false,
+                        supportZoom: true,
+                        builtInZoomControls: true,
+                        displayZoomControls: false,
+                        mediaPlaybackRequiresUserGesture: true,
+                        useHybridComposition: true,
+                      ),
+                      onWebViewCreated: (c) => _webController = c,
+                      onLoadStart: (c, url) {
+                        if (!mounted) return;
+                        setState(() {
+                          _currentUrl =
+                              url?.toString() ?? _currentUrl;
+                          _progress = 0;
+                        });
+                      },
+                      onLoadStop: (c, url) async {
+                        final t = await c.getTitle();
+                        if (!mounted) return;
+                        setState(() {
+                          _currentUrl =
+                              url?.toString() ?? _currentUrl;
+                          _title = t ?? '';
+                          _progress = 1.0;
+                        });
+                        await _refreshNav();
+                      },
+                      onProgressChanged: (c, p) {
+                        if (!mounted) return;
+                        setState(() => _progress = p / 100.0);
+                      },
+                      onTitleChanged: (c, title) {
+                        if (!mounted) return;
+                        setState(() => _title = title ?? '');
+                      },
+                    ),
             ),
             Container(
               color: const Color(0xFF1A0F3D),
