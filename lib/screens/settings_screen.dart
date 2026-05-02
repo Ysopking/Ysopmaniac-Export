@@ -9,6 +9,7 @@ import '../services/chrome_import_quick.dart';
 import '../services/haptic_helper.dart';
 import '../services/secure_flag.dart';
 import '../theme.dart';
+import '../data/locale_catalog.dart';
 
 /// Apple-UX-Settings (Stage G):
 ///
@@ -147,16 +148,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               _row(
                 icon: Icons.language_rounded,
                 title: l10n.languageLabel,
-                value: settings.language == 'de' ? 'Deutsch' : 'English',
-                onTap: () => notifier.updateField(
-                    language: settings.language == 'de' ? 'en' : 'de'),
+                value: () {
+                  final lang = kLanguages.firstWhere(
+                    (l) => l.code == settings.language,
+                    orElse: () => kLanguages.first,
+                  );
+                  return '${lang.flag} ${lang.nativeLabel}';
+                }(),
+                onTap: () => _showLanguagePicker(context, ref, settings.language),
               ),
               _row(
                 icon: Icons.public_rounded,
                 title: l10n.countryLabel,
-                value: settings.country.toUpperCase(),
-                onTap: () => notifier.updateField(
-                    country: settings.country == 'de' ? 'at' : 'de'),
+                value: () {
+                  final c = kCountries.firstWhere(
+                    (c) => c.code == settings.country,
+                    orElse: () => const LocaleCountry(code:'de',flag:'🇩🇪',label:'Deutschland'),
+                  );
+                  return '${c.flag} ${c.label}';
+                }(),
+                onTap: () => _showCountryPicker(context, ref, settings.country),
               ),
             ],
           ]),
@@ -619,6 +630,109 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ).whenComplete(controller.dispose);
   }
 
+  Future<void> _showLanguagePicker(
+      BuildContext ctx, WidgetRef ref, String current) async {
+    final notifier = ref.read(settingsProvider.notifier);
+    await showModalBottomSheet<void>(
+      context: ctx,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFFF5F5F7),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.black12,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text('Suchsprache',
+                    style: FindUXProTheme.headlineStyle.copyWith(
+                        fontSize: 17, fontWeight: FontWeight.w700)),
+              ),
+              const SizedBox(height: 12),
+              ...kLanguages.map((lang) {
+                final sel = lang.code == current;
+                return Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      Haptics.pick();
+                      notifier.updateField(language: lang.code);
+                      Navigator.pop(ctx);
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: sel
+                            ? FindUXProTheme.primaryPurple.withValues(alpha: 0.08)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(lang.flag, style: const TextStyle(fontSize: 22)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(lang.nativeLabel,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: sel
+                                          ? FindUXProTheme.primaryPurple
+                                          : Colors.black87,
+                                    )),
+                                Text(lang.germanLabel,
+                                    style: const TextStyle(
+                                        fontSize: 12, color: Colors.black45)),
+                              ],
+                            ),
+                          ),
+                          if (sel)
+                            Icon(Icons.check_rounded,
+                                color: FindUXProTheme.primaryPurple, size: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showCountryPicker(
+      BuildContext ctx, WidgetRef ref, String current) async {
+    final notifier = ref.read(settingsProvider.notifier);
+    final picked = await showModalBottomSheet<String>(
+      context: ctx,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SettingsCountryPickerSheet(selected: current),
+    );
+    if (picked != null) {
+      notifier.updateField(country: picked);
+    }
+  }
+
   void _confirmWipe(BuildContext context, WidgetRef ref) {
     showDialog<void>(
       context: context,
@@ -651,4 +765,151 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // Versand). Die zugehoerigen l10n-Strings (feedbackTitle, feedbackDesc,
   // noFeedback, deleteFeedback, sendFeedbackSafe, reviewFeedback) bleiben
   // als orphans im generierten l10n-File — sie schaden nicht.
+}
+
+
+class _SettingsCountryPickerSheet extends StatefulWidget {
+  final String selected;
+  const _SettingsCountryPickerSheet({required this.selected});
+  @override
+  State<_SettingsCountryPickerSheet> createState() =>
+      _SettingsCountryPickerSheetState();
+}
+
+class _SettingsCountryPickerSheetState
+    extends State<_SettingsCountryPickerSheet> {
+  final _ctrl = TextEditingController();
+  List<LocaleCountry> _filtered = kCountries;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl.addListener(() {
+      final q = _ctrl.text.toLowerCase().trim();
+      setState(() {
+        _filtered = q.isEmpty
+            ? kCountries
+            : kCountries
+                .where((c) =>
+                    c.label.toLowerCase().contains(q) || c.code.contains(q))
+                .toList();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.88,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scrollCtrl) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFFF5F5F7),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.black12,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _ctrl,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'Land suchen...',
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollCtrl,
+                itemCount: _filtered.length,
+                itemExtent: 52,
+                itemBuilder: (_, i) {
+                  final c = _filtered[i];
+                  final sel = c.code == widget.selected;
+                  return Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => Navigator.pop(context, c.code),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: sel
+                              ? FindUXProTheme.primaryPurple
+                                  .withValues(alpha: 0.08)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                        child: Row(
+                          children: [
+                            Text(c.flag,
+                                style: const TextStyle(fontSize: 22)),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                c.label,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: sel
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  color: sel
+                                      ? FindUXProTheme.primaryPurple
+                                      : Colors.black87,
+                                ),
+                              ),
+                            ),
+                            Text(c.code.toUpperCase(),
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.black38)),
+                            if (sel)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 8),
+                                child: Icon(Icons.check_rounded,
+                                    size: 18,
+                                    color: FindUXProTheme.primaryPurple),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

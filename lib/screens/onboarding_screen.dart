@@ -7,6 +7,7 @@ import '../services/learning_service.dart';
 import '../screens/interests_screen.dart';
 import '../services/chrome_import_quick.dart';
 import '../services/haptic_helper.dart';
+import '../data/locale_catalog.dart';
 import '../theme.dart';
 
 /// Stage 15: Pflicht-Stammdaten-Wizard.
@@ -455,41 +456,80 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Widget _step5Locale() {
     return _StepLayout(
       title: 'Sprache & Land',
-      subtitle: 'Welche Sprache bevorzugst du in den Treffern, und in '
-          'welchem Land suchst du am haeufigsten?',
+      subtitle: 'Mit welcher Sprache suchst du? Und in welchem Land bist du?',
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Sprache',
+          const Text('Suchsprache',
               style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
                   color: Colors.black54,
                   letterSpacing: 0.5)),
-          const SizedBox(height: 8),
-          Row(children: [
-            Expanded(
-                child: _SegmentChip(
-              label: 'Deutsch',
-              selected: _languageLocal == 'de',
-              onTap: () {
-                Haptics.pick();
-                setState(() => _languageLocal = 'de');
-              },
-            )),
-            const SizedBox(width: 10),
-            Expanded(
-                child: _SegmentChip(
-              label: 'English',
-              selected: _languageLocal == 'en',
-              onTap: () {
-                Haptics.pick();
-                setState(() => _languageLocal = 'en');
-              },
-            )),
-          ]),
-          const SizedBox(height: 18),
+          const SizedBox(height: 10),
+          // 2×3 Sprach-Grid
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              childAspectRatio: 2.8,
+            ),
+            itemCount: kLanguages.length,
+            itemBuilder: (_, i) {
+              final lang = kLanguages[i];
+              final sel = _languageLocal == lang.code;
+              return GestureDetector(
+                onTap: () {
+                  Haptics.pick();
+                  setState(() => _languageLocal = lang.code);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  decoration: BoxDecoration(
+                    color: sel ? const Color(0xFF6C4AB6) : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: sel ? const Color(0xFF6C4AB6) : Colors.black12,
+                      width: sel ? 1.8 : 1,
+                    ),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  child: Row(
+                    children: [
+                      Text(lang.flag, style: const TextStyle(fontSize: 18)),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(lang.nativeLabel,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: sel ? Colors.white : Colors.black87,
+                                ),
+                                overflow: TextOverflow.ellipsis),
+                            Text(lang.germanLabel,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: sel ? Colors.white70 : Colors.black45,
+                                ),
+                                overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 20),
           const Text('Land',
               style: TextStyle(
                   fontSize: 13,
@@ -497,30 +537,61 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   color: Colors.black54,
                   letterSpacing: 0.5)),
           const SizedBox(height: 8),
-          Row(children: [
-            Expanded(
-                child: _SegmentChip(
-              label: 'Deutschland',
-              selected: _countryLocal == 'de',
-              onTap: () {
-                Haptics.pick();
-                setState(() => _countryLocal = 'de');
-              },
-            )),
-            const SizedBox(width: 10),
-            Expanded(
-                child: _SegmentChip(
-              label: 'Oesterreich',
-              selected: _countryLocal == 'at',
-              onTap: () {
-                Haptics.pick();
-                setState(() => _countryLocal = 'at');
-              },
-            )),
-          ]),
+          // Land-Picker-Button: öffnet Suchbare Bottom-Sheet
+          GestureDetector(
+            onTap: () => _pickCountry(),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.black12),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    kCountries.firstWhere(
+                      (c) => c.code == _countryLocal,
+                      orElse: () => const LocaleCountry(code:'de',flag:'🇩🇪',label:'Deutschland'),
+                    ).flag,
+                    style: const TextStyle(fontSize: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      kCountries.firstWhere(
+                        (c) => c.code == _countryLocal,
+                        orElse: () => const LocaleCountry(code:'de',flag:'🇩🇪',label:'Deutschland'),
+                      ).label,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.expand_more_rounded, color: Colors.black38, size: 22),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _pickCountry() async {
+    Haptics.tap();
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CountryPickerSheet(selected: _countryLocal),
+    );
+    if (picked != null && mounted) {
+      setState(() => _countryLocal = picked);
+    }
   }
 
   Widget _step6Action() {
@@ -965,6 +1036,138 @@ class _ActionCard extends StatelessWidget {
                     color: Colors.black26, size: 22),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class _CountryPickerSheet extends StatefulWidget {
+  final String selected;
+  const _CountryPickerSheet({required this.selected});
+  @override
+  State<_CountryPickerSheet> createState() => _CountryPickerSheetState();
+}
+
+class _CountryPickerSheetState extends State<_CountryPickerSheet> {
+  final _ctrl = TextEditingController();
+  List<LocaleCountry> _filtered = kCountries;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl.addListener(() {
+      final q = _ctrl.text.toLowerCase().trim();
+      setState(() {
+        _filtered = q.isEmpty
+            ? kCountries
+            : kCountries.where((c) =>
+                c.label.toLowerCase().contains(q) ||
+                c.code.contains(q)).toList();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.88,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scrollCtrl) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFFF5F5F7),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.black12,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _ctrl,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'Land suchen...',
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollCtrl,
+                itemCount: _filtered.length,
+                itemExtent: 52,
+                itemBuilder: (_, i) {
+                  final c = _filtered[i];
+                  final sel = c.code == widget.selected;
+                  return Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => Navigator.pop(context, c.code),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: sel ? const Color(0xFF6C4AB6).withValues(alpha:0.08) : Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        child: Row(
+                          children: [
+                            Text(c.flag, style: const TextStyle(fontSize: 22)),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                c.label,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                                  color: sel ? const Color(0xFF6C4AB6) : Colors.black87,
+                                ),
+                              ),
+                            ),
+                            Text(c.code.toUpperCase(),
+                                style: const TextStyle(fontSize: 12, color: Colors.black38)),
+                            if (sel)
+                              const Padding(
+                                padding: EdgeInsets.only(left: 8),
+                                child: Icon(Icons.check_rounded,
+                                    size: 18, color: Color(0xFF6C4AB6)),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
