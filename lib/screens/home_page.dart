@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../services/learning_service.dart';
 import '../logic/query_builder.dart';
@@ -26,8 +26,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   final TextEditingController _whatController = TextEditingController();
   final TextEditingController _whyController = TextEditingController();
 
-  late InAppWebViewController _webViewController;
-  late PullToRefreshController _pullToRefreshController;
+  late WebViewController _webViewController;
   bool _webViewLoaded = false;
   bool _showFeedbackOverlay = false;
   bool _showDeepAnalysisOverlay = false;
@@ -42,18 +41,25 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   void initState() {
     super.initState();
-    _pullToRefreshController = PullToRefreshController(
-      onRefresh: () async {
-        if (Platform.isAndroid) {
-          _webViewController.reload();
-        } else if (Platform.isIOS) {
-          _webViewController.loadUrl(urlRequest: URLRequest(url: await _webViewController.getUrl()));
-        }
-      },
-      settings: PullToRefreshSettings(
-        color: FindUXProTheme.secondaryPurple,
-      ),
-    );
+    _webViewController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(FindUXProTheme.primaryPurple)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onProgress: (int progress) {
+            // Update loading state
+            if (progress >= 80 && !_webViewLoaded) {
+              setState(() => _webViewLoaded = true);
+            }
+          },
+          onPageStarted: (String url) {
+            setState(() => _webViewLoaded = false);
+          },
+          onPageFinished: (String url) {
+            setState(() => _webViewLoaded = true);
+          },
+        ),
+      );
   }
 
   @override
@@ -67,11 +73,9 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Future<void> _purgeAllSessionData() async {
     try {
-      await InAppWebViewController.clearAllCache();
-      final webStorageManager = WebStorageManager.instance();
-      await webStorageManager.deleteAllData();
-      CookieManager cookieManager = CookieManager.instance();
-      await cookieManager.deleteAllCookies();
+      await _webViewController.clearCache();
+      // Note: webview_flutter has limited cache/cookie management
+      // For full session clearing, consider using platform channels
     } catch (e) {
       debugPrint('Purge Error: $e');
     }
@@ -122,16 +126,13 @@ final fullQuery = await builder.buildQuery(
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final randomUA = MirrorLogic.getRandomUserAgent();
-      _webViewController.loadUrl(urlRequest: URLRequest(
-        url: WebUri(url),
-        headers: {
-          'User-Agent': randomUA,
-          'Accept-Language': 'de-DE,de;q=0.9',
-          'Sec-Ch-Ua-Mobile': '?1',
-          'Sec-Ch-Ua-Platform': '"iOS"',
-          'Sec-Fetch-Mode': 'navigate',
-        },
-      ));
+      _webViewController.loadRequest(Uri.parse(url), headers: {
+        'User-Agent': randomUA,
+        'Accept-Language': 'de-DE,de;q=0.9',
+        'Sec-Ch-Ua-Mobile': '?1',
+        'Sec-Ch-Ua-Platform': '"iOS"',
+        'Sec-Fetch-Mode': 'navigate',
+      });
     });
 
     widget.learningService.trackSearch(
@@ -373,31 +374,22 @@ final fullQuery = await builder.buildQuery(
                 child: AnimatedOpacity(
                   duration: const Duration(milliseconds: 400),
                   opacity: _webViewLoaded ? 1.0 : 0.0,
-                  child: InAppWebView(
-                    initialSettings: InAppWebViewSettings(
-                      javaScriptEnabled: true,
-                      transparentBackground: true,
-                      incognito: true,
-                      cacheEnabled: false,
-                      clearCache: true,
-                      useShouldOverrideUrlLoading: true,
-                      safeBrowsingEnabled: true,
-                      preferredContentMode: UserPreferredContentMode.MOBILE,
-                    ),
-                    pullToRefreshController: _pullToRefreshController,
-                    onWebViewCreated: (controller) => _webViewController = controller,
-                    onLoadStop: (controller, url) {
-                      setState(() { _webViewLoaded = true; });
-                      controller.evaluateJavascript(source: MirrorLogic.getStealthShieldJs());
-                    },
-                  ),
+                  child: WebViewWidget(controller: _webViewController),
                 ),
               ),
               if (!_webViewLoaded) Container(color: FindUXProTheme.primaryPurple, child: const Center(child: CupertinoActivityIndicator(color: Colors.white, radius: 14))),
               Positioned(bottom: 30, left: 20, right: 20, child: SafeArea(child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 Container(padding: const EdgeInsets.all(4), decoration: BoxDecoration(color: FindUXProTheme.primaryPurple.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(30)), child: Row(children: [
-                  IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20), onPressed: () => _webViewController.goBack()),
-                  IconButton(icon: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 20), onPressed: () => _webViewController.goForward()),
+                  IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20), onPressed: () async {
+                    if (await _webViewController.canGoBack()) {
+                      _webViewController.goBack();
+                    }
+                  }),
+                  IconButton(icon: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 20), onPressed: () async {
+                    if (await _webViewController.canGoForward()) {
+                      _webViewController.goForward();
+                    }
+                  }),
                 ])),
                 GestureDetector(onTap: () => setState(() => _showFeedbackOverlay = !_showFeedbackOverlay), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: FindUXProTheme.primaryPurple, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 5))]), child: Row(children: [const Icon(Icons.psychology, color: Colors.white, size: 20), const SizedBox(width: 8),                 Text(l10n.learningMode, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))]))),
               ]))),
