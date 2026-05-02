@@ -232,8 +232,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   'Verhindert Screenshots, Aufnahmen und App-Vorschau',
               value: settings.disableScreenshots,
               onChanged: (v) async {
+                // FLAG_SECURE ist ab MainActivity.kt immer-on gesetzt.
+                // disableScreenshots-Pref bleibt fuer zuenftige Nutzung erhalten,
+                // hat aber keinen Einfluss mehr auf den Screenshot-Schutz.
                 await notifier.updateField(disableScreenshots: v);
-                await SecureFlag.setSecure(v);
               },
             ),
             _row(

@@ -119,11 +119,17 @@ class FindUXQueryBuilder {
     final employmentType = (settings['employmentType'] as String?) ?? 'student';
     final employmentWeight = weights['weight_employment_$employmentType'] ?? 1.0;
 
+    // Interests aus settings extrahieren (List<String> oder leer)
+    final interests = (settings['interests'] as List?)
+        ?.whereType<String>()
+        .toList() ?? <String>[];
+
     final stamm = _stammdaten.resolve(
       what: what,
       why: why,
       settings: settings,
       employmentWeight: employmentWeight,
+      interests: interests,
     );
 
     final parts = <String>[];

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/secure_flag.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart' as ext;
@@ -37,10 +38,17 @@ class _IncognitoBrowserScreenState extends State<IncognitoBrowserScreen> {
   bool _canGoForward = false;
   bool _ready = false;
 
+  // Screenshot rate-limiter Zustand (UI-Feedback)
+  bool _screenshotLimitReached = false;
+
   @override
   void initState() {
     super.initState();
     _currentUrl = widget.url;
+    // FLAG_SECURE fuer diese WebView-Session aufheben
+    // (max 3 Screenshots / 30 s via SecureFlag.requestScreenshot())
+    // ignore: discarded_futures
+    SecureFlag.enterWebView();
     // ignore: discarded_futures
     _prepareSession();
   }
@@ -82,6 +90,9 @@ class _IncognitoBrowserScreenState extends State<IncognitoBrowserScreen> {
 
   @override
   void dispose() {
+    // FLAG_SECURE sofort wieder hart setzen
+    // ignore: discarded_futures
+    SecureFlag.exitWebView();
     // 4. Beim Schliessen: alle Spuren der Browse-Session weg
     // ignore: discarded_futures
     () async {
@@ -100,6 +111,40 @@ class _IncognitoBrowserScreenState extends State<IncognitoBrowserScreen> {
     try {
       await ext.launchUrl(uri, mode: ext.LaunchMode.externalApplication);
     } catch (_) {}
+  }
+
+  /// Macht einen programmatischen Screenshot — nur wenn rate limit OK.
+  /// Max 3 Screenshots in 30 Sekunden (erzwungen durch MainActivity.kt).
+  Future<void> _takeScreenshot() async {
+    final allowed = await SecureFlag.requestScreenshot();
+    if (!allowed) {
+      if (!mounted) return;
+      setState(() => _screenshotLimitReached = true);
+      await Future<void>.delayed(const Duration(seconds: 3));
+      if (!mounted) return;
+      setState(() => _screenshotLimitReached = false);
+      return;
+    }
+    try {
+      final data = await _webController?.takeScreenshot();
+      if (data == null || !mounted) return;
+      setState(() => _screenshotLimitReached = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Screenshot gespeichert'),
+          duration: Duration(seconds: 2),
+          backgroundColor: Color(0xFF1A0F3D),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Screenshot fehlgeschlagen: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> _refreshNav() async {
@@ -292,6 +337,21 @@ class _IncognitoBrowserScreenState extends State<IncognitoBrowserScreen> {
                   IconButton(
                     icon: const Icon(Icons.refresh, color: Colors.white),
                     onPressed: () => _webController?.reload(),
+                  ),
+                  // Screenshot-Button: rate-limited (max 3 / 30 s)
+                  IconButton(
+                    icon: Icon(
+                      _screenshotLimitReached
+                          ? Icons.timer_outlined
+                          : Icons.screenshot_monitor_outlined,
+                      color: _screenshotLimitReached
+                          ? Colors.red
+                          : Colors.white,
+                    ),
+                    tooltip: _screenshotLimitReached
+                        ? 'Limit erreicht (max 3 / 30 s)'
+                        : 'Screenshot dieser Seite',
+                    onPressed: _ready ? _takeScreenshot : null,
                   ),
                   IconButton(
                     icon: const Icon(Icons.open_in_new,

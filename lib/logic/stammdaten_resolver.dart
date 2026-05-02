@@ -1,91 +1,195 @@
-/// Stammdaten-Resolver: Wandelt User-Stammdaten + Such-Intent in
-/// konkrete Query-Anreicherungen um.
+/// Stammdaten-Resolver v2: Spec-konforme, beschaeftigungstyp-spezifische
+/// Query-Anreicherung.
 ///
-/// Eingabe:
-///   - Settings-Map (employmentType, beruf, plz, language, country, jahr)
-///   - WAS- und WARUM-Text (zur Intent-Erkennung)
-///   - employmentWeight: gelerntes Gewicht aus SharedPreferences
-///                       (weight_employment_<type>, Default 1.0)
-///
-/// Ausgabe (StammdatenContext):
-///   - softTerms:        Begriffe, die per OR-Boost optional eingefuegt werden
-///   - hardTerms:        Begriffe, die zwingend in die Query gehoeren (z.B. PLZ
-///                       bei Lokal-Intent)
-///   - preferredSources: Quellen-Keys, die bevorzugt werden (Soft-Bias wenn
-///                       der User keine eigene Quellen-Auswahl getroffen hat)
-///   - languageHint:     z.B. 'lang_de' fuer Google `lr=`
-///
-/// Idee: Stammdaten werden NICHT blind in jede Query gepfeffert — das
-/// vermuellt das Ergebnis. Stattdessen wird Intent erkannt und nur dort
-/// angereichert, wo es sinnvoll ist.
+/// Neu in v2 (basierend auf Produkt-Spec):
+///   - excludeDomains:  -site: Ausschluesse (Rentner: Pinterest/TikTok;
+///                      Vollzeit: gutefrage.net; Teilzeit: Content-Farmen)
+///   - dateAfter:       after:YYYY-MM-DD fuer Vollzeit-Aktualitaet
+///   - preferIntitle:   intitle: fuer Top-Keyword (Vollzeit)
+///   - fileTypeHints:   filetype:pdf/doc (Student: PDF; Erwerbslos: PDF+DOC)
+///   - trustDomains:    Rentner medizinisch/finanziell → stiftung-warentest etc.
 library;
 
 class StammdatenContext {
   final List<String> softTerms;
   final List<String> hardTerms;
   final List<String> preferredSources;
+  final List<String> excludeDomains;
+  final List<String> trustDomains;
+  final List<String> fileTypeHints;
   final String? languageHint;
+  final String? dateAfter;
   final bool boostRecent;
+  final bool preferIntitle;
 
   const StammdatenContext({
     this.softTerms = const [],
     this.hardTerms = const [],
     this.preferredSources = const [],
+    this.excludeDomains = const [],
+    this.trustDomains = const [],
+    this.fileTypeHints = const [],
     this.languageHint,
+    this.dateAfter,
     this.boostRecent = false,
+    this.preferIntitle = false,
   });
 }
 
 class StammdatenResolver {
-  /// Empfohlene Quellen pro Beschaeftigungstyp (Soft-Bias).
-  /// Reihenfolge = Prioritaet. Wird durch employmentWeight skaliert:
-  ///   < 0.7  → 0 Quellen (Preset ignoriert)
+  // ========== Quellen-Presets (Reihenfolge = Prioritaet) ==========
+
+  /// Skalierung durch employmentWeight:
+  ///   < 0.7  → 0 Quellen
   ///   0.7–1.2 → erste 2 Quellen
-  ///   > 1.2  → alle Quellen des Presets
-  ///
-  /// Aenderungen ggue. v1:
-  ///   - teilzeit: eigenes Profil (news + offiziell + ratgeber) statt = vollzeit
-  ///   - erwerbslos: stellenboersen an erster Stelle
+  ///   ≥ 1.2  → alle Quellen
   static const Map<String, List<String>> _employmentSourcePresets = {
-    'student':    ['academic', 'wikipedia', 'docs'],
+    'student':    ['academic', 'docs', 'wikipedia'],
     'vollzeit':   ['docs', 'foren', 'blogs'],
-    'teilzeit':   ['news', 'offiziell', 'blogs'],
-    'rentner':    ['wikipedia', 'news', 'offiziell'],
-    'erwerbslos': ['stellenboersen', 'offiziell', 'foren', 'news'],
+    'teilzeit':   ['reddit', 'foren', 'news', 'offiziell'],
+    'rentner':    ['wikipedia', 'offiziell', 'news'],
+    'erwerbslos': ['stellenboersen', 'offiziell', 'foren'],
   };
 
-  /// Stellenbörsen-spezifische Job-Intent-Trigger nur fuer erwerbslos
-  static const List<String> _jobSearchIntentWords = [
-    'job', 'jobs', 'stelle', 'stellen', 'stellenanzeige', 'stellenanzeigen',
-    'bewerbung', 'bewerben', 'lebenslauf', 'cv', 'arbeit', 'arbeitssuche',
-    'karriere', 'arbeitsamt', 'arbeitsagentur', 'foerderung',
+  // ========== Ausschluss-Domains pro Beschaeftigungstyp ==========
+
+  /// Rentner: Schutzwall gegen Social-Media-Spam und Scam-Seiten
+  static const List<String> _rentnerExclusions = [
+    'pinterest.de', 'pinterest.com', 'pinterest.at', 'pinterest.ch',
+    'tiktok.com', 'instagram.com', 'twitter.com', 'x.com',
+    'facebook.com', 'snapchat.com',
+    // SEO-Spam und dubiose Gesundheits-Seiten
+    'homeopathy.com', 'naturheilkunde.de',
   ];
 
-  /// Intent-Trigger-Worte: WAS oder WARUM enthaelt einen dieser Begriffe?
+  /// Vollzeit: Gutefrage + langsamer Hobbyisten-Content
+  static const List<String> _vollzeitExclusions = [
+    'gutefrage.net', 'wer-weiss-was.de', 'gute-frage.net',
+    'pinterest.de', 'pinterest.com',
+  ];
+
+  /// Teilzeit: reine Content-Farmen und Click-Bait-Seiten
+  static const List<String> _teilzeitExclusions = [
+    'pinterest.de', 'pinterest.com',
+    'gofeminin.de', 'desired.de', 'stylebook.de',
+  ];
+
+  /// Erwerbslos: Coaching-Scams und unseriöse Kursanbieter
+  static const List<String> _erwerbslosExclusions = [
+    'pinterest.de', 'pinterest.com',
+    'geld-verdienen-sofort.de',
+  ];
+
+  // ========== Familienstatus-Ausschluesse + Trust-Domains ==========
+
+  /// Familie: Pinterest-Schutz + Mommy-Blog-SEO-Spam
+  static const List<String> _familieExclusions = [
+    'pinterest.com', 'pinterest.de', 'pinterest.at',
+    // Affiliate-lastige Baby/Kind-Blogs ohne redaktionellen Mehrwert
+    'desired.de', 'gofeminin.de', 'mamaclub.de',
+    'babywelt.de',
+  ];
+
+  /// Familie: Trust-Domains fuer medizinische/erzieherische Suchen
+  static const List<String> _familieMedTrustDomains = [
+    'kindergesundheit-info.de', 'familienportal.de',
+    'stiftung-warentest.de', 'bundeszentrale-fuer-gesundheitliche-aufklaerung.de',
+    'bzga.de', 'bund.de', 'kinderrechte.de',
+  ];
+
+  /// Alleinerziehend: Staatliche Hilfs- und Informationsseiten
+  static const List<String> _alleinerziehendTrustDomains = [
+    'bmfsfj.de', 'arbeitsagentur.de', 'bundesregierung.de',
+    'bund.de', 'gesetze-im-internet.de', 'vamv.de',
+  ];
+
+  /// Alleinerziehend: Toxische Diskussionsforen + Scam-Anwaelte ausschliessen
+  static const List<String> _alleinerziehendExclusions = [
+    'pinterest.com', 'pinterest.de',
+    // Anwalts-Leadgenerierungs-Seiten (Spec: "Scam-Anwälte die Erstgespräche verkaufen")
+    'anwalt.de',
+    'anwalt24.de',
+    'anwaltshotline.de',
+  ];
+
+  // ========== Intent-Trigger: Familie / Recht / Antrag ==========
+
+  static const List<String> _familyMedicalIntentWords = [
+    'kita', 'kinder', 'kind', 'impfung', 'impfen', 'kinderarzt',
+    'fieber', 'allergie', 'erziehung', 'entwicklung', 'schulreife',
+    'kindergarten', 'schule', 'lernen', 'nachhilfe',
+  ];
+
+  static const List<String> _legalIntentWords = [
+    'unterhalt', 'sorgerecht', 'betreuung', 'recht', 'rechtlich',
+    'gesetz', 'antrag', 'antraege', 'beantragen', 'foerderung',
+    'unterstuetzung', 'hilfe', 'sozialleistung', 'buergergeld',
+    'hartz', 'wohngeld', 'kindergeld', 'elterngeld',
+  ];
+
+  // ========== Trust-Domains fuer Rentner (Medizin + Finanzen) ==========
+
+  static const List<String> _rentnerMedicalTrustDomains = [
+    'stiftung-warentest.de', 'apotheken-umschau.de', 'bund.de',
+    'gesundheitsministerium.de', 'rki.de', 'bzga.de',
+    'krankenkasse.de', 'vdek.com',
+  ];
+
+  static const List<String> _rentnerFinancialTrustDomains = [
+    'stiftung-warentest.de', 'bafin.de', 'vzbv.de',
+    'verbraucherzentrale.de', 'bundesbank.de', 'bund.de',
+  ];
+
+  // ========== Intent-Trigger ==========
+
   static const List<String> _locationIntentWords = [
-    'regional', 'lokal', 'lokales', 'naehe', 'nähe', 'nahe', 'umgebung',
-    'vor ort', 'in meiner stadt', 'in meiner region', 'oertlich', 'örtlich',
-    'umkreis', 'plz', 'postleitzahl',
+    'regional', 'lokal', 'naehe', 'nähe', 'nahe', 'umgebung',
+    'vor ort', 'in meiner stadt', 'in meiner region', 'oertlich',
+    'umkreis', 'plz', 'postleitzahl', 'lieferung', 'abholung',
   ];
   static const List<String> _jobIntentWords = [
-    'job', 'jobs', 'karriere', 'beruf', 'beruflich', 'arbeit', 'stelle',
+    'job', 'jobs', 'karriere', 'beruf', 'arbeit', 'stelle',
     'stellenanzeige', 'bewerbung', 'lebenslauf', 'cv', 'gehalt',
-    'arbeitgeber', 'arbeitnehmer',
+  ];
+  static const List<String> _jobSearchIntentWords = [
+    'job', 'jobs', 'stelle', 'stellen', 'bewerbung', 'bewerben',
+    'lebenslauf', 'cv', 'arbeitssuche', 'karriere', 'arbeitsamt',
+    'foerderung', 'qualifikation', 'weiterbildung',
   ];
   static const List<String> _academicIntentWords = [
     'studie', 'studien', 'forschung', 'paper', 'thesis', 'arbeit',
     'literatur', 'wissenschaft', 'journal', 'doi', 'meta-analyse',
-    'systematic review', 'fakultaet', 'fakultät', 'professor',
+    'skript', 'vorlesung', 'hausarbeit', 'facharbeit', 'quelle',
   ];
   static const List<String> _newsIntentWords = [
     'aktuell', 'heute', 'gestern', 'breaking', 'neueste', 'nachricht',
-    'nachrichten', 'meldung', 'news',
+    'nachrichten', 'meldung', 'news', 'aktuelles',
+  ];
+  static const List<String> _medicalIntentWords = [
+    'gesundheit', 'krankheit', 'medikament', 'arzt', 'symptom',
+    'therapie', 'behandlung', 'diagnose', 'impfung', 'allergie',
+    'apotheke', 'rezept', 'nebenwirkung', 'pille', 'tablette',
+  ];
+  static const List<String> _financialIntentWords = [
+    'geld', 'kredit', 'zinsen', 'bank', 'konto', 'anlage', 'aktie',
+    'rente', 'pension', 'versicherung', 'steuern', 'finanz',
+    'betrug', 'phishing', 'scam',
+  ];
+  static const List<String> _cvIntentWords = [
+    'lebenslauf', 'cv', 'vorlage', 'template', 'muster',
+    'bewerbungsschreiben', 'anschreiben',
+  ];
+  static const List<String> _softwareIntentWords = [
+    'fehler', 'error', 'bug', 'installier', 'konfigur', 'setup',
+    'tutorial', 'anleitung', 'how to', 'howto', 'api', 'sdk',
+    'dokumentation', 'docs', 'library', 'framework',
   ];
 
-  /// Intent-Signalworte fuer Finanz-Kontext (Sozialleistungen, Steuern,
-  /// Rente, Mietrecht, Investieren, Familienrecht).
+  // ── Interesse-Signalwoerter ─────────────────────────────────────────────
+
+  /// Finanz-Intent: passt zu finanzen/soziales/*, finanzen/steuern/*, etc.
   static const List<String> _finanzIntentWords = [
-    'geld', 'euro', 'kosten', 'preis', 'guenstig', 'günstig', 'sparen',
+    'geld', 'euro', 'kosten', 'preis', 'guenstig', 'günstiger', 'sparen',
     'foerderung', 'förderung', 'leistung', 'antrag', 'sozial', 'steuer',
     'steuern', 'rente', 'miete', 'kredit', 'budget', 'haushalt', 'finanz',
     'finanzen', 'versicherung', 'gehalt', 'einkommen', 'schulden',
@@ -94,38 +198,35 @@ class StammdatenResolver {
     'sorgerecht', 'erbrecht', 'mietvertrag', 'nebenkosten',
   ];
 
-  /// Intent-Signalworte fuer Bildungs-Kontext (Bewerbung, Studium,
-  /// Weiterbildung, Selbststaendigkeit, Kinder).
+  /// Bildungs-Intent: passt zu bildung/bewerbung/*, bildung/studium/*, etc.
   static const List<String> _bildungIntentWords = [
     'lernen', 'lerntipp', 'kurs', 'ausbildung', 'studium', 'studieren',
     'weiterbildung', 'schule', 'schulisch', 'bewerbung', 'bewerben',
     'lebenslauf', 'zertifikat', 'nachhilfe', 'hausaufgaben', 'prüfung',
     'pruefung', 'umschulung', 'freelance', 'freiberuflich', 'gruendung',
     'gründung', 'startup', 'hochschule', 'bafoeg', 'bafög', 'lernmethode',
-    'onlinekurs', 'zertifikat', 'bildung', 'abschluss', 'quereinstieg',
+    'onlinekurs', 'bildung', 'abschluss', 'quereinstieg',
   ];
 
-  /// Bevorzugte Quellen pro Interesse-Top-Kategorie.
-  /// Werden NUR hinzugefuegt, wenn ein passender Intent erkannt wird.
+  /// Bevorzugte Quellen pro Interesse-Kategorie (nur bei passendem Intent).
   static const Map<String, List<String>> _interestSources = {
-    'finanzen':      ['offiziell', 'ratgeber'],
-    'bildung':       ['academic', 'docs', 'ratgeber'],
-    'sport':         ['ratgeber', 'blogs'],
-    'kochen':        ['ratgeber', 'blogs'],
-    'tech':          ['docs', 'foren', 'blogs'],
-    'reisen':        ['ratgeber', 'blogs'],
-    'wissenschaft':  ['academic', 'docs'],
-    'mathe':         ['academic', 'docs'],
-    'sprachen':      ['academic', 'ratgeber'],
-    'gaming':        ['foren', 'blogs'],
-    'auto':          ['ratgeber', 'foren'],
-    'garten':        ['ratgeber', 'blogs'],
-    'musik':         ['blogs'],
-    'film':          ['blogs'],
+    'finanzen':     ['offiziell', 'ratgeber'],
+    'bildung':      ['academic', 'docs', 'ratgeber'],
+    'sport':        ['ratgeber', 'blogs'],
+    'kochen':       ['ratgeber', 'blogs'],
+    'tech':         ['docs', 'foren', 'blogs'],
+    'reisen':       ['ratgeber', 'blogs'],
+    'wissenschaft': ['academic', 'docs'],
+    'mathe':        ['academic', 'docs'],
+    'sprachen':     ['academic', 'ratgeber'],
+    'gaming':       ['foren', 'blogs'],
+    'auto':         ['ratgeber', 'foren'],
+    'garten':       ['ratgeber', 'blogs'],
+    'musik':        ['blogs'],
+    'film':         ['blogs'],
   };
 
-  /// SoftTerms pro Interesse-Top-Kategorie (werden bei Intent-Treffer
-  /// als optionaler Kontext-Boost in die Query injiziert).
+  /// SoftTerms pro Interesse-Kategorie (nur bei passendem Intent).
   static const Map<String, List<String>> _interestSoftTerms = {
     'finanzen': ['Förderung', 'offiziell'],
     'bildung':  ['Kurs', 'Weiterbildung'],
@@ -146,118 +247,293 @@ class StammdatenResolver {
     final softTerms = <String>[];
     final hardTerms = <String>[];
     final preferredSources = <String>[];
+    final excludeDomains = <String>[];
+    final trustDomains = <String>[];
+    final fileTypeHints = <String>[];
 
     final fullText = '${what.toLowerCase()} ${why.toLowerCase()}';
-    final hasLocation = _containsAny(fullText, _locationIntentWords);
-    final hasJob = _containsAny(fullText, _jobIntentWords);
-    final hasAcademic = _containsAny(fullText, _academicIntentWords);
-    final hasNews = _containsAny(fullText, _newsIntentWords);
+    final hasLocation  = _containsAny(fullText, _locationIntentWords);
+    final hasJob       = _containsAny(fullText, _jobIntentWords);
     final hasJobSearch = _containsAny(fullText, _jobSearchIntentWords);
-    final hasFinanz  = _containsAny(fullText, _finanzIntentWords);
-    final hasBildung = _containsAny(fullText, _bildungIntentWords);
+    final hasAcademic  = _containsAny(fullText, _academicIntentWords);
+    final hasNews      = _containsAny(fullText, _newsIntentWords);
+    final hasMedical   = _containsAny(fullText, _medicalIntentWords);
+    final hasFinancial = _containsAny(fullText, _financialIntentWords);
+    final hasCvIntent      = _containsAny(fullText, _cvIntentWords);
+    final hasSoftware      = _containsAny(fullText, _softwareIntentWords);
+    final hasFamilyMedical = _containsAny(fullText, _familyMedicalIntentWords);
+    final hasLegal         = _containsAny(fullText, _legalIntentWords);
+    // Interesse-spezifische Intent-Flags (werden nur in Schritt 10 genutzt)
+    final hasFinanzIntent  = _containsAny(fullText, _finanzIntentWords);
+    final hasBildungIntent = _containsAny(fullText, _bildungIntentWords);
 
     final employmentType =
         ((settings['employmentType'] as String?) ?? 'student').trim();
-    final beruf = ((settings['beruf'] as String?) ?? '').trim();
-    final plz = ((settings['plz'] as String?) ?? '').trim();
-    final language = ((settings['language'] as String?) ?? 'de').trim();
-    final country = ((settings['country'] as String?) ?? 'de').trim();
-    final jahr = (settings['jahr'] as int?) ?? 1990;
+    final familyStatus =
+        ((settings['familyStatus'] as String?) ?? 'single').trim();
+    final beruf   = ((settings['beruf']    as String?) ?? '').trim();
+    final plz     = ((settings['plz']      as String?) ?? '').trim();
+    final language= ((settings['language'] as String?) ?? 'de').trim();
+    final country = ((settings['country']  as String?) ?? 'de').trim();
+    final jahr    = (settings['jahr']      as int?)    ?? 1990;
 
-    // 1) Beschaeftigungs-Preset als Quellen-Bias (skaliert durch employmentWeight)
+    // ─────────────────────────────────────────────────────────────
+    // 1. QUELLEN-PRESET (skaliert durch employmentWeight)
+    // ─────────────────────────────────────────────────────────────
     final preset = _employmentSourcePresets[employmentType];
     if (preset != null && employmentWeight >= 0.7) {
-      // Anzahl der aktivierten Preset-Quellen haengt vom gelernten Gewicht ab
       final count = employmentWeight >= 1.4
-          ? preset.length          // alles aktivieren
-          : (employmentWeight >= 1.0 ? 2 : 1); // Standard oder reduziert
+          ? preset.length
+          : (employmentWeight >= 1.0 ? 2 : 1);
       preferredSources.addAll(preset.take(count));
     }
 
-    // 2) Job-Intent: Jobrichtung + employmentType-Marker zwingend rein
+    // ─────────────────────────────────────────────────────────────
+    // 2. STUDENT-SPEZIFISCH
+    //    → Academic-Boost, PDF bei Fachfragen, Uni-Domains
+    // ─────────────────────────────────────────────────────────────
+    bool preferIntitle = false;
+    String? dateAfter;
+
+    if (employmentType == 'student') {
+      // Akademische Fachfrage: PDF-Filter und Uni-Domain-Boost
+      if (hasAcademic) {
+        fileTypeHints.add('pdf');
+        if (!preferredSources.contains('academic')) {
+          preferredSources.insert(0, 'academic');
+        }
+        softTerms.add('Zusammenfassung');
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 3. RENTNER-SPEZIFISCH
+    //    → Schutzwall, Trust-Domains fuer Medizin/Finanzen
+    // ─────────────────────────────────────────────────────────────
+    if (employmentType == 'rentner') {
+      excludeDomains.addAll(_rentnerExclusions);
+      // Foren entfernen (Spec: Social-Media-Lärm und Scam-Risiko)
+      preferredSources.removeWhere(
+          (s) => s == 'foren' || s == 'reddit' || s == 'social');
+
+      if (hasMedical) {
+        trustDomains.addAll(_rentnerMedicalTrustDomains);
+        if (!preferredSources.contains('offiziell')) {
+          preferredSources.insert(0, 'offiziell');
+        }
+      }
+      if (hasFinancial) {
+        trustDomains.addAll(_rentnerFinancialTrustDomains);
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 4. VOLLZEIT-SPEZIFISCH
+    //    → intitle: fuer Top-Keyword, after: Aktualitaet,
+    //      Gutefrage abstrafen
+    // ─────────────────────────────────────────────────────────────
+    if (employmentType == 'vollzeit') {
+      excludeDomains.addAll(_vollzeitExclusions);
+      // intitle: bei Software/Tool-Fragen (kein langes Lesen)
+      if (hasSoftware || hasJob) {
+        preferIntitle = true;
+      }
+      // Aktualitaets-Filter: immer fuer Vollzeit (niemand will 5 Jahre alte Tipps)
+      final cutoffYear = DateTime.now().year - 1;
+      dateAfter = '$cutoffYear-01-01';
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 5. TEILZEIT-SPEZIFISCH
+    //    → Reddit/Community-Foren aufwerten, Content-Farmen abstrafen
+    // ─────────────────────────────────────────────────────────────
+    if (employmentType == 'teilzeit') {
+      excludeDomains.addAll(_teilzeitExclusions);
+      // Community-Foren und echte Erfahrungsberichte priorisieren
+      if (!preferredSources.contains('reddit')) {
+        preferredSources.insert(0, 'reddit');
+      }
+      // Lokal-Intent: PLZ in hardTerms
+      if (hasLocation && plz.isNotEmpty && plz != '0') {
+        hardTerms.add(plz);
+        softTerms.add(country == 'de' ? 'Deutschland' : country.toUpperCase());
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 6. ERWERBSLOS-SPEZIFISCH
+    //    → Stellenboersen an die Spitze, CV-Vorlagen filetype:,
+    //      Coaching-Scams ausschliessen
+    // ─────────────────────────────────────────────────────────────
+    if (employmentType == 'erwerbslos') {
+      excludeDomains.addAll(_erwerbslosExclusions);
+
+      if (hasJobSearch) {
+        // Stellenboersen explizit nach vorne
+        if (!preferredSources.contains('stellenboersen')) {
+          preferredSources.insert(0, 'stellenboersen');
+        }
+      }
+      // Lebenslauf-Vorlage: filetype:doc und filetype:pdf
+      if (hasCvIntent) {
+        fileTypeHints.addAll(['doc', 'pdf']);
+        softTerms.add('Vorlage');
+      }
+      // Antrags-/Hilfe-Intent (Buergergeld, Foerderung, Sozialleistung):
+      // Offizielle Behoerden-Seiten erzwingen, hilfreiche Foren dazu
+      if (hasLegal) {
+        trustDomains.addAll([
+          'arbeitsagentur.de', 'bmfsfj.de', 'bundesregierung.de',
+          'bund.de', 'gesetze-im-internet.de', 'sozialgesetzbuch.de',
+        ]);
+        if (!preferredSources.contains('offiziell')) {
+          preferredSources.insert(0, 'offiziell');
+        }
+        // Reddit/Foren fuer echte Erfahrungen (z.B. r/hartz4, r/sozialleistungen)
+        if (!preferredSources.contains('reddit')) {
+          preferredSources.add('reddit');
+        }
+        if (!preferredSources.contains('foren')) {
+          preferredSources.add('foren');
+        }
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 7. GEMEINSAME INTENT-LOGIK
+    // ─────────────────────────────────────────────────────────────
+
+    // Job-Intent: Beruf + Vollzeit/Teilzeit-Marker
     if (hasJob) {
       if (beruf.isNotEmpty) {
         hardTerms.add(beruf.contains(' ') ? '"$beruf"' : beruf);
       }
-      // Vollzeit/Teilzeit-Marker hilft bei Stellenanzeigen
       if (employmentType == 'vollzeit' || employmentType == 'teilzeit') {
-        hardTerms.add(employmentType);
+        softTerms.add(employmentType);
       }
     } else if (beruf.isNotEmpty) {
-      // Sonst nur als ganz weicher Boost (laesst Google entscheiden)
       softTerms.add(beruf.toLowerCase().split(' ').first);
     }
 
-    // 3) Erwerbslos + Job-Suche-Intent: Stellenboersen explizit nach vorne
-    if (employmentType == 'erwerbslos' && hasJobSearch) {
-      if (!preferredSources.contains('stellenboersen')) {
-        preferredSources.insert(0, 'stellenboersen');
-      }
-      // Arbeitsagentur-Tipp als SoftTerm
-      softTerms.add('Stellenanzeige');
-    }
-
-    // 4) Lokal-Intent: PLZ + Land in die Query
-    if (hasLocation && plz.isNotEmpty && plz != '0') {
+    // Lokal-Intent (allgemein, nicht nur Teilzeit)
+    if (hasLocation && plz.isNotEmpty && plz != '0' &&
+        !hardTerms.contains(plz)) {
       hardTerms.add(plz);
-      // Bundeslaender-/Stadt-Hint via Country-Code
-      hardTerms.add(country == 'de' ? 'Deutschland' : country.toUpperCase());
     }
 
-    // 5) Academic-Intent: zusaetzlich Academic-Quellen vorne
-    if (hasAcademic) {
-      preferredSources.insertAll(0, ['academic', 'docs']);
+    // Academic-Intent allgemein
+    if (hasAcademic && employmentType != 'student') {
+      if (!preferredSources.contains('academic')) {
+        preferredSources.insert(0, 'academic');
+      }
     }
 
-    // 6) News-Intent
+    // News-Intent: News-Quellen vorne
     if (hasNews) {
-      preferredSources.insertAll(0, ['news']);
+      if (!preferredSources.contains('news')) {
+        preferredSources.insert(0, 'news');
+      }
     }
 
-    // 7) Senioren / Rentner: Klartext bevorzugen, Foren raus
-    if (employmentType == 'rentner') {
-      preferredSources.removeWhere((s) => s == 'foren' || s == 'reddit');
-    }
-
-    // 8) Sprache als Hint fuer Google `lr=`
+    // ─────────────────────────────────────────────────────────────
+    // 8. SPRACHE + AKTUALITAET
+    // ─────────────────────────────────────────────────────────────
     final languageHint = (language == 'de' || language == 'en')
         ? 'lang_$language'
         : null;
 
-    // 9) Aktualitaets-Boost: News-Intent ODER User <30 Jahre
     final age = DateTime.now().year - jahr;
-    final boostRecent = hasNews || (age >= 0 && age <= 30);
+    final boostRecent = hasNews || (age >= 0 && age <= 30) ||
+        employmentType == 'vollzeit';
 
-    // 10) Interesse-basierte Anreicherung (intent-sensitiv)
+    // ─────────────────────────────────────────────────────────────
+    // 8b. FAMILIENSTATUS — spec-konform
+    // ─────────────────────────────────────────────────────────────
+    if (familyStatus == 'familie') {
+      // Schutz vor Pinterest + Affiliate-Mommy-Blog-Spam (immer aktiv)
+      excludeDomains.addAll(_familieExclusions);
+
+      // Lokal-Bias bei Familien (Kita, Arzt, Angebote)
+      if (plz.isNotEmpty && plz != '0' && !hardTerms.contains(plz)) {
+        softTerms.add(plz);
+      }
+
+      // Medizinisch/erzieherisch → Trust-Domains erzwingen
+      if (hasFamilyMedical || hasMedical) {
+        trustDomains.addAll(_familieMedTrustDomains);
+        if (!preferredSources.contains('offiziell')) {
+          preferredSources.insert(0, 'offiziell');
+        }
+      }
+    } else if (familyStatus == 'alleinerziehend') {
+      // Toxische Foren + Scam-Anwalts-Portale ausschliessen
+      excludeDomains.addAll(_alleinerziehendExclusions);
+
+      // Lokal-Bias noch stärker (Kita-Plätze, lokale Angebote)
+      if (plz.isNotEmpty && plz != '0' && !hardTerms.contains(plz)) {
+        softTerms.add(plz);
+      }
+
+      // Rechtlich/finanziell/Antrags-Intent → staatliche Seiten an die Spitze
+      if (hasLegal || hasFinancial) {
+        trustDomains.addAll(_alleinerziehendTrustDomains);
+        if (!preferredSources.contains('offiziell')) {
+          preferredSources.insert(0, 'offiziell');
+        }
+        // Reddit-Communities fuer echte Erfahrungen zusaetzlich boosten
+        if (!preferredSources.contains('reddit')) {
+          preferredSources.add('reddit');
+        }
+        // Allgemeiner Foerderungs-Hint
+        if (!softTerms.contains('Förderung') && !fullText.contains('foerder')) {
+          softTerms.add('Förderung');
+        }
+      } else {
+        // Ohne spezifischen Intent: nur effizienz-fokussierte Quellen
+        if (!preferredSources.contains('offiziell')) {
+          preferredSources.add('offiziell');
+        }
+      }
+    }
+    // 'single': Baseline — nur Berufstyp-Filter greifen, kein family overlay
+
+    // ─────────────────────────────────────────────────────────────
+    // 10. INTERESSE-BASIERTE ANREICHERUNG (intent-sensitiv)
     //
-    //  • Finanzen: softTerms + offiziell/ratgeber-Quellen bei Finanz-Intent
-    //  • Bildung:  academic/docs/ratgeber bei Bildungs-Intent
-    //  • Alle anderen Kategorien: nur Quellen-Bias, keine hartcodierten Terme
-    //  • Sub-Kategorie-spezifisch: Soziales → "Förderung" + "Antrag" als
-    //    Soft-Hint, wenn es nicht schon aus Employment-Seed kommt
+    //  Wird NUR aktiviert wenn:
+    //    a) Der User Interessen gesetzt hat (interests.isNotEmpty)
+    //    b) Ein passender Intent-Treffer im Query vorliegt
+    //  → Verhindert Kontaminierung unverwandter Suchanfragen.
+    // ─────────────────────────────────────────────────────────────
     if (interests.isNotEmpty) {
-      // Top-Level-Kategorien dedupliziert extrahieren
-      final topCats = interests
-          .map((p) => p.split('/').first)
-          .toSet();
+      final topCats = interests.map((p) => p.split('/').first).toSet();
 
       for (final cat in topCats) {
-        final intentMatches = switch (cat) {
-          'finanzen' => hasFinanz,
-          'bildung'  => hasBildung,
-          _          => _containsAny(
-              fullText,
-              // Faellt-through: immer aktivieren (weicher Quellen-Bias)
-              [cat, cat.substring(0, cat.length > 4 ? 4 : cat.length)],
-            ),
+        // Intent-Pruefung pro Kategorie
+        final matches = switch (cat) {
+          'finanzen'     => hasFinanzIntent,
+          'bildung'      => hasBildungIntent,
+          'wissenschaft' => hasAcademic,
+          'mathe'        => hasAcademic,
+          'sport'        => _containsAny(fullText, ['sport', 'training', 'fitness', 'laufen', 'yoga']),
+          'kochen'       => _containsAny(fullText, ['rezept', 'kochen', 'zutaten', 'backen', 'essen']),
+          'tech'         => hasSoftware,
+          'reisen'       => _containsAny(fullText, ['reise', 'urlaub', 'hotel', 'flug', 'ausland']),
+          'gaming'       => _containsAny(fullText, ['game', 'spiel', 'gaming', 'steam', 'mmo']),
+          'auto'         => _containsAny(fullText, ['auto', 'fahrzeug', 'motor', 'kfz', 'kaufen']),
+          _              => false,
         };
-        if (!intentMatches) continue;
+        if (!matches) continue;
 
         // Quellen-Bias hinzufuegen
         final sources = _interestSources[cat];
-        if (sources != null) preferredSources.addAll(sources);
+        if (sources != null) {
+          for (final s in sources) {
+            if (!preferredSources.contains(s)) preferredSources.add(s);
+          }
+        }
 
-        // SoftTerms hinzufuegen (falls Kategorie einen Eintrag hat)
+        // SoftTerms hinzufuegen (nur wenn noch nicht vorhanden)
         final terms = _interestSoftTerms[cat];
         if (terms != null) {
           for (final t in terms) {
@@ -266,54 +542,63 @@ class StammdatenResolver {
         }
       }
 
-      // Sub-Kategorie-spezifische Anreicherung
-      // Muster: finanzen/soziales/* → Förderung + Antrag sofern Finanz-Intent
-      if (hasFinanz) {
-        final hasSoziales  = interests.any((p) => p.startsWith('finanzen/soziales/'));
-        final hasSteuern   = interests.any((p) => p.startsWith('finanzen/steuern/'));
-        final hasRente     = interests.any((p) => p.startsWith('finanzen/rente/'));
-        final hasMietrecht = interests.any((p) => p.startsWith('finanzen/mietrecht/'));
-
-        if (hasSoziales && !softTerms.contains('Antrag')) {
+      // Sub-Kategorie-Hints (spezifische Anreicherung bei starkem Finanz-Intent)
+      if (hasFinanzIntent) {
+        if (interests.any((p) => p.startsWith('finanzen/soziales/')) &&
+            !softTerms.contains('Antrag')) {
           softTerms.add('Antrag');
         }
-        if (hasSteuern && !softTerms.contains('Finanzamt')) {
+        if (interests.any((p) => p.startsWith('finanzen/steuern/')) &&
+            !softTerms.contains('Finanzamt')) {
           softTerms.add('Finanzamt');
         }
-        if (hasRente && !softTerms.contains('Rentenversicherung')) {
+        if (interests.any((p) => p.startsWith('finanzen/rente/')) &&
+            !softTerms.contains('Rentenversicherung')) {
           softTerms.add('Rentenversicherung');
         }
-        if (hasMietrecht && !softTerms.contains('Mieterbund')) {
+        if (interests.any((p) => p.startsWith('finanzen/mietrecht/')) &&
+            !softTerms.contains('Mieterbund')) {
           softTerms.add('Mieterbund');
         }
       }
-      if (hasBildung) {
-        final hasWeiterbildung = interests.any(
-            (p) => p.startsWith('bildung/weiterbildung/'));
-        final hasBewerbung = interests.any(
-            (p) => p.startsWith('bildung/bewerbung/'));
-        if (hasWeiterbildung && !softTerms.contains('Bildungsgutschein')) {
+      if (hasBildungIntent) {
+        if (interests.any((p) => p.startsWith('bildung/weiterbildung/')) &&
+            !softTerms.contains('Bildungsgutschein')) {
           softTerms.add('Bildungsgutschein');
         }
-        if (hasBewerbung && !softTerms.contains('Vorlage')) {
+        if (interests.any((p) => p.startsWith('bildung/bewerbung/')) &&
+            !softTerms.contains('Vorlage')) {
           softTerms.add('Vorlage');
         }
       }
     }
 
-    // Doppelte preferredSources entfernen, Reihenfolge erhalten
-    final dedupedSources = <String>{};
+    // ─────────────────────────────────────────────────────────────
+    // 9. DEDUPLIZIEREN + ZUSAMMENFUEHREN
+    // ─────────────────────────────────────────────────────────────
+    final seen = <String>{};
     final orderedSources = <String>[];
     for (final s in preferredSources) {
-      if (dedupedSources.add(s)) orderedSources.add(s);
+      if (seen.add(s)) orderedSources.add(s);
+    }
+
+    final seenTrust = <String>{};
+    final orderedTrust = <String>[];
+    for (final d in trustDomains) {
+      if (seenTrust.add(d)) orderedTrust.add(d);
     }
 
     return StammdatenContext(
       softTerms: softTerms,
       hardTerms: hardTerms,
       preferredSources: orderedSources,
+      excludeDomains: List.unmodifiable(excludeDomains.toSet().toList()),
+      trustDomains: orderedTrust,
+      fileTypeHints: List.unmodifiable(fileTypeHints.toSet().toList()),
       languageHint: languageHint,
+      dateAfter: dateAfter,
       boostRecent: boostRecent,
+      preferIntitle: preferIntitle,
     );
   }
 
