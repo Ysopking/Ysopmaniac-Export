@@ -162,11 +162,11 @@ class LearningService {
       await prefs.remove(k);
     }
     if (kDebugMode) {
-      debugPrint('resetLearningWeights: \${toRemove.length} Gewichts-Keys entfernt.');
+      debugPrint('resetLearningWeights: ${toRemove.length} Gewichts-Keys entfernt.');
     }
   }
 
-    Future<void> checkAndAnalyze() async {
+  Future<void> checkAndAnalyze() async {
     final prefs = await SharedPreferences.getInstance();
     final lastAnalysis = prefs.getInt('last_analysis') ?? 0;
     final now = DateTime.now().millisecondsSinceEpoch;
