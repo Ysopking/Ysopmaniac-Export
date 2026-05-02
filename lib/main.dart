@@ -151,9 +151,11 @@ class _MyAppState extends ConsumerState<MyApp> {
   }
 
   Route<dynamic> _onGenerateRoute(RouteSettings settings) {
-    return MaterialPageRoute(
+    return PageRouteBuilder(
       settings: settings,
-      builder: (context) => Consumer(
+      transitionDuration: const Duration(milliseconds: 380),
+      reverseTransitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (context, animation, secondaryAnimation) => Consumer(
         builder: (context, ref, _) {
           final onboardingDone = ref.watch(onboardingDoneProvider);
           final authenticated = ref.watch(authProvider);
@@ -178,6 +180,23 @@ class _MyAppState extends ConsumerState<MyApp> {
           }
         },
       ),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.035),
+              end: Offset.zero,
+            ).animate(curved),
+            child: child,
+          ),
+        );
+      },
     );
   }
 
