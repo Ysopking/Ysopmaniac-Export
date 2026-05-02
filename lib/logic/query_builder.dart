@@ -540,20 +540,6 @@ class FindUXQueryBuilder {
         .toList();
   }
 
-  List<String> _topLearnedKeywords(Map<String, double> weights,
-      {required bool positive, required int max}) {
-    final entries = <MapEntry<String, double>>[];
-    weights.forEach((key, weight) {
-      if (!key.startsWith('weight_kw_')) return;
-      if (positive ? weight > 1.4 : weight < 0.7) {
-        entries.add(MapEntry(key.replaceFirst('weight_kw_', ''), weight));
-      }
-    });
-    entries.sort((a, b) =>
-        positive ? b.value.compareTo(a.value) : a.value.compareTo(b.value));
-    return entries.take(max).map((e) => e.key).toList();
-  }
-
   List<String> _topLearnedDomains(Map<String, double> weights,
       {required bool positive, required int max}) {
     final entries = <MapEntry<String, double>>[];
