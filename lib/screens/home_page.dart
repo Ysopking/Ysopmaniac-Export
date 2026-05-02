@@ -21,6 +21,7 @@ import '../coach/coach_screen.dart';
 import '../coach/theme_detector.dart';
 import '../coach/precision_advisor.dart';
 import 'incognito_browser_screen.dart';
+import 'widgets/inline_coach_section.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   final LearningService learningService;
@@ -42,10 +43,9 @@ class _HomePageState extends ConsumerState<HomePage> {
   // Stage G UX: "Warum?"-Feld ist standardmaessig versteckt — nur per Chip
   // sichtbar. Das ist der Apple-Trick fuer "ein Feld, optional mehr".
   bool _showWhyField = false;
+  CoachInjection? _ambientCoachInjection;
   List<String> _suggestedGoals = [];
   Timer? _analysisTimer;
-  Timer? _specifyTimer;
-  bool _specifyShown = false;
 
   String? _selectedRating;
   final TextEditingController _feedbackController = TextEditingController();
@@ -169,7 +169,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   void dispose() {
     _analysisTimer?.cancel();
-    _specifyTimer?.cancel();
     if (_volumeListenerActive) {
       try {
         VolumeController().removeListener();
@@ -258,10 +257,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   }) async {
     if (_whatController.text.trim().isEmpty) return;
 
-    // Bei jeder neuen Suche alten Specify-Popup-Timer abbrechen.
-    _specifyTimer?.cancel();
-    _specifyShown = false;
-
     if (_viewState != 'results') {
       _startDeepAnalysis();
     }
@@ -293,7 +288,8 @@ class _HomePageState extends ConsumerState<HomePage> {
       contextWhy = '$contextWhy $addedGoal';
     }
 
-    final effectiveMode = injection?.modeOverride ?? settings.mode;
+    final resolvedInjection = injection ?? _ambientCoachInjection;
+    final effectiveMode = resolvedInjection?.modeOverride ?? settings.mode;
     final fullQuery = overrideQuery ??
         await builder.buildQuery(
           what: _whatController.text,
@@ -301,7 +297,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           filters: allFilters,
           settings: settingsMap,
           mode: effectiveMode,
-          coachInjection: injection,
+          coachInjection: resolvedInjection,
         );
 
     final url = builder.buildSearchUrl(
@@ -387,172 +383,9 @@ class _HomePageState extends ConsumerState<HomePage> {
       if (mounted) setState(() => _advice = rec);
     });
 
-    // 30s nach jeder Suche: sanft anbieten, die Suche zu praezisieren.
-    _scheduleSpecifyPopup();
   }
 
-  /// 30-Sekunden-Timer nach erfolgter Suche. Wird gecancelt, sobald der
-  /// User eine neue Suche startet, zurueck zum Dashboard navigiert oder
-  /// die Seite verlaesst (dispose).
-  void _scheduleSpecifyPopup() {
-    _specifyTimer?.cancel();
-    _specifyTimer = Timer(const Duration(seconds: 30), () {
-      if (!mounted) return;
-      if (_specifyShown) return;
-      if (_viewState != 'results') return;
-      _showSpecifyPopup();
-    });
-  }
-
-  Future<void> _showSpecifyPopup() async {
-    if (!mounted || _specifyShown) return;
-    _specifyShown = true;
-    HapticFeedback.lightImpact();
-    final outcome = await showDialog<String>(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.tips_and_updates_outlined,
-                color: Color(0xFF6A4DFF), size: 22),
-            SizedBox(width: 8),
-            Expanded(
-                child: Text('Suche praezisieren?',
-                    style: TextStyle(fontWeight: FontWeight.w900))),
-          ],
-        ),
-        content: const Text(
-          'Hast du noch nicht gefunden was du suchst? Lass mich dir helfen, '
-          'deine Suche etwas konkreter zu machen.',
-          style: TextStyle(fontSize: 13, height: 1.4),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 'no'),
-            child: const Text('Passt schon'),
-          ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6A4DFF),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            ),
-            icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-            label: const Text('Praezisieren'),
-            onPressed: () => Navigator.pop(ctx, 'yes'),
-          ),
-        ],
-      ),
-    );
-    if (!mounted || outcome != 'yes') return;
-    await _openCoachForCurrent();
-  }
-
-  Future<void> _openCoachForCurrent() async {
-    final what = _whatController.text;
-    final why = _whyController.text;
-    if (what.trim().isEmpty) return;
-    final theme = ThemeDetector.detect(what, why);
-    final s = ref.read(settingsProvider);
-    final adv = _advice;
-    final initialMode =
-        (adv != null && adv.hasData) ? adv.preferredMode : s.mode;
-    if (!mounted) return;
-    final result = await Navigator.push<CoachResult>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CoachScreen(
-          initialTheme: theme,
-          what: what,
-          why: why,
-          currentMode: initialMode,
-          currentSources: s.sources,
-          currentFiles: s.files,
-        ),
-      ),
-    );
-    if (result == null || result.skipped) return;
-    final inj = CoachInjection.fromChoices(result.choices);
-    await _performSearch(
-      injection: inj,
-      overrideQuery: result.overrideQuery,
-      coachChoices: result.choices.map((c) => c.toJson()).toList(),
-    );
-  }
-
-  void _showLaunchFailedSnack() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Suchergebnis konnte nicht geoeffnet werden.'),
-        backgroundColor: Colors.redAccent,
-      ),
-    );
-  }
-
-  void _startDeepAnalysis() {
-    _analysisTimer?.cancel();
-    _analysisTimer = Timer(const Duration(seconds: 30), () async {
-      if (_viewState == 'results' && mounted) {
-        final results =
-            await DeepAnalyzer.analyzeResults(_whatController.text, {});
-        if (mounted) {
-          setState(() {
-            _suggestedGoals = results;
-            _showDeepAnalysisOverlay = true;
-          });
-          HapticFeedback.heavyImpact();
-        }
-      }
-    });
-  }
-
-  void _submitFeedback() {
-    if (_selectedRating == null) return;
-    HapticFeedback.mediumImpact();
-    widget.learningService.trackFeedback(_selectedRating!,
-        comment: _feedbackController.text.trim());
-    setState(() {
-      _showFeedbackOverlay = false;
-      _selectedRating = null;
-      _feedbackController.clear();
-      // Stage 14: Pflicht-Modus aufloesen.
-      _mandatoryRating = false;
-      _newTokensThisSearch = const <String>{};
-    });
-  }
-
-  // ---------- Build ----------
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
-        child: _getViewForState(),
-      ),
-    );
-  }
-
-  Widget _getViewForState() {
-    switch (_viewState) {
-      case 'home':
-        return _buildHomeScreen(key: const ValueKey('home'));
-      case 'dashboard':
-        return _buildSearchDashboard(key: const ValueKey('dashboard'));
-      case 'results':
-        return _buildResultsScreen(key: const ValueKey('results'));
-      default:
-        return _buildHomeScreen(key: const ValueKey('home'));
-    }
-  }
+  
 
   // ---------- Home (Premium-Look) ----------
 
@@ -740,6 +573,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                         },
                       ),
                     ],
+                    const SizedBox(height: 12),
+                    // Stage 18: Ambient Coach (immer sichtbar, nie aufdringlich)
+                    InlineCoachSection(
+                      what: _whatController.text,
+                      why: _whyController.text,
+                      onChanged: (inj) => setState(
+                        () => _ambientCoachInjection = inj.isEmpty ? null : inj,
+                      ),
+                    ),
                     const SizedBox(height: 20),
                     // Erweiterte Suche -> nur sichtbar nach erster Suche
                     if (_hasSearchedOnce) _buildAdvancedExpander(settings),
@@ -1249,7 +1091,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                       ? null
                       : () async {
                           _analysisTimer?.cancel();
-                          _specifyTimer?.cancel();
                           await _purgeAllSessionData();
                           if (!mounted) return;
                           setState(() => _viewState = 'dashboard');
