@@ -3,10 +3,11 @@ import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/findux_stopwords.dart';
 
-/// Lern- und Gewichtungs-Modul (v2).
+/// Lern- und Gewichtungs-Modul (v3, Coach-aware).
 ///
 /// Was getrackt wird (alles verschluesselt, lokal):
 ///   - Suchanfragen: query+url+filter+mode+sources+files+stammdaten-snapshot
+///                   + coach_choices (Theme, Dimension, Chip-Label, Tags)
 ///   - Feedback: thumbs up/down + optionaler Kommentar (idempotent pro search)
 ///
 /// Wie gewichtet wird (lokale Gewichte in SharedPreferences):
@@ -14,14 +15,9 @@ import '../utils/findux_stopwords.dart';
 ///   - weight_filter_<f>     Quellen-/Datei-Filter
 ///   - weight_mode_<m>       precise/standard/discover/recent
 ///   - weight_domain_<host>  bevorzugte/abgewertete Domains
-///   - weight_employment_<t> Beschaeftigungstyp-Korrelation (Stammdaten)
-///
-/// Anti-Drift Massnahmen:
-///   - Asymmetrische, ABER GEDAEMPFTE Bumps (up=+0.20, down=-0.25)
-///   - Hard-Limits pro Gewichts-Typ (Keywords [0.4..2.5], Domains [0.1..5.0])
-///   - 5% Decay Richtung 1.0 nach jedem Analyse-Lauf
-///   - Idempotent: pro Suche maximal EIN Feedback gewertet
-///   - Search-Log rotiert auf max. 200 Eintraege
+///   - weight_employment_<t> Beschaeftigungstyp-Korrelation
+///   - weight_theme_<id>     Coach-Themen-Gewicht
+///   - weight_chip_<id>      Coach-Chip-Gewicht (theme:dim:chip)
 class LearningService {
   static const String _boxName = 'learning_data';
   static const String _logBoxName = 'learning_log';
@@ -30,11 +26,9 @@ class LearningService {
   static const double _decayFactor = 0.05;
   static const int _maxSearchLogEntries = 200;
 
-  // Additive Bumps statt multiplikativ -> linear, kein Runaway.
   static const double _bumpUp = 0.20;
   static const double _bumpDown = 0.25;
 
-  // Hard-Limits pro Gewichts-Typ
   static const double _kwMin = 0.4;
   static const double _kwMax = 2.5;
   static const double _filterMin = 0.2;
@@ -43,6 +37,10 @@ class LearningService {
   static const double _modeMax = 3.0;
   static const double _domainMin = 0.1;
   static const double _domainMax = 5.0;
+  static const double _themeMin = 0.3;
+  static const double _themeMax = 3.0;
+  static const double _chipMin = 0.3;
+  static const double _chipMax = 3.0;
 
   bool _initialized = false;
 
@@ -68,6 +66,7 @@ class LearningService {
     required List<String> sources,
     required List<String> files,
     required String mode,
+    List<Map<String, dynamic>>? coachChoices,
   }) async {
     if (!Hive.isBoxOpen(_boxName)) return;
     final box = Hive.box<dynamic>(_boxName);
@@ -83,13 +82,12 @@ class LearningService {
       'sources': sources,
       'files': files,
       'mode': mode,
+      if (coachChoices != null && coachChoices.isNotEmpty)
+        'coach_choices': coachChoices,
     });
     await _rotateLog(box);
   }
 
-  /// Idempotent: pro search_id wird nur das ERSTE Feedback ausgewertet.
-  /// Spaetere Bewertungen ueberschreiben den Kommentar, aber zaehlen NICHT
-  /// noch einmal als Gewichts-Bump.
   Future<void> trackFeedback(String rating, {String? comment}) async {
     if (!Hive.isBoxOpen(_feedbackBoxName) ||
         !Hive.isBoxOpen(_boxName)) return;
@@ -99,7 +97,6 @@ class LearningService {
     if (searchBox.isEmpty) return;
     final lastSearchId = searchBox.keys.last.toString();
 
-    // Schon Feedback fuer diese Suche da? -> nur Kommentar updaten
     final existing = box.values.cast<dynamic>().firstWhere(
           (e) {
             if (e is! Map) return false;
@@ -110,7 +107,6 @@ class LearningService {
     if (existing != null) {
       final m = Map<String, dynamic>.from(existing as Map);
       m['comment'] = comment ?? m['comment'] ?? '';
-      // Key der existierenden Entry finden + aktualisieren
       for (final k in box.keys) {
         final v = box.get(k);
         if (v is Map && v['search_id']?.toString() == lastSearchId) {
@@ -150,7 +146,6 @@ class LearningService {
 
     final searchData = Map<dynamic, dynamic>.from(searchBox.toMap());
 
-    // Nur noch nicht-applied Feedbacks verarbeiten
     final pendingKeys = <dynamic>[];
     for (final k in feedbackBox.keys) {
       final v = feedbackBox.get(k);
@@ -168,35 +163,30 @@ class LearningService {
       final search = Map<String, dynamic>.from(searchData[searchId] as Map);
       final isPositive = rating == 'up';
       final delta = isPositive ? _bumpUp : -_bumpDown;
-      final kwDelta = delta * 0.5; // gedaempft fuer Keywords
+      final kwDelta = delta * 0.5;
 
-      // Mode
       final mode = (search['mode'] as String?) ?? 'standard';
       await _bumpAdditive(prefs, 'weight_mode_$mode', delta, _modeMin, _modeMax);
 
-      // Filter (Quellen + Dateitypen)
       final sources =
           (search['sources'] as List<dynamic>?) ?? const <dynamic>[];
       final files =
           (search['files'] as List<dynamic>?) ?? const <dynamic>[];
       for (final filter in [...sources, ...files]) {
-        if (filter == 'alle') continue; // 'alle' nicht lernen
+        if (filter == 'alle') continue;
         await _bumpAdditive(prefs, 'weight_filter_$filter', delta,
             _filterMin, _filterMax);
       }
 
-      // Beschaeftigungstyp-Korrelation (Stammdaten-Lernen)
       final empType =
           (search['employmentType'] as String?) ?? 'student';
       await _bumpAdditive(prefs, 'weight_employment_$empType', delta * 0.3,
           _modeMin, _modeMax);
 
-      // Keyword-Gewichte
       final query = (search['query'] as String?) ?? '';
       final language = (search['language'] as String?) ?? 'de';
       await _extractAndWeightKeywords(query, kwDelta, prefs, language);
 
-      // Domain-Gewicht
       final url = (search['url'] as String?) ?? '';
       final host = _extractHost(url);
       if (host != null) {
@@ -204,7 +194,28 @@ class LearningService {
             _domainMin, _domainMax);
       }
 
-      // Markiere als verarbeitet
+      // Coach-Choices lernen: Theme + Chip Gewichte
+      final choices = search['coach_choices'];
+      if (choices is List) {
+        for (final c in choices) {
+          if (c is! Map) continue;
+          final theme = c['theme']?.toString();
+          final dim = c['dim']?.toString();
+          final chip = c['chip']?.toString();
+          if (theme != null && theme.isNotEmpty) {
+            await _bumpAdditive(prefs, 'weight_theme_$theme', delta * 0.5,
+                _themeMin, _themeMax);
+          }
+          if (theme != null && dim != null && chip != null) {
+            final chipKey = '${theme}__${dim}__$chip'
+                .toLowerCase()
+                .replaceAll(RegExp(r'[^a-z0-9_]'), '_');
+            await _bumpAdditive(prefs, 'weight_chip_$chipKey', delta * 0.4,
+                _chipMin, _chipMax);
+          }
+        }
+      }
+
       fValue['applied'] = true;
       await feedbackBox.put(fk, fValue);
       processed++;
@@ -218,7 +229,6 @@ class LearningService {
     }
   }
 
-  /// Decay: alle Gewichte 5% Richtung 1.0 schieben.
   Future<void> _applyDecay(SharedPreferences prefs) async {
     final keys =
         prefs.getKeys().where((k) => k.startsWith('weight_')).toList();
@@ -239,7 +249,6 @@ class LearningService {
     }
   }
 
-  /// Additive Aenderung — KEIN Multiplizieren.
   Future<void> _bumpAdditive(SharedPreferences prefs, String key,
       double delta, double min, double max) async {
     final current = prefs.getDouble(key) ?? 1.0;
@@ -255,13 +264,11 @@ class LearningService {
       'action': 'interest_model_refinement',
       'message': message,
     });
-    // Log auch rotieren
     while (logBox.length > 50) {
       await logBox.deleteAt(0);
     }
   }
 
-  /// Begrenzung des Such-Logs auf _maxSearchLogEntries Eintraege.
   Future<void> _rotateLog(Box<dynamic> box) async {
     while (box.length > _maxSearchLogEntries) {
       final oldestKey = box.keys.first;
@@ -286,7 +293,6 @@ class LearningService {
 
   Future<void> _extractAndWeightKeywords(String query, double delta,
       SharedPreferences prefs, String language) async {
-    // Operatoren raus
     final clean = query
         .replaceAll(
             RegExp(
@@ -300,7 +306,7 @@ class LearningService {
     final words = clean
         .split(RegExp(r'\s+'))
         .where((w) => w.length > 3 && !stopwords.contains(w))
-        .toSet() // Dedup pro Query
+        .toSet()
         .toList();
 
     for (final word in words) {

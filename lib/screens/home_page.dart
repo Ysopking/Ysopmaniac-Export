@@ -11,6 +11,11 @@ import '../logic/query_builder.dart';
 import '../logic/state_provider.dart';
 import '../logic/deep_analyzer.dart';
 import '../theme.dart';
+import '../coach/coach_models.dart';
+import '../coach/coach_screen.dart';
+import '../coach/vagueness_detector.dart';
+import '../coach/theme_detector.dart';
+import '../coach/precision_advisor.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   final LearningService learningService;
@@ -36,6 +41,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   final TextEditingController _feedbackController = TextEditingController();
 
   String _viewState = 'home';
+  PrecisionRecommendation? _advice;
 
   // Quellen-Optionen (Label + interner Key)
   static const List<Map<String, String>> _sourceOptions = [
@@ -76,6 +82,17 @@ class _HomePageState extends ConsumerState<HomePage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadAdvice();
+  }
+
+  Future<void> _loadAdvice() async {
+    final r = await PrecisionAdvisor.analyze();
+    if (mounted) setState(() => _advice = r);
+  }
+
+  @override
   void dispose() {
     _analysisTimer?.cancel();
     _whatController.dispose();
@@ -95,8 +112,48 @@ class _HomePageState extends ConsumerState<HomePage> {
     });
   }
 
-  Future<void> _performSearch({String? addedGoal}) async {
+  Future<void> _performSearch({
+    String? addedGoal,
+    CoachInjection? injection,
+    String? overrideQuery,
+    List<Map<String, dynamic>>? coachChoices,
+  }) async {
     if (_whatController.text.trim().isEmpty) return;
+
+    // Coach-Trigger nur bei initialer User-Suche (nicht bei Recoach/AddedGoal)
+    if (injection == null && overrideQuery == null && addedGoal == null) {
+      final what = _whatController.text;
+      final why = _whyController.text;
+      if (VaguenessDetector.isVague(what: what, why: why)) {
+        final theme = ThemeDetector.detect(what, why);
+        final s = ref.read(settingsProvider);
+        final adv = _advice;
+        final initialMode = (adv != null && adv.hasData)
+            ? adv.preferredMode
+            : s.mode;
+        if (!mounted) return;
+        final result = await Navigator.push<CoachResult>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CoachScreen(
+              initialTheme: theme,
+              what: what,
+              why: why,
+              currentMode: initialMode,
+              currentSources: s.sources,
+              currentFiles: s.files,
+            ),
+          ),
+        );
+        if (result == null) return; // User hat Coach abgebrochen
+        if (!result.skipped) {
+          injection = CoachInjection.fromChoices(result.choices);
+          overrideQuery = result.overrideQuery;
+          coachChoices =
+              result.choices.map((c) => c.toJson()).toList();
+        }
+      }
+    }
 
     if (_viewState != 'results') {
       _startDeepAnalysis();
@@ -113,6 +170,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     final settingsMap = <String, dynamic>{
       'plz': settings.plz,
       'beruf': settings.beruf,
+      'employmentType': settings.employmentType,
       'searchengine': settings.searchEngine,
       'enableYouthProtection': settings.enableYouthProtection,
       'language': settings.language,
@@ -124,13 +182,16 @@ class _HomePageState extends ConsumerState<HomePage> {
       contextWhy = '$contextWhy $addedGoal';
     }
 
-    final fullQuery = await builder.buildQuery(
-      what: _whatController.text,
-      why: contextWhy,
-      filters: allFilters,
-      settings: settingsMap,
-      mode: settings.mode,
-    );
+    final effectiveMode = injection?.modeOverride ?? settings.mode;
+    final fullQuery = overrideQuery ??
+        await builder.buildQuery(
+          what: _whatController.text,
+          why: contextWhy,
+          filters: allFilters,
+          settings: settingsMap,
+          mode: effectiveMode,
+          coachInjection: injection,
+        );
 
     final url = builder.buildSearchUrl(
         fullQuery, settings.searchEngine, settingsMap);
@@ -169,8 +230,15 @@ class _HomePageState extends ConsumerState<HomePage> {
       settings: settingsMap,
       sources: settings.sources,
       files: settings.files,
-      mode: settings.mode,
+      mode: effectiveMode,
+      coachChoices: coachChoices,
     );
+
+    // Stil-Analyzer nach jeder Suche neu laden (asynchron, blockiert nichts)
+    // ignore: discarded_futures
+    PrecisionAdvisor.analyze().then((rec) {
+      if (mounted) setState(() => _advice = rec);
+    });
   }
 
   void _showLaunchFailedSnack() {
@@ -382,6 +450,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _buildStammdatenPill(),
+                    _buildAdvicePill(),
                     _buildLightInput(
                       controller: _whatController,
                       label: l10n.whatSearch,
@@ -436,6 +506,93 @@ class _HomePageState extends ConsumerState<HomePage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildStammdatenPill() {
+    final settings = ref.watch(settingsProvider);
+    final plz = settings.plz.trim();
+    final beruf = settings.beruf.trim();
+    if (plz.isEmpty && beruf.isEmpty) {
+      return GestureDetector(
+        onTap: () => Navigator.pushNamed(context, '/settings'),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.amber.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+          ),
+          child: Row(children: const [
+            Icon(Icons.info_outline, size: 18, color: Colors.amber),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Stammdaten ergaenzen fuer praezisere Suchen (PLZ, Beruf)',
+                style: TextStyle(fontSize: 12, color: Colors.black87),
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios, size: 12, color: Colors.black54),
+          ]),
+        ),
+      );
+    }
+    final parts = <String>[];
+    if (plz.isNotEmpty) parts.add('PLZ $plz');
+    if (beruf.isNotEmpty) parts.add(beruf);
+    return GestureDetector(
+      onTap: () => Navigator.pushNamed(context, '/settings'),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: FindUXProTheme.primaryPurple.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: FindUXProTheme.primaryPurple.withValues(alpha: 0.25)),
+        ),
+        child: Row(children: [
+          const Icon(Icons.verified_user_outlined,
+              size: 16, color: FindUXProTheme.primaryPurple),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              parts.join('  ·  '),
+              style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87),
+            ),
+          ),
+          const Icon(Icons.edit_outlined, size: 14, color: Colors.black54),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildAdvicePill() {
+    final adv = _advice;
+    if (adv == null || !adv.hasData) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.green.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.green.withValues(alpha: 0.25)),
+      ),
+      child: Row(children: [
+        const Icon(Icons.psychology_alt_outlined,
+            size: 16, color: Colors.green),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            adv.summary,
+            style: const TextStyle(fontSize: 11, color: Colors.black87),
+          ),
+        ),
+      ]),
     );
   }
 

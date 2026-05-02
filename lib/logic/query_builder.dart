@@ -1,24 +1,29 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/findux_stopwords.dart';
+import '../coach/coach_models.dart';
+import '../coach/phrase_detector.dart';
+import '../coach/smart_date.dart';
 import 'stammdaten_resolver.dart';
 
-/// FindUX Query-Builder (v2).
+/// FindUX Query-Builder (v3, Coach-aware).
 ///
 /// Pipeline:
 ///   1) WAS  -> Phrase oder Token-Set, Mode-abhaengig formatiert
+///              + Phrase-Auto-Detect (Multi-Wort-Wendungen automatisch quoten)
 ///   2) WARUM -> Kontext-Tokens, dedupliziert ggn. WAS, Stoppwoerter raus
 ///   3) Stammdaten-Resolver liefert harte/weiche Terme + Source-Bias
-///   4) Lern-Boost (positive Keywords als OR-Erweiterung)
-///   5) Lern-Demote (negative Keywords + Domains)
-///   6) site:(...)-Gruppe + filetype:(...)-Gruppe (jeweils EINE)
-///   7) Mode-spezifische Operatoren (intitle:, after:DATE, ...)
-///   8) Spam-Filter + Jugendschutz
+///   4) Coach-Injection (HardTerms, Phrases, Intitles, Sites, Excludes, after)
+///   5) Lern-Boost (positive Keywords als OR-Erweiterung)
+///   6) Lern-Demote (negative Keywords + Domains)
+///   7) site:(...)-Gruppe + filetype:(...)-Gruppe (jeweils EINE)
+///   8) Smart-Date: after:DATE wenn Intent es nahelegt (kein Coach-after gesetzt)
+///   9) Spam-Filter + Jugendschutz
 ///
 /// Strikte Regeln:
 ///   - max 1 site:(...)-Gruppe, max 1 filetype:(...)-Gruppe
 ///   - max 8 Domains in der site-Gruppe (Google bricht sonst silent ab)
 ///   - keine Zeichen-Inflation: Query <= 1800 Zeichen vor URL-Encoding
-///   - keine Operatoren in der Query verdoppeln (z.B. "site:x site:x")
+///   - keine Operatoren in der Query verdoppeln
 class FindUXQueryBuilder {
   final StammdatenResolver _stammdaten = StammdatenResolver();
 
@@ -85,7 +90,7 @@ class FindUXQueryBuilder {
     '-site:pinterest.de',
     '-site:answers.yahoo.com',
     '-site:tripadvisor.com',
-    '-site:w3schools.com', // bevorzuge MDN
+    '-site:w3schools.com',
   ];
 
   static const List<String> explicitExclusions = [
@@ -100,6 +105,7 @@ class FindUXQueryBuilder {
     required List<String> filters,
     required Map<String, dynamic> settings,
     String mode = 'standard',
+    CoachInjection? coachInjection,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final weights = _loadWeights(prefs);
@@ -113,10 +119,14 @@ class FindUXQueryBuilder {
     );
 
     final parts = <String>[];
-    final usedTokens = <String>{}; // Dedup-Tracker
+    final usedTokens = <String>{};
 
-    // 1. WAS: Mode-abhaengige Formatierung
-    final cleanWhat = _normalizeQuotes(what).trim();
+    // 1. WAS: Mode-abhaengige Formatierung + Auto-Quote-Phrase
+    final cleanWhatRaw = _normalizeQuotes(what).trim();
+    // Auto-Quote nur wenn nicht discover und User hat noch keine Quotes
+    final cleanWhat = (mode != 'discover' && !cleanWhatRaw.contains('"'))
+        ? PhraseDetector.autoQuote(cleanWhatRaw)
+        : cleanWhatRaw;
     if (cleanWhat.isNotEmpty) {
       parts.add(_formatPrimary(cleanWhat, mode));
       usedTokens.addAll(_lowercaseTokens(cleanWhat));
@@ -143,7 +153,7 @@ class FindUXQueryBuilder {
       usedTokens.addAll(contextKeywords.map((e) => e.toLowerCase()));
     }
 
-    // 4. Stammdaten-Hard-Terms (z.B. PLZ bei Lokal-Intent)
+    // 4. Stammdaten-Hard-Terms
     for (final t in stamm.hardTerms) {
       final lower = t.replaceAll('"', '').toLowerCase();
       if (!usedTokens.contains(lower)) {
@@ -152,7 +162,7 @@ class FindUXQueryBuilder {
       }
     }
 
-    // 5. Stammdaten-Soft-Terms (nur in standard/discover, nicht in precise)
+    // 5. Stammdaten-Soft-Terms (nur in standard/discover)
     if (mode != 'precise' && stamm.softTerms.isNotEmpty) {
       final softs = stamm.softTerms
           .where((t) => !usedTokens.contains(t.toLowerCase()))
@@ -166,7 +176,37 @@ class FindUXQueryBuilder {
       usedTokens.addAll(softs.map((e) => e.toLowerCase()));
     }
 
-    // 6. Lern-Boost: Top-3 positive Keywords als OR-Gruppe
+    // 6. Coach-Injection (HardTerms, Phrases, Intitles, Excludes — Sites kommen spaeter)
+    final coachSites = <String>[];
+    String? coachAfter;
+    if (coachInjection != null && !coachInjection.isEmpty) {
+      for (final t in coachInjection.hardTerms) {
+        final lower = t.toLowerCase();
+        if (!usedTokens.contains(lower)) {
+          parts.add(t);
+          usedTokens.add(lower);
+        }
+      }
+      for (final p in coachInjection.phrases) {
+        final phr = p.replaceAll('"', '').trim();
+        if (phr.isEmpty) continue;
+        parts.add('"$phr"');
+      }
+      for (final t in coachInjection.intitles) {
+        final clean = t.toLowerCase().trim();
+        if (clean.isEmpty) continue;
+        parts.add('intitle:$clean');
+      }
+      coachSites.addAll(coachInjection.sites);
+      for (final e in coachInjection.excludes) {
+        final clean = e.replaceAll(RegExp(r'^-+'), '').trim();
+        if (clean.isEmpty) continue;
+        parts.add('-$clean');
+      }
+      coachAfter = coachInjection.after;
+    }
+
+    // 7. Lern-Boost: Top-3 positive Keywords als OR-Gruppe
     final boostKws = _topLearnedKeywords(weights, positive: true, max: 3)
         .where((k) => !usedTokens.contains(k))
         .toList();
@@ -178,42 +218,51 @@ class FindUXQueryBuilder {
       }
     }
 
-    // 7. Lern-Demote: Top-3 negative Keywords als -term
+    // 8. Lern-Demote: Top-3 negative Keywords als -term
     final demoteKws = _topLearnedKeywords(weights, positive: false, max: 3);
     for (final kw in demoteKws) {
       parts.add('-$kw');
     }
 
-    // 8. Quellen-Bias: User-Auswahl ODER Stammdaten-Preset
+    // 9. Quellen-Bias: User + Stammdaten + Coach-Sites in EINE site-Gruppe
     final effectiveFilters = _resolveEffectiveFilters(filters, stamm);
     final sortedFilters = _sortFiltersByWeight(effectiveFilters, weights);
-    final siteGroup = _buildSiteGroup(sortedFilters);
+    final filterSiteDomains = _collectSiteDomains(sortedFilters);
+    final mergedSites = <String>{...filterSiteDomains, ...coachSites};
+    final siteGroup = _buildSiteGroupFromDomains(mergedSites);
     if (siteGroup != null) parts.add(siteGroup);
     final fileGroup = _buildFiletypeGroup(sortedFilters);
     if (fileGroup != null) parts.add(fileGroup);
 
-    // 9. Lern-Domain-Demote: Bottom-3 Domains
+    // 10. Lern-Domain-Demote
     final badDomains = _topLearnedDomains(weights, positive: false, max: 3);
     for (final d in badDomains) {
       parts.add('-site:$d');
     }
 
-    // 10. Mode-Operatoren: recent => after:DATE
-    if (mode == 'recent' || stamm.boostRecent && mode == 'standard') {
+    // 11. Datum: Coach-after > recent-Mode > Stammdaten-boostRecent > Smart-Date-Heuristik
+    if (coachAfter != null && coachAfter.isNotEmpty) {
+      parts.add('after:$coachAfter');
+    } else if (mode == 'recent' ||
+        (stamm.boostRecent && mode == 'standard')) {
       final cutoff = DateTime.now().subtract(const Duration(days: 365));
       parts.add('after:${_isoDate(cutoff)}');
+    } else if (mode != 'precise') {
+      // Smart-Date nur wenn nichts anderes datiert UND Mode nicht precise
+      final smartAfter = SmartDate.formatAfterOperator(what, why);
+      if (smartAfter != null) parts.add(smartAfter);
     }
 
-    // 11. Standard-Filter
+    // 12. Standard-Filter
     parts.addAll(noiseExclusions);
     parts.addAll(defaultBlockedDomains);
 
-    // 12. Jugendschutz
+    // 13. Jugendschutz
     final isYouthActive =
         (settings['enableYouthProtection'] as bool?) ?? true;
     if (isYouthActive) parts.addAll(explicitExclusions);
 
-    // 13. Build + sanitize
+    // 14. Build + sanitize
     return _sanitize(parts);
   }
 
@@ -249,8 +298,8 @@ class FindUXQueryBuilder {
       default: // google
         base = 'https://www.google.com/search?q=';
         params.write('&hl=$lang&gl=${country.toUpperCase()}');
-        params.write('&lr=lang_$lang'); // Sprach-Filter
-        params.write('&filter=1'); // dedupliziert
+        params.write('&lr=lang_$lang');
+        params.write('&filter=1');
         params.write('&num=20');
         if (isYouthActive) params.write('&safe=active');
     }
@@ -280,7 +329,7 @@ class FindUXQueryBuilder {
     if (alreadyQuoted) return what;
     switch (mode) {
       case 'discover':
-        return what; // Google darf erweitern
+        return what;
       case 'precise':
       default:
         return hasSpace ? '"$what"' : what;
@@ -342,14 +391,11 @@ class FindUXQueryBuilder {
     return entries.take(max).map((e) => e.key).toList();
   }
 
-  /// Wenn der User keine eigene Quellen-Auswahl hat ('alle'),
-  /// wird die Stammdaten-Empfehlung als Soft-Bias verwendet.
   List<String> _resolveEffectiveFilters(
       List<String> userFilters, StammdatenContext stamm) {
     final hasExplicit =
         userFilters.where((f) => f != 'alle').isNotEmpty;
     if (hasExplicit) return userFilters.where((f) => f != 'alle').toList();
-    // 'alle' + Stammdaten-Empfehlung -> nur Top-2 weich rein
     return stamm.preferredSources.take(2).toList();
   }
 
@@ -366,12 +412,16 @@ class FindUXQueryBuilder {
         .toList();
   }
 
-  String? _buildSiteGroup(List<String> filters) {
+  Set<String> _collectSiteDomains(List<String> filters) {
     final domains = <String>{};
     for (final f in filters) {
       final ds = sourceDomains[f];
       if (ds != null) domains.addAll(ds);
     }
+    return domains;
+  }
+
+  String? _buildSiteGroupFromDomains(Set<String> domains) {
     if (domains.isEmpty) return null;
     if (domains.length == 1) return 'site:${domains.first}';
     final parts = domains.take(8).map((d) => 'site:$d').toList();
@@ -405,18 +455,12 @@ class FindUXQueryBuilder {
   }
 
   String _sanitize(List<String> parts) {
-    final out = parts
-        .where((p) => p.isNotEmpty)
-        .toList();
-    // Entferne exakt gleiche Parts (z.B. doppelte -site:x durch Lern+Default)
+    final out = parts.where((p) => p.isNotEmpty).toList();
     final seen = <String>{};
     final unique = <String>[];
     for (final p in out) {
       if (seen.add(p)) unique.add(p);
     }
-    return unique
-        .join(' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    return unique.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 }
