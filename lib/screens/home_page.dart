@@ -387,6 +387,75 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   
 
+
+  // ---------- Build ----------
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F7),
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        child: _getViewForState(),
+      ),
+    );
+  }
+
+  Widget _getViewForState() {
+    switch (_viewState) {
+      case 'home':
+        return _buildHomeScreen(key: const ValueKey('home'));
+      case 'dashboard':
+        return _buildSearchDashboard(key: const ValueKey('dashboard'));
+      case 'results':
+        return _buildResultsScreen(key: const ValueKey('results'));
+      default:
+        return _buildHomeScreen(key: const ValueKey('home'));
+    }
+  }
+
+  void _startDeepAnalysis() {
+    _analysisTimer?.cancel();
+    _analysisTimer = Timer(const Duration(seconds: 30), () async {
+      if (_viewState == 'results' && mounted) {
+        final results =
+            await DeepAnalyzer.analyzeResults(_whatController.text, {});
+        if (mounted) {
+          setState(() {
+            _suggestedGoals = results;
+            _showDeepAnalysisOverlay = true;
+          });
+          HapticFeedback.heavyImpact();
+        }
+      }
+    });
+  }
+
+  void _showLaunchFailedSnack() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Suchergebnis konnte nicht geoeffnet werden.'),
+        backgroundColor: Colors.redAccent,
+      ),
+    );
+  }
+
+  void _submitFeedback() {
+    if (_selectedRating == null) return;
+    HapticFeedback.mediumImpact();
+    widget.learningService.trackFeedback(
+      _selectedRating!,
+      comment: _feedbackController.text.trim(),
+    );
+    setState(() {
+      _showFeedbackOverlay = false;
+      _selectedRating = null;
+      _feedbackController.clear();
+      _mandatoryRating = false;
+      _newTokensThisSearch = const <String>{};
+    });
+  }
+
   // ---------- Home (Premium-Look) ----------
 
   Widget _buildHomeScreen({Key? key}) {
