@@ -20,6 +20,7 @@ class QueryDebugInfo {
   final bool preferIntitle;
   final bool boostRecent;
   final List<String> interests;
+  final double familyWeight;
   final List<String> boostKws;
   final List<String> demoteKws;
   final List<String> learnedTrustDomains;
@@ -36,6 +37,7 @@ class QueryDebugInfo {
     required this.preferIntitle,
     required this.boostRecent,
     required this.interests,
+    required this.familyWeight,
     required this.boostKws,
     required this.demoteKws,
     required this.learnedTrustDomains,
@@ -166,6 +168,11 @@ class FindUXQueryBuilder {
 
     final employmentType = (settings['employmentType'] as String?) ?? 'student';
     final employmentWeight = weights['weight_employment_$employmentType'] ?? 1.0;
+    // Familienstatus-Lerngewicht: analog zu employmentWeight.
+    // Startet bei 1.1 nach Onboarding (seedStarterFamilyWeights).
+    // Wird durch trackFeedback verfeinert.
+    final familyStatus = (settings['familyStatus'] as String?) ?? 'single';
+    final familyWeight = weights['weight_family_$familyStatus'] ?? 1.0;
 
     // Interests aus settings extrahieren (List<String> oder leer)
     final interests = (settings['interests'] as List?)
@@ -177,6 +184,7 @@ class FindUXQueryBuilder {
       why: why,
       settings: settings,
       employmentWeight: employmentWeight,
+      familyWeight: familyWeight,
       interests: interests,
     );
 
@@ -405,6 +413,7 @@ class FindUXQueryBuilder {
         preferIntitle: stamm.preferIntitle,
         boostRecent: stamm.boostRecent,
         interests: interests,
+        familyWeight: familyWeight,
         boostKws: boostKws,
         demoteKws: demoteKws,
         learnedTrustDomains: learnedTrustDomains.toList(),
