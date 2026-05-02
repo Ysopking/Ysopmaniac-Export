@@ -1,98 +1,66 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/findux_stopwords.dart';
+import 'stammdaten_resolver.dart';
 
-/// Query-Builder fuer FindUX. Nutzt soviel von Googles Suchoperatoren wie
-/// sinnvoll, OHNE die Query mit redundanten Operatoren zu ueberladen
-/// (Google faellt bei zu viel Logik auf Naive-Matching zurueck).
+/// FindUX Query-Builder (v2).
 ///
-/// Kern-Strategie:
-///   - "WAS" -> exakte Phrase ODER lockerer Match je nach Mode
-///   - "WARUM" -> Kontext-Begriffe (intitle: fuer das wichtigste)
-///   - Filter -> EINE site:(...)-Gruppe + EINE filetype:(...)-Gruppe
-///   - Lern-Boost: Top-3 positive Keywords als OR-Erweiterung
-///   - Lern-Exclude: Top-3 negative Keywords als -term
-///   - Mode-Strategie:
-///       precise   -> "phrase" + intitle:topkw  (Praezision)
-///       standard  -> Phrase + Kontext (Balance)
-///       discover  -> lose OR-Expansion        (Recall)
-///       recent    -> after:DATE (letzte 12 Mon.)
-///   - Default-Negativ-Filter: AI-Slop / Content-Farms / Ads / Tracker-Pfade
+/// Pipeline:
+///   1) WAS  -> Phrase oder Token-Set, Mode-abhaengig formatiert
+///   2) WARUM -> Kontext-Tokens, dedupliziert ggn. WAS, Stoppwoerter raus
+///   3) Stammdaten-Resolver liefert harte/weiche Terme + Source-Bias
+///   4) Lern-Boost (positive Keywords als OR-Erweiterung)
+///   5) Lern-Demote (negative Keywords + Domains)
+///   6) site:(...)-Gruppe + filetype:(...)-Gruppe (jeweils EINE)
+///   7) Mode-spezifische Operatoren (intitle:, after:DATE, ...)
+///   8) Spam-Filter + Jugendschutz
+///
+/// Strikte Regeln:
+///   - max 1 site:(...)-Gruppe, max 1 filetype:(...)-Gruppe
+///   - max 8 Domains in der site-Gruppe (Google bricht sonst silent ab)
+///   - keine Zeichen-Inflation: Query <= 1800 Zeichen vor URL-Encoding
+///   - keine Operatoren in der Query verdoppeln (z.B. "site:x site:x")
 class FindUXQueryBuilder {
-  // ------- KONSTANTEN -------
+  final StammdatenResolver _stammdaten = StammdatenResolver();
 
-  /// Mehrere Domains pro Quelle: bevorzugte (qualitativ hochwertige) Sites
-  /// in einer EINZIGEN site:(...)-OR-Gruppe.
-  final Map<String, List<String>> sourceDomains = const {
+  // ==================== Quellen / Dateien ====================
+
+  static const Map<String, List<String>> sourceDomains = {
     'foren': [
-      'reddit.com',
-      'stackoverflow.com',
-      'stackexchange.com',
-      'quora.com',
+      'reddit.com', 'stackoverflow.com', 'stackexchange.com',
       'gutefrage.net',
     ],
     'reddit': ['reddit.com'],
     'news': [
-      'spiegel.de',
-      'zeit.de',
-      'sueddeutsche.de',
-      'faz.net',
-      'taz.de',
-      'tagesschau.de',
-      'heise.de',
-      'golem.de',
-      'bbc.com',
-      'reuters.com',
+      'spiegel.de', 'zeit.de', 'sueddeutsche.de', 'faz.net', 'taz.de',
+      'tagesschau.de', 'heise.de', 'golem.de', 'bbc.com', 'reuters.com',
     ],
     'wikipedia': ['wikipedia.org', 'wikimedia.org'],
     'offiziell': [
-      // .gov / .edu / .mil als Pseudo-Domains via site:
-      'gov',
-      'edu',
-      'europa.eu',
-      'bund.de',
-      'admin.ch',
-      'gv.at',
+      'gov', 'edu', 'europa.eu', 'bund.de', 'admin.ch', 'gv.at',
     ],
     'academic': [
-      'edu',
-      'ac.uk',
-      'researchgate.net',
-      'arxiv.org',
-      'jstor.org',
-      'springer.com',
-      'sciencedirect.com',
-      'semanticscholar.org',
+      'edu', 'ac.uk', 'researchgate.net', 'arxiv.org', 'jstor.org',
+      'springer.com', 'sciencedirect.com', 'semanticscholar.org',
+      'scholar.google.com',
     ],
     'video': ['youtube.com', 'vimeo.com', 'dailymotion.com'],
     'blogs': ['medium.com', 'substack.com', 'wordpress.com', 'blogspot.com'],
     'shops': [
-      'amazon.de',
-      'ebay.de',
-      'otto.de',
-      'idealo.de',
-      'geizhals.de',
-      'mediamarkt.de',
-      'saturn.de',
+      'amazon.de', 'ebay.de', 'otto.de', 'idealo.de', 'geizhals.de',
+      'mediamarkt.de', 'saturn.de',
     ],
     'social': [
-      'twitter.com',
-      'x.com',
-      'facebook.com',
-      'linkedin.com',
-      'mastodon.social',
-      'bsky.app',
+      'twitter.com', 'x.com', 'facebook.com', 'linkedin.com',
+      'mastodon.social', 'bsky.app',
     ],
     'code': ['github.com', 'gitlab.com', 'bitbucket.org', 'codeberg.org'],
     'docs': [
-      'developer.mozilla.org',
-      'docs.python.org',
-      'docs.microsoft.com',
-      'developer.apple.com',
-      'docs.flutter.dev',
+      'developer.mozilla.org', 'docs.python.org', 'docs.microsoft.com',
+      'developer.apple.com', 'docs.flutter.dev',
     ],
   };
 
-  /// Datei-Operatoren: jeweils alle relevanten Endungen in einer Gruppe.
-  final Map<String, List<String>> fileExtensions = const {
+  static const Map<String, List<String>> fileExtensions = {
     'pdf': ['pdf'],
     'ppt': ['pptx', 'ppt', 'key', 'odp'],
     'doc': ['docx', 'doc', 'odt', 'rtf'],
@@ -104,39 +72,27 @@ class FindUXQueryBuilder {
     'ebook': ['epub', 'mobi'],
   };
 
-  /// Allgemeine Spam- und Low-Quality-Pfade, die wir IMMER ausschliessen.
-  /// In einer eigenen Gruppe, damit der User-Context nicht ueberlagert wird.
   static const List<String> noiseExclusions = [
-    '-inurl:ads',
+    '-inurl:utm_',
     '-inurl:promo',
     '-inurl:sponsored',
-    '-inurl:utm_',
     '-intitle:sponsored',
     '-intitle:advertorial',
   ];
 
-  /// Bekannt schlechte Domains, die fast nie gute Resultate bringen
-  /// (Content-Farms, AI-Slop, Pinterest-SEO, Comparison-Spam).
   static const List<String> defaultBlockedDomains = [
     '-site:pinterest.com',
     '-site:pinterest.de',
-    '-site:quora.com',
     '-site:answers.yahoo.com',
     '-site:tripadvisor.com',
     '-site:w3schools.com', // bevorzuge MDN
   ];
 
   static const List<String> explicitExclusions = [
-    '-sex',
-    '-porn',
-    '-nude',
-    '-gambling',
-    '-betting',
-    '-erotik',
-    '-xxx',
+    '-sex', '-porn', '-nude', '-gambling', '-betting', '-erotik', '-xxx',
   ];
 
-  // ------- API -------
+  // ==================== Public API ====================
 
   Future<String> buildQuery({
     required String what,
@@ -147,88 +103,126 @@ class FindUXQueryBuilder {
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final weights = _loadWeights(prefs);
+    final language = (settings['language'] as String?) ?? 'de';
+    final stopwords = stopwordsForLanguage(language);
+
+    final stamm = _stammdaten.resolve(
+      what: what,
+      why: why,
+      settings: settings,
+    );
 
     final parts = <String>[];
+    final usedTokens = <String>{}; // Dedup-Tracker
 
-    // 1. WAS: Phrase oder Begriff(e)
+    // 1. WAS: Mode-abhaengige Formatierung
     final cleanWhat = _normalizeQuotes(what).trim();
     if (cleanWhat.isNotEmpty) {
       parts.add(_formatPrimary(cleanWhat, mode));
+      usedTokens.addAll(_lowercaseTokens(cleanWhat));
     }
 
-    // 2. Top-Keyword als intitle: (nur wenn ein klarer Hauptbegriff existiert)
-    final topKw = _extractTopKeyword(cleanWhat);
-    if (mode == 'precise' && topKw != null && topKw.length >= 4) {
-      parts.add('intitle:$topKw');
+    // 2. Top-Keyword als intitle: nur im precise-Mode
+    if (mode == 'precise') {
+      final topKw = _extractTopKeyword(cleanWhat, stopwords);
+      if (topKw != null && topKw.length >= 4) {
+        parts.add('intitle:$topKw');
+      }
     }
 
-    // 3. WARUM -> Kontext-Begriffe (lockerer Match, keine Operatoren)
-    final contextKeywords = _tokenize(why);
+    // 3. WARUM-Kontext (deduped, ohne Stoppwoerter)
+    final contextKeywords = _tokenize(why, stopwords)
+        .where((t) => !usedTokens.contains(t.toLowerCase()))
+        .toList();
     if (contextKeywords.isNotEmpty) {
-      // discover-Mode: OR-Verkettung fuer mehr Recall
       if (mode == 'discover' && contextKeywords.length >= 2) {
         parts.add('(${contextKeywords.take(4).join(' OR ')})');
       } else {
         parts.add(contextKeywords.take(4).join(' '));
       }
+      usedTokens.addAll(contextKeywords.map((e) => e.toLowerCase()));
     }
 
-    // 4. Persoenliche Signale (Beruf / PLZ als reine Begriffe)
-    final beruf = (settings['beruf'] as String?)?.trim() ?? '';
-    if (beruf.isNotEmpty && mode != 'discover') {
-      parts.add(beruf.contains(' ') ? '"$beruf"' : beruf);
-    }
-    final plz = (settings['plz'] as String?)?.trim() ?? '';
-    if (plz.isNotEmpty && plz != '0') {
-      parts.add(plz);
+    // 4. Stammdaten-Hard-Terms (z.B. PLZ bei Lokal-Intent)
+    for (final t in stamm.hardTerms) {
+      final lower = t.replaceAll('"', '').toLowerCase();
+      if (!usedTokens.contains(lower)) {
+        parts.add(t);
+        usedTokens.add(lower);
+      }
     }
 
-    // 5. Lern-Boost: Top-N positive Keywords als OR-Gruppe
-    final boostKws = _topLearnedKeywords(weights, positive: true, max: 3);
+    // 5. Stammdaten-Soft-Terms (nur in standard/discover, nicht in precise)
+    if (mode != 'precise' && stamm.softTerms.isNotEmpty) {
+      final softs = stamm.softTerms
+          .where((t) => !usedTokens.contains(t.toLowerCase()))
+          .take(2)
+          .toList();
+      if (softs.length >= 2) {
+        parts.add('(${softs.join(' OR ')})');
+      } else if (softs.length == 1) {
+        parts.add(softs.first);
+      }
+      usedTokens.addAll(softs.map((e) => e.toLowerCase()));
+    }
+
+    // 6. Lern-Boost: Top-3 positive Keywords als OR-Gruppe
+    final boostKws = _topLearnedKeywords(weights, positive: true, max: 3)
+        .where((k) => !usedTokens.contains(k))
+        .toList();
     if (boostKws.isNotEmpty && mode != 'precise') {
-      parts.add('(${boostKws.join(' OR ')})');
+      if (boostKws.length == 1) {
+        parts.add(boostKws.first);
+      } else {
+        parts.add('(${boostKws.join(' OR ')})');
+      }
     }
 
-    // 6. Lern-Exclude: Top-N stark negative Keywords als -term
+    // 7. Lern-Demote: Top-3 negative Keywords als -term
     final demoteKws = _topLearnedKeywords(weights, positive: false, max: 3);
     for (final kw in demoteKws) {
       parts.add('-$kw');
     }
 
-    // 7. Filter -> EINE site:(...) und EINE filetype:(...) Gruppe
-    final sortedFilters = _sortFiltersByWeight(filters, weights);
-    final siteGroup = _buildSiteGroup(sortedFilters, weights);
+    // 8. Quellen-Bias: User-Auswahl ODER Stammdaten-Preset
+    final effectiveFilters = _resolveEffectiveFilters(filters, stamm);
+    final sortedFilters = _sortFiltersByWeight(effectiveFilters, weights);
+    final siteGroup = _buildSiteGroup(sortedFilters);
     if (siteGroup != null) parts.add(siteGroup);
-    final fileGroup = _buildFiletypeGroup(sortedFilters, weights);
+    final fileGroup = _buildFiletypeGroup(sortedFilters);
     if (fileGroup != null) parts.add(fileGroup);
 
-    // 8. Mode-spezifische Datums-Eingrenzung
-    if (mode == 'recent') {
+    // 9. Lern-Domain-Demote: Bottom-3 Domains
+    final badDomains = _topLearnedDomains(weights, positive: false, max: 3);
+    for (final d in badDomains) {
+      parts.add('-site:$d');
+    }
+
+    // 10. Mode-Operatoren: recent => after:DATE
+    if (mode == 'recent' || stamm.boostRecent && mode == 'standard') {
       final cutoff = DateTime.now().subtract(const Duration(days: 365));
       parts.add('after:${_isoDate(cutoff)}');
     }
 
-    // 9. Standard-Negativ-Filter (Spam / Ads)
+    // 11. Standard-Filter
     parts.addAll(noiseExclusions);
     parts.addAll(defaultBlockedDomains);
 
-    // 10. Jugendschutz
-    final isYouthActive = (settings['enableYouthProtection'] as bool?) ?? true;
+    // 12. Jugendschutz
+    final isYouthActive =
+        (settings['enableYouthProtection'] as bool?) ?? true;
     if (isYouthActive) parts.addAll(explicitExclusions);
 
-    // 11. Zusammenbau + Whitespace-Sanitize
-    return parts
-        .where((p) => p.isNotEmpty)
-        .join(' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    // 13. Build + sanitize
+    return _sanitize(parts);
   }
 
   String buildSearchUrl(
       String query, String engine, Map<String, dynamic> settings) {
     String base;
     final params = StringBuffer();
-    final isYouthActive = (settings['enableYouthProtection'] as bool?) ?? true;
+    final isYouthActive =
+        (settings['enableYouthProtection'] as bool?) ?? true;
     final lang = (settings['language'] as String?) ?? 'de';
     final country = (settings['country'] as String?) ?? 'de';
 
@@ -252,22 +246,20 @@ class FindUXQueryBuilder {
         params.write('&country=${country.toUpperCase()}');
         if (isYouthActive) params.write('&safesearch=strict');
         break;
-      default:
-        // Google
+      default: // google
         base = 'https://www.google.com/search?q=';
         params.write('&hl=$lang&gl=${country.toUpperCase()}');
-        params.write('&filter=1'); // Duplikate dedupliziert
-        params.write('&num=20'); // 20 statt 10 Ergebnisse
+        params.write('&lr=lang_$lang'); // Sprach-Filter
+        params.write('&filter=1'); // dedupliziert
+        params.write('&num=20');
         if (isYouthActive) params.write('&safe=active');
     }
 
-    // Google's Limit: 2048 Zeichen URL-gesamt. Kuerze Query auf 1800,
-    // damit nach URL-Encoding noch Platz fuer Params bleibt.
     if (query.length > 1800) query = query.substring(0, 1790).trim();
     return base + Uri.encodeComponent(query) + params.toString();
   }
 
-  // ------- HELPERS -------
+  // ==================== Helpers ====================
 
   Map<String, double> _loadWeights(SharedPreferences prefs) {
     final w = <String, double>{};
@@ -282,58 +274,83 @@ class FindUXQueryBuilder {
   String _normalizeQuotes(String s) =>
       s.replaceAll(RegExp(r'[“”„‟]'), '"').replaceAll(RegExp(r'\s+'), ' ');
 
-  /// Format-Strategie fuer den Hauptbegriff je nach Mode.
   String _formatPrimary(String what, String mode) {
     final hasSpace = what.contains(' ');
     final alreadyQuoted = what.contains('"');
     if (alreadyQuoted) return what;
     switch (mode) {
-      case 'precise':
-        return hasSpace ? '"$what"' : what;
       case 'discover':
-        // bewusst KEINE Quotes -> Google darf erweitern
-        return what;
+        return what; // Google darf erweitern
+      case 'precise':
       default:
         return hasSpace ? '"$what"' : what;
     }
   }
 
-  /// Erstes "starkes" Wort (>=4 Zeichen, kein Stoppwort) als intitle:-Kandidat.
-  String? _extractTopKeyword(String what) {
+  Set<String> _lowercaseTokens(String s) => s
+      .replaceAll('"', '')
+      .toLowerCase()
+      .split(RegExp(r'\s+'))
+      .where((t) => t.isNotEmpty)
+      .toSet();
+
+  String? _extractTopKeyword(String what, Set<String> stopwords) {
     if (what.isEmpty) return null;
     final tokens = what
         .replaceAll('"', '')
         .toLowerCase()
         .split(RegExp(r'\s+'))
-        .where((t) => t.length >= 4 && !_germanStopwords.contains(t))
+        .where((t) => t.length >= 4 && !stopwords.contains(t))
         .toList();
     return tokens.isEmpty ? null : tokens.first;
   }
 
-  List<String> _tokenize(String s) {
+  List<String> _tokenize(String s, Set<String> stopwords) {
     if (s.isEmpty) return const [];
     return s
         .split(RegExp(r'[,;\s]+'))
         .map((t) => t.trim())
-        .where((t) => t.length > 2 && !_germanStopwords.contains(t.toLowerCase()))
+        .where((t) => t.length > 2 && !stopwords.contains(t.toLowerCase()))
         .toList();
   }
 
-  /// Liefert Top-N Keywords aus den gelernten Gewichten.
-  /// positive=true -> stark gewichtete (weight > 1.5)
-  /// positive=false -> stark abgewertete (weight < 0.7)
-  List<String> _topLearnedKeywords(
-      Map<String, double> weights, {required bool positive, required int max}) {
+  List<String> _topLearnedKeywords(Map<String, double> weights,
+      {required bool positive, required int max}) {
     final entries = <MapEntry<String, double>>[];
     weights.forEach((key, weight) {
       if (!key.startsWith('weight_kw_')) return;
-      if (positive ? weight > 1.5 : weight < 0.7) {
+      if (positive ? weight > 1.4 : weight < 0.7) {
         entries.add(MapEntry(key.replaceFirst('weight_kw_', ''), weight));
       }
     });
     entries.sort((a, b) =>
         positive ? b.value.compareTo(a.value) : a.value.compareTo(b.value));
     return entries.take(max).map((e) => e.key).toList();
+  }
+
+  List<String> _topLearnedDomains(Map<String, double> weights,
+      {required bool positive, required int max}) {
+    final entries = <MapEntry<String, double>>[];
+    weights.forEach((key, weight) {
+      if (!key.startsWith('weight_domain_')) return;
+      if (positive ? weight > 1.5 : weight < 0.6) {
+        entries.add(MapEntry(key.replaceFirst('weight_domain_', ''), weight));
+      }
+    });
+    entries.sort((a, b) =>
+        positive ? b.value.compareTo(a.value) : a.value.compareTo(b.value));
+    return entries.take(max).map((e) => e.key).toList();
+  }
+
+  /// Wenn der User keine eigene Quellen-Auswahl hat ('alle'),
+  /// wird die Stammdaten-Empfehlung als Soft-Bias verwendet.
+  List<String> _resolveEffectiveFilters(
+      List<String> userFilters, StammdatenContext stamm) {
+    final hasExplicit =
+        userFilters.where((f) => f != 'alle').isNotEmpty;
+    if (hasExplicit) return userFilters.where((f) => f != 'alle').toList();
+    // 'alle' + Stammdaten-Empfehlung -> nur Top-2 weich rein
+    return stamm.preferredSources.take(2).toList();
   }
 
   List<String> _sortFiltersByWeight(
@@ -344,12 +361,12 @@ class FindUXQueryBuilder {
       final wb = weights['weight_filter_$b'] ?? 1.0;
       return wb.compareTo(wa);
     });
-    // Nur Filter mit positiver Gewichtung beruecksichtigen
-    return list.where((f) => (weights['weight_filter_$f'] ?? 1.0) >= 0.7).toList();
+    return list
+        .where((f) => (weights['weight_filter_$f'] ?? 1.0) >= 0.7)
+        .toList();
   }
 
-  /// Baut max EINE site:(...) Gruppe aus allen aktiven Quellen-Filtern.
-  String? _buildSiteGroup(List<String> filters, Map<String, double> weights) {
+  String? _buildSiteGroup(List<String> filters) {
     final domains = <String>{};
     for (final f in filters) {
       final ds = sourceDomains[f];
@@ -361,18 +378,11 @@ class FindUXQueryBuilder {
     return '(${parts.join(' OR ')})';
   }
 
-  /// Baut max EINE filetype:(...) Gruppe aus allen aktiven Datei-Filtern.
-  String? _buildFiletypeGroup(
-      List<String> filters, Map<String, double> weights) {
+  String? _buildFiletypeGroup(List<String> filters) {
     final exts = <String>{};
     for (final f in filters) {
       final es = fileExtensions[f];
       if (es != null) exts.addAll(es);
-    }
-    // Spezialfall 'code' = Domain-basiert, kein filetype
-    if (filters.contains('code')) {
-      // Domain wird in _buildSiteGroup behandelt, aber 'code' ist nur in
-      // sourceDomains, nicht in fileExtensions -> nichts zu tun
     }
     if (exts.isEmpty) return null;
     if (exts.length == 1) return 'filetype:${exts.first}';
@@ -385,32 +395,28 @@ class FindUXQueryBuilder {
 
   String _langName(String code) {
     switch (code) {
-      case 'de':
-        return 'deutsch';
-      case 'en':
-        return 'english';
-      case 'fr':
-        return 'francais';
-      case 'es':
-        return 'espanol';
-      case 'it':
-        return 'italiano';
-      default:
-        return 'english';
+      case 'de': return 'deutsch';
+      case 'en': return 'english';
+      case 'fr': return 'francais';
+      case 'es': return 'espanol';
+      case 'it': return 'italiano';
+      default: return 'english';
     }
   }
 
-  // Kompakte Liste deutscher + englischer Stoppwoerter.
-  static const Set<String> _germanStopwords = {
-    'der','die','das','und','oder','aber','mit','von','zu','zum','zur','auf',
-    'fuer','für','ist','bin','sind','war','waren','wird','werden','wurde',
-    'haben','hat','hatte','sich','dass','weil','wenn','dann','also','noch',
-    'nur','auch','als','wie','was','wer','wo','wann','warum','welche','dieser',
-    'diese','dieses','jener','jene','jenes','sein','seine','ihr','ihre','mein',
-    'meine','dein','deine','ein','eine','einen','einem','einer','eines','den',
-    'dem','des','sie','ihm','ihn','ihnen','wir','uns','unser','unsere','euch',
-    'euer','eure','ihnen','than','then','this','that','these','those','with',
-    'from','your','have','will','would','could','should','about','what','when',
-    'where','which','while','their','they','them','were','been','into','than',
-  };
+  String _sanitize(List<String> parts) {
+    final out = parts
+        .where((p) => p.isNotEmpty)
+        .toList();
+    // Entferne exakt gleiche Parts (z.B. doppelte -site:x durch Lern+Default)
+    final seen = <String>{};
+    final unique = <String>[];
+    for (final p in out) {
+      if (seen.add(p)) unique.add(p);
+    }
+    return unique
+        .join(' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
 }
