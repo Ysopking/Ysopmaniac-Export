@@ -31,7 +31,6 @@
 
     <application
         android:allowBackup="false"
-        android:debuggable="false"
         android:vmSafeMode="false"
         android:fullBackupContent="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
