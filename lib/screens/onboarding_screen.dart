@@ -98,6 +98,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       files: const ['alle'],
       mode: 'standard',
       openInApp: true,
+      enableVolumeShortcut: false,
     );
     await notifier.updateSettings(newState);
   }
