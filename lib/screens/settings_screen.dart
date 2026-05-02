@@ -4,8 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../logic/state_provider.dart';
+import '../services/chrome_import_quick.dart';
 import '../theme.dart';
-import 'chrome_import_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -153,12 +153,11 @@ class SettingsScreen extends ConsumerWidget {
           _optionTile(
             icon: Icons.history_rounded,
             title: 'Chrome-Verlauf importieren',
-            subtitle: 'Reduziert auf 4 Felder, Datei wird geloescht',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => const ChromeImportScreen()),
-            ),
+            subtitle: 'Ein Tap: Datei waehlen, lokal reduzieren, loeschen',
+            onTap: () {
+              // Stage F: Ein-Klick-Import — kein separater Screen mehr.
+              quickImportChrome(context);
+            },
           ),
           _optionTile(
             icon: Icons.security_rounded,
@@ -388,6 +387,11 @@ class SettingsScreen extends ConsumerWidget {
         content: TextField(
           controller: controller,
           keyboardType: keyboard,
+          // Stage F Haertung: keine IME-Lerndaten, keine Auto-Korrektur.
+          autocorrect: false,
+          enableSuggestions: false,
+          smartDashesType: SmartDashesType.disabled,
+          smartQuotesType: SmartQuotesType.disabled,
           decoration: InputDecoration(hintText: hint),
         ),
         actions: [

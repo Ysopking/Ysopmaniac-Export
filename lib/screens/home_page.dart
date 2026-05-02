@@ -764,6 +764,15 @@ class _HomePageState extends ConsumerState<HomePage> {
           const SizedBox(height: 4),
           TextField(
             controller: controller,
+            // Stage F Haertung: Such-Anfragen sind sensibel — sie sollen
+            // weder in IME-Personalisierung noch in Auto-Korrektur-
+            // Lernmodelle wandern. enableIMEPersonalizedLearning steuert
+            // android:inputType=textNoLearning.
+            autocorrect: false,
+            enableSuggestions: false,
+            enableIMEPersonalizedLearning: false,
+            smartDashesType: SmartDashesType.disabled,
+            smartQuotesType: SmartQuotesType.disabled,
             style: const TextStyle(
                 color: Colors.black87,
                 fontSize: 16,
@@ -1236,6 +1245,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                       placeholder: 'Details zur Sitzung...',
                       maxLines: 3,
                       padding: const EdgeInsets.all(12),
+                      // Stage F Haertung: Feedback-Text bleibt strikt
+                      // lokal — IME-Personalisierung deaktiviert.
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      enableIMEPersonalizedLearning: false,
+                      smartDashesType: SmartDashesType.disabled,
+                      smartQuotesType: SmartQuotesType.disabled,
                       decoration: BoxDecoration(
                         color: const Color(0xFFF0F0F5),
                         borderRadius: BorderRadius.circular(12),

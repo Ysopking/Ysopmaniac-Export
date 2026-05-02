@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FindUX Pro: harte Netzwerk-Policy.
+  - Cleartext HTTP global verboten.
+  - User-eingespielte CAs (z.B. eines kompromittierten Geraets) werden ignoriert.
+  - Nur die System-Trust-Anchors zaehlen.
+  - Keine Domain-Whitelist fuer Cleartext (es gibt keine Ausnahme).
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <!--
+      Debug-Overrides bewusst NICHT erlauben.
+      Falls du fuer Debug-Builds einen MITM-Proxy brauchst, kommt das in
+      einen separaten editor-Flavor (Stage G), nicht in den Hauptbuild.
+    -->
+</network-security-config>

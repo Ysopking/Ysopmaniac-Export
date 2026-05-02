@@ -8,9 +8,11 @@ import 'package:findux_mobile/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:flutter_windowmanager/flutter_windowmanager.dart';
 
 import 'services/security_service.dart';
 import 'services/learning_service.dart';
+import 'services/auto_lock_service.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/unlock_screen.dart';
@@ -33,6 +35,17 @@ Future<void> main() async {
       debugPrint('PlatformDispatcher error: $error');
       return true;
     };
+
+    // Stage F Haertung: blockt Screenshots und das Recents-Thumbnail.
+    // FLAG_SECURE wird so frueh wie moeglich gesetzt, damit der Splash
+    // nicht in den App-Switcher gerendert wird.
+    if (Platform.isAndroid) {
+      try {
+        await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
+      } catch (e) {
+        debugPrint('FLAG_SECURE konnte nicht gesetzt werden: $e');
+      }
+    }
 
     final SecurityService securityService = SecurityService();
     final LearningService learningService = LearningService();
@@ -73,10 +86,34 @@ class MyApp extends ConsumerStatefulWidget {
 }
 
 class _MyAppState extends ConsumerState<MyApp> {
+  late final AutoLockObserver _autoLock;
+
   @override
   void initState() {
     super.initState();
+    _autoLock = AutoLockObserver(
+      timeout: const Duration(seconds: 60),
+      onLock: _lockSession,
+    )..attach();
     _initApp();
+  }
+
+  @override
+  void dispose() {
+    _autoLock.detach();
+    super.dispose();
+  }
+
+  /// Stage F: Sitzung sperren, sobald die App > 60 s im Hintergrund war.
+  /// Wir setzen den Auth-State auf false — der UnlockScreen erscheint
+  /// dann beim naechsten Foreground automatisch via _onGenerateRoute.
+  void _lockSession() {
+    if (!mounted) return;
+    final auth = ref.read(authProvider);
+    if (auth) {
+      debugPrint('AutoLock: Sitzung nach Inaktivitaet gesperrt.');
+      ref.read(authProvider.notifier).state = false;
+    }
   }
 
   Future<void> _initApp() async {

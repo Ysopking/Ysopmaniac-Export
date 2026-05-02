@@ -4,8 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../logic/state_provider.dart';
+import '../services/chrome_import_quick.dart';
 import '../theme.dart';
-import 'chrome_import_screen.dart';
 
 /// Schlankes 4-Schritt-Onboarding im Light-Card-Stil (Option 3 aus dem
 /// Mock-Up). Quellen-/Dateitypen-/Suchmaschinen-Auswahl ist bewusst raus –
@@ -316,14 +316,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         ? 'Erneut importieren'
                         : 'Verlauf jetzt importieren'),
                     onPressed: () async {
-                      HapticFeedback.selectionClick();
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ChromeImportScreen(),
-                        ),
-                      );
-                      if (mounted) {
+                      // Stage F: Ein-Klick-Import direkt hier — keine
+                      // Zwischen-Navigation. File-Picker -> Analyze ->
+                      // Persist -> SnackBar in einem Rutsch.
+                      final ok = await quickImportChrome(context);
+                      if (mounted && ok) {
                         setState(() => _chronikDone = true);
                       }
                     },
@@ -396,6 +393,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: _berufController,
+                    // Stage F Haertung: keine IME-Vorschlaege, keine
+                    // Auto-Korrektur, kein Smart-Quotes — die Eingabe
+                    // soll nicht in Personalisierungs-Modelle der Tastatur
+                    // wandern.
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    smartDashesType: SmartDashesType.disabled,
+                    smartQuotesType: SmartQuotesType.disabled,
                     decoration: const InputDecoration(
                       hintText: 'z.B. IT, Pflege, Marketing, Handwerk',
                       border: InputBorder.none,
@@ -492,6 +497,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 TextField(
                   controller: _plzController,
                   keyboardType: TextInputType.number,
+                  // Stage F Haertung: PLZ ist personenbezogen — keine
+                  // IME-Lern-Daten generieren.
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  smartDashesType: SmartDashesType.disabled,
+                  smartQuotesType: SmartQuotesType.disabled,
                   decoration: const InputDecoration(
                     hintText: 'z.B. 10115',
                     border: InputBorder.none,
