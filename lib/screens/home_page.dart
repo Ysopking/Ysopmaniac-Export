@@ -844,25 +844,70 @@ class _HomePageState extends ConsumerState<HomePage> {
   Widget _buildAdvicePill() {
     final adv = _advice;
     if (adv == null || !adv.hasData) return const SizedBox.shrink();
+
+    final hasFilter = adv.filterHint.isNotEmpty;
+    final hasTheme  = adv.topThemeLabel != null;
+    // Padding leicht erhoehen wenn mehrere Zeilen sichtbar werden.
+    final vertPad   = (hasFilter || hasTheme) ? 10.0 : 8.0;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: vertPad),
       decoration: BoxDecoration(
         color: Colors.green.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.green.withValues(alpha: 0.25)),
       ),
-      child: Row(children: [
-        const Icon(Icons.psychology_alt_outlined,
-            size: 16, color: Colors.green),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            adv.summary,
-            style: const TextStyle(fontSize: 11, color: Colors.black87),
-          ),
-        ),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Zeile 1: Modus · Woerter · Zufriedenheit (immer sichtbar)
+          Row(children: [
+            const Icon(Icons.psychology_alt_outlined,
+                size: 16, color: Colors.green),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                adv.summary,
+                style: const TextStyle(fontSize: 11, color: Colors.black87),
+              ),
+            ),
+          ]),
+          // Zeile 2: Top-Quellen (nur wenn weight_filter_* > 1.1 vorhanden)
+          if (hasFilter) ...[
+            const SizedBox(height: 5),
+            Row(children: [
+              const Icon(Icons.library_books_outlined,
+                  size: 14, color: Colors.green),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Top-Quellen: ${adv.filterHint}',
+                  style: const TextStyle(
+                      fontSize: 11, color: Colors.black54),
+                ),
+              ),
+            ]),
+          ],
+          // Zeile 3: Bevorzugtes Coach-Theme (nur wenn Theme-Feedback vorliegt)
+          if (hasTheme) ...[
+            const SizedBox(height: 5),
+            Row(children: [
+              const Icon(Icons.lightbulb_outline,
+                  size: 14, color: Colors.green),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Haeufiges Thema: ${adv.topThemeLabel}',
+                  style: const TextStyle(
+                      fontSize: 11, color: Colors.black54),
+                ),
+              ),
+            ]),
+          ],
+        ],
+      ),
     );
   }
 

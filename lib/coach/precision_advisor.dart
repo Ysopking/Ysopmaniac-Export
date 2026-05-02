@@ -1,15 +1,21 @@
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'themes_catalog.dart';
 
 /// PrecisionAdvisor — analysiert die lokale Such-Historie + Feedback,
 /// um den persoenlichen Stil des Users zu lernen.
 ///
-/// 100% offline, Hive-basiert, verschluesselt. Kein Byte verlaesst das Geraet.
+/// 100% offline, Hive-basiert + SharedPreferences-Gewichte. Kein Byte
+/// verlaesst das Geraet.
 ///
 /// Liefert:
 ///   - bevorzugter Modus (precise/standard/discover/recent)
 ///   - durchschnittliche Wortzahl bei erfolgreichen Suchen
 ///   - Top-Themen aus Coach-Choices
 ///   - Gesamtzufriedenheit (Anteil 'up' an gesamten Bewertungen)
+///   - Top-2 bevorzugte Quellen-Filter (weight_filter_* > 1.1)  [NEU]
+///   - Label des bevorzugten Coach-Themes (aus ThemesCatalog)   [NEU]
 class PrecisionAdvisor {
   static const String _searchBox = 'learning_data';
   static const String _feedbackBox = 'learning_feedback';
@@ -103,7 +109,7 @@ class PrecisionAdvisor {
       }
     });
 
-    // Top-Themen
+    // Top-Themen (sortiert nach up - down, mind. 1 positiv)
     final themesSorted = themeStat.entries.toList()
       ..sort((a, b) =>
           (b.value.up - b.value.down).compareTo(a.value.up - a.value.down));
@@ -117,12 +123,42 @@ class PrecisionAdvisor {
         wordCountUp > 0 ? (wordSumUp / wordCountUp).round() : 0;
     final satisfaction = totalUp / (totalUp + totalDown);
 
+    // --- NEU: Top-2 bevorzugte Quellen-Filter aus SharedPreferences --------
+    final topFilterKeys = <String>[];
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final entries = <MapEntry<String, double>>[];
+      for (final key in prefs.getKeys()) {
+        if (key.startsWith('weight_filter_')) {
+          final val = prefs.getDouble(key) ?? 1.0;
+          // Nur statistisch signifikante Praeferenz (> 1.1 = mindestens
+          // ein positives Feedback-Signal ueber dem Basis-Gewicht)
+          if (val > 1.1) {
+            entries.add(
+              MapEntry(key.substring('weight_filter_'.length), val),
+            );
+          }
+        }
+      }
+      entries.sort((a, b) => b.value.compareTo(a.value));
+      topFilterKeys.addAll(entries.take(2).map((e) => e.key));
+    } catch (e) {
+      if (kDebugMode) debugPrint('PrecisionAdvisor: filter read failed: $e');
+    }
+
+    // --- NEU: Label des Top-Coach-Themes aus ThemesCatalog -----------------
+    final topThemeLabel = topThemes.isNotEmpty
+        ? ThemesCatalog.byId(topThemes.first)?.label
+        : null;
+
     return PrecisionRecommendation(
       preferredMode: bestMode,
       avgWordCountSuccess: avgWords,
       topThemes: topThemes,
       overallSatisfaction: satisfaction,
       totalRated: totalUp + totalDown,
+      topFilterKeys: topFilterKeys,
+      topThemeLabel: topThemeLabel,
     );
   }
 }
@@ -139,35 +175,74 @@ class PrecisionRecommendation {
   final double overallSatisfaction;
   final int totalRated;
 
+  /// Top-2 Quellen-Filter, nach gelerntem Gewicht absteigend.
+  /// Leer wenn keine signifikante Praeferenz erkannt (weight <= 1.1).
+  final List<String> topFilterKeys;
+
+  /// Human-readable Label des Top-Coach-Themes (aus ThemesCatalog.byId).
+  /// null wenn kein Theme-Feedback vorliegt.
+  final String? topThemeLabel;
+
   const PrecisionRecommendation({
     required this.preferredMode,
     required this.avgWordCountSuccess,
     required this.topThemes,
     required this.overallSatisfaction,
     required this.totalRated,
+    this.topFilterKeys = const <String>[],
+    this.topThemeLabel,
   });
 
   factory PrecisionRecommendation.empty() => const PrecisionRecommendation(
         preferredMode: 'standard',
         avgWordCountSuccess: 0,
-        topThemes: const <String>[],
+        topThemes: <String>[],
         overallSatisfaction: 0.0,
         totalRated: 0,
+        topFilterKeys: <String>[],
+        topThemeLabel: null,
       );
 
   /// Erst ab 3 Bewertungen ist die Empfehlung statistisch sinnvoll.
   bool get hasData => totalRated >= 3;
 
+  /// Einzeilige Zusammenfassung: Modus · Woerter · Zufriedenheit.
   String get summary {
     if (!hasData) return '';
     final pct = (overallSatisfaction * 100).round();
     final modeName = const {
-          'precise': 'Praezise',
+          'precise':  'Praezise',
           'standard': 'Standard',
           'discover': 'Entdecken',
-          'recent': 'Aktuell',
+          'recent':   'Aktuell',
         }[preferredMode] ??
         preferredMode;
     return 'Dein Stil: $modeName-Modus · etwa $avgWordCountSuccess Woerter · $pct% Treffer';
+  }
+
+  // Human-readable Labels fuer weight_filter_* Keys.
+  static const Map<String, String> _filterLabels = {
+    'academic':       'Wissenschaft',
+    'wikipedia':      'Wikipedia',
+    'docs':           'Dokumentation',
+    'foren':          'Foren',
+    'reddit':         'Reddit',
+    'news':           'Nachrichten',
+    'offiziell':      'Offizielle Seiten',
+    'official':       'Offizielle Seiten',
+    'blogs':          'Blogs',
+    'shopping':       'Shopping',
+    'stellenboersen': 'Stellenboersen',
+    'ratgeber':       'Ratgeber',
+    'forum':          'Foren',
+  };
+
+  /// Komma-getrennte Labels der Top-Filter fuer die UI.
+  /// Leer wenn [topFilterKeys] leer.
+  String get filterHint {
+    if (topFilterKeys.isEmpty) return '';
+    return topFilterKeys
+        .map((k) => _filterLabels[k] ?? k)
+        .join(' · ');
   }
 }
