@@ -16,14 +16,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+     steps:
+       - uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-          cache: '' # Cache deaktiviert für frischen Build
+       - name: Setup Java
+         uses: actions/setup-java@v4
+         with:
+           distribution: 'zulu'
+           java-version: '17'
+           cache: '' # Cache deaktiviert für frischen Build
 
        - name: Setup Flutter
          uses: subosito/flutter-action@v2
@@ -45,28 +46,28 @@ jobs:
            flutter pub get
            flutter precache --android
 
-      - name: Generate Localization
-        run: flutter gen-l10n
+       - name: Generate Localization
+         run: flutter gen-l10n
 
-      - name: Run Code Analysis
-        run: flutter analyze --no-fatal-infos
+       - name: Run Code Analysis
+         run: flutter analyze --no-fatal-infos
 
-      - name: Build APK (Debug)
-        run: flutter build apk --debug --android-skip-build-dependency-validation
+       - name: Build APK (Debug)
+         run: flutter build apk --debug --android-skip-build-dependency-validation
 
-      - name: Build APK (Release)
-        run: flutter build apk --release --android-skip-build-dependency-validation
+       - name: Build APK (Release)
+         run: flutter build apk --release --android-skip-build-dependency-validation
 
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: findux-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
-          retention-days: 7
+       - name: Upload Debug APK
+         uses: actions/upload-artifact@v4
+         with:
+           name: findux-debug-apk
+           path: build/app/outputs/flutter-apk/app-debug.apk
+           retention-days: 7
 
-      - name: Upload Release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: findux-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 7
+       - name: Upload Release APK
+         uses: actions/upload-artifact@v4
+         with:
+           name: findux-release-apk
+           path: build/app/outputs/flutter-apk/app-release.apk
+           retention-days: 7
