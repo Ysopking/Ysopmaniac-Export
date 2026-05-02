@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../services/learning_service.dart';
@@ -96,6 +97,18 @@ final fullQuery = await builder.buildQuery(
       _viewState = 'results';
       _searchPerformed = true;
       _showDeepAnalysisOverlay = false;
+    });
+
+    // Launch search in external browser
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final randomUA = MirrorLogic.getRandomUserAgent();
+      if (await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(
+          Uri.parse(url),
+          mode: LaunchMode.externalApplication,
+          webViewConfiguration: const WebViewConfiguration(),
+        );
+      }
     });
 
     widget.learningService.trackSearch(
@@ -326,8 +339,13 @@ final fullQuery = await builder.buildQuery(
                 setState(() {});
               }),
               Expanded(child: Text('Suchergebnisse: ${_whatController.text}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14), overflow: TextOverflow.ellipsis)),
-              IconButton(icon: const Icon(Icons.refresh, color: Colors.white, size: 22), onPressed: () {
-                setState(() => _searchPerformed = false);
+              IconButton(icon: const Icon(Icons.open_in_browser, color: Colors.white, size: 22), onPressed: () async {
+                final settings = ref.read(settingsProvider);
+                final builder = FindUXQueryBuilder();
+                final url = builder.buildSearchUrl(_whatController.text, settings.searchEngine, {});
+                if (await canLaunchUrl(Uri.parse(url))) {
+                  await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                }
               }),
             ],
           ),
@@ -350,7 +368,7 @@ final fullQuery = await builder.buildQuery(
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'WebView wurde aus Kompatibilitätsgründen deaktiviert.\nDie App funktioniert jetzt stabil!',
+                        'Suche wurde im Browser geöffnet!\nDie App verwendet jetzt externe Browser-Integration.',
                         style: const TextStyle(color: Colors.grey),
                         textAlign: TextAlign.center,
                       ),
@@ -364,8 +382,13 @@ final fullQuery = await builder.buildQuery(
                   IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20), onPressed: () {
                     setState(() => _viewState = 'dashboard');
                   }),
-                  IconButton(icon: const Icon(Icons.refresh, color: Colors.white, size: 20), onPressed: () {
-                    setState(() => _searchPerformed = false);
+                  IconButton(icon: const Icon(Icons.open_in_browser, color: Colors.white, size: 20), onPressed: () async {
+                    final settings = ref.read(settingsProvider);
+                    final builder = FindUXQueryBuilder();
+                    final url = builder.buildSearchUrl(_whatController.text, settings.searchEngine, {});
+                    if (await canLaunchUrl(Uri.parse(url))) {
+                      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                    }
                   }),
                 ])),
                 GestureDetector(onTap: () => setState(() => _showFeedbackOverlay = !_showFeedbackOverlay), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: FindUXProTheme.primaryPurple, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 5))]), child: Row(children: [const Icon(Icons.psychology, color: Colors.white, size: 20), const SizedBox(width: 8),                 Text(l10n.learningMode, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))]))),
