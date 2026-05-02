@@ -426,15 +426,70 @@ class LearningService {
       }
     }
 
+    // Leichte Vorgewichtung (1.1) — echtes Lernen passiert durch Chronik + Interessen
     final empKey = 'weight_employment_$employmentType';
     final currentEmp = prefs.getDouble(empKey) ?? 0.0;
-    if (1.3 > currentEmp) {
-      await prefs.setDouble(empKey, 1.3);
+    if (1.1 > currentEmp) {
+      await prefs.setDouble(empKey, 1.1);
     }
 
     if (kDebugMode) {
       debugPrint(
         'seedStarterWeights: $employmentType — ${weights.length} Keys gesetzt.',
+      );
+    }
+  }
+
+
+  /// Setzt leichte Familienstatus-Starter-Gewichte.
+  /// Wird zusammen mit seedStarterWeights am Ende des Onboardings aufgerufen.
+  /// Werte bewusst gering (1.05–1.10) — Interessen + Chronik haben Vorrang.
+  Future<void> seedStarterFamilyWeights(String familyStatus) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    const familyWeights = <String, Map<String, double>>{
+      'single': {
+        'weight_kw_freizeit':         1.08,
+        'weight_kw_reise':            1.06,
+        'weight_kw_lifestyle':        1.06,
+        'weight_filter_blogs':        1.08,
+        'weight_mode_discover':       1.08,
+      },
+      'familie': {
+        'weight_kw_kinder':           1.10,
+        'weight_kw_familie':          1.10,
+        'weight_kw_schule':           1.08,
+        'weight_kw_erziehung':        1.08,
+        'weight_kw_gesundheit':       1.06,
+        'weight_kw_regional':         1.08, // Lokal-Bias (Kita, Arzt, Schule)
+        'weight_filter_offiziell':    1.08,
+        'weight_filter_news':         1.06,
+        'weight_mode_standard':       1.06,
+      },
+      'alleinerziehend': {
+        'weight_kw_kinder':           1.10,
+        'weight_kw_foerderung':       1.10,
+        'weight_kw_unterstuetzung':   1.10,
+        'weight_kw_recht':            1.08,
+        'weight_kw_beratung':         1.08,
+        'weight_kw_regional':         1.10, // Starker Lokal-Bias (Kita, Angebote)
+        'weight_kw_kostenlos':        1.08,
+        'weight_filter_offiziell':    1.12,
+        'weight_mode_standard':       1.06,
+      },
+    };
+
+    final weights = familyWeights[familyStatus] ?? {};
+    for (final entry in weights.entries) {
+      final current = prefs.getDouble(entry.key) ?? 0.0;
+      if (entry.value > current) {
+        await prefs.setDouble(entry.key, entry.value);
+      }
+    }
+
+    if (kDebugMode) {
+      debugPrint(
+        'seedStarterFamilyWeights: $familyStatus — ${weights.length} Keys gesetzt.',
       );
     }
   }

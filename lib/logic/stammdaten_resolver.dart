@@ -164,6 +164,8 @@ class StammdatenResolver {
 
     final employmentType =
         ((settings['employmentType'] as String?) ?? 'student').trim();
+    final familyStatus =
+        ((settings['familyStatus'] as String?) ?? 'single').trim();
     final beruf   = ((settings['beruf']    as String?) ?? '').trim();
     final plz     = ((settings['plz']      as String?) ?? '').trim();
     final language= ((settings['language'] as String?) ?? 'de').trim();
@@ -320,6 +322,22 @@ class StammdatenResolver {
     final age = DateTime.now().year - jahr;
     final boostRecent = hasNews || (age >= 0 && age <= 30) ||
         employmentType == 'vollzeit';
+
+    // ─────────────────────────────────────────────────────────────
+    // 8b. FAMILIENSTATUS — leichter Lokal-Bias
+    //     Kein starker Effekt; Interessen + Chronik haben Vorrang.
+    // ─────────────────────────────────────────────────────────────
+    if ((familyStatus == 'familie' || familyStatus == 'alleinerziehend') &&
+        plz.isNotEmpty && plz != '0' && !hardTerms.contains(plz)) {
+      // Familien suchen häufig lokal (Kita, Arzt, Angebote)
+      softTerms.add(plz);
+    }
+    if (familyStatus == 'alleinerziehend') {
+      // Allgemeiner Förderungs-Hint: wird nur eingeblendet wenn nicht schon vorhanden
+      if (!softTerms.contains('Förderung') && !fullText.contains('foerder')) {
+        softTerms.add('Förderung');
+      }
+    }
 
     // ─────────────────────────────────────────────────────────────
     // 9. DEDUPLIZIEREN + ZUSAMMENFUEHREN

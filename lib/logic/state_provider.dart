@@ -41,6 +41,9 @@ const employmentTypes = <String>[
 class SettingsState {
   final String plz;
   final String employmentType;
+  /// Familienstatus: 'single' | 'familie' | 'alleinerziehend'.
+  /// Leichte Vorgewichtung — wird durch Interessen + Chronik verfeinert.
+  final String familyStatus;
   /// Optionale Jobrichtung. Nur sinnvoll wenn employmentType in {vollzeit,teilzeit}.
   final String beruf;
   final String searchEngine;
@@ -70,6 +73,7 @@ class SettingsState {
   const SettingsState({
     required this.plz,
     required this.employmentType,
+    required this.familyStatus,
     required this.beruf,
     required this.searchEngine,
     required this.language,
@@ -96,6 +100,7 @@ class SettingsState {
   SettingsState copyWith({
     String? plz,
     String? employmentType,
+    String? familyStatus,
     String? beruf,
     String? searchEngine,
     String? language,
@@ -114,6 +119,7 @@ class SettingsState {
     return SettingsState(
       plz: plz ?? this.plz,
       employmentType: employmentType ?? this.employmentType,
+      familyStatus: familyStatus ?? this.familyStatus,
       beruf: beruf ?? this.beruf,
       searchEngine: searchEngine ?? this.searchEngine,
       language: language ?? this.language,
@@ -137,6 +143,7 @@ class SettingsState {
 const SettingsState _defaultSettings = SettingsState(
   plz: '',
   employmentType: 'student',
+  familyStatus: 'single',
   beruf: '',
   searchEngine: 'google',
   language: 'de',
@@ -163,6 +170,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     'plz',
     'beruf',
     'employmentType',
+    'familyStatus',
     'jahr',
     'searchengine',
     'language',
@@ -204,6 +212,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     String pPlz = '';
     String pBeruf = '';
     String pEmploymentType = 'student';
+    String pFamilyStatus = 'single';
     int pJahr = 1990;
     List<String> pInterests = const [];
     try {
@@ -212,6 +221,8 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       pBeruf = (box.get('beruf') as String?) ?? '';
       pEmploymentType =
           (box.get('employmentType') as String?) ?? 'student';
+      pFamilyStatus =
+          (box.get('familyStatus') as String?) ?? 'single';
       pJahr = (box.get('jahr') as int?) ?? 1990;
       // Interessen liegen ebenfalls verschluesselt im Vault.
       final raw = box.get('interests');
@@ -226,6 +237,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       plz: pPlz,
       beruf: pBeruf,
       employmentType: pEmploymentType,
+      familyStatus: pFamilyStatus,
       jahr: pJahr,
       searchEngine: prefs.getString('searchengine') ?? 'google',
       language: prefs.getString('language') ?? 'de',
@@ -256,6 +268,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       await box.put('plz', newState.plz);
       await box.put('beruf', newState.beruf);
       await box.put('employmentType', newState.employmentType);
+      await box.put('familyStatus', newState.familyStatus);
       await box.put('jahr', newState.jahr);
       await box.put('interests', newState.interests);
     } catch (e) {
@@ -294,6 +307,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
   Future<void> updateField({
     String? plz,
     String? employmentType,
+    String? familyStatus,
     String? beruf,
     String? searchEngine,
     String? language,

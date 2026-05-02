@@ -38,7 +38,7 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  static const _kTotalSteps = 6;
+  static const _kTotalSteps = 7;
 
   // Aktueller Schritt-Index 0..5
   int _step = 0;
@@ -54,6 +54,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _plzController = TextEditingController();
   int _yearLocal = 1990;
   String _jobLocal = 'student';
+  String _familyStatus = 'single'; // 'single' | 'familie' | 'alleinerziehend'
   String _languageLocal = 'de';
   String _countryLocal = 'de';
 
@@ -83,10 +84,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       case 2:
         return _jobPicked;
       case 3:
-        return true; // PLZ optional
+        return true; // Familienstatus hat Default
       case 4:
-        return true; // Sprache/Land hat Default
+        return true; // PLZ optional
       case 5:
+        return true; // Sprache/Land hat Default
+      case 6:
         return _interestsDone || _importDone;
       default:
         return false;
@@ -102,6 +105,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     await notifier.updateSettings(SettingsState(
       plz: _plzController.text.trim(),
       employmentType: _jobLocal,
+      familyStatus: _familyStatus,
       beruf: '',
       searchEngine: 'google',
       language: _languageLocal,
@@ -128,8 +132,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       setState(() => _busy = true);
       await _persistAll();
       if (!mounted) return;
-      // Starter-Gewichte einmalig basierend auf Beschaeftigung setzen
+      // Starter-Gewichte einmalig basierend auf Beschaeftigung + Familienstatus setzen
       await ref.read(learningServiceProvider).seedStarterWeights(_jobLocal);
+      if (!mounted) return;
+      await ref.read(learningServiceProvider).seedStarterFamilyWeights(_familyStatus);
       if (!mounted) return;
       Haptics.done();
       widget.onComplete();
@@ -208,11 +214,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       case 2:
         return _step2Job();
       case 3:
-        return _step3Plz();
+        return _step3Family();
       case 4:
-        return _step4Locale();
+        return _step4Plz();
       case 5:
-        return _step5Action();
+        return _step5Locale();
+      case 6:
+        return _step6Action();
       default:
         return const SizedBox();
     }
@@ -380,7 +388,38 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  Widget _step3Plz() {
+
+  static const _familyLabels = <String, String>{
+    'single':          'Single / Paar (keine Kinder)',
+    'familie':         'Familie',
+    'alleinerziehend': 'Alleinerziehend',
+  };
+
+  Widget _step3Family() {
+    return _StepLayout(
+      title: 'Familiensituation',
+      subtitle: 'Eine leichte Voranpassung der Such-Heuristik — '
+          'wird durch deine Interessen und deinen Verlauf weiter verfeinert.',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: _familyLabels.entries.map((e) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _SegmentChip(
+              label: e.value,
+              selected: _familyStatus == e.key,
+              onTap: () {
+                Haptics.pick();
+                setState(() => _familyStatus = e.key);
+              },
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _step4Plz() {
     return _StepLayout(
       title: 'Postleitzahl',
       subtitle: 'Optional — kann lokale Suchen verbessern (z.B. '
@@ -413,7 +452,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  Widget _step4Locale() {
+  Widget _step5Locale() {
     return _StepLayout(
       title: 'Sprache & Land',
       subtitle: 'Welche Sprache bevorzugst du in den Treffern, und in '
@@ -484,7 +523,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  Widget _step5Action() {
+  Widget _step6Action() {
     final interestsCount =
         ref.watch(settingsProvider).interests.length;
     return _StepLayout(
