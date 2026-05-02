@@ -88,6 +88,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       sources: _sources,
       files: _files,
       mode: 'standard',
+      openInApp: true,
     );
     await notifier.updateSettings(newState);
   }
