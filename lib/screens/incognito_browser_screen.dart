@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/secure_flag.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import '../services/tls_guard.dart';
 import 'package:url_launcher/url_launcher.dart' as ext;
 
 /// Privater In-App-Browser. Verwendet flutter_inappwebview ohne den
@@ -277,6 +278,11 @@ class _IncognitoBrowserScreenState extends State<IncognitoBrowserScreen> {
                         useHybridComposition: true,
                       ),
                       onWebViewCreated: (c) => _webController = c,
+                      // TLS-Pinning: CA-Issuer-Validierung für alle Such-Engines.
+                      // Erkennt MITM-Angriffe mit falschen/kompromittierten CAs.
+                      // null-Return → System-Validierung läuft weiter (kein blindes PROCEED).
+                      onReceivedServerTrustAuthRequest: (c, challenge) =>
+                          TlsGuard.evaluate(challenge),
                       onLoadStart: (c, url) {
                         if (!mounted) return;
                         setState(() {

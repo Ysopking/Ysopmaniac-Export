@@ -1,20 +1,129 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  FindUX Pro: harte Netzwerk-Policy.
-  - Cleartext HTTP global verboten.
-  - User-eingespielte CAs (z.B. eines kompromittierten Geraets) werden ignoriert.
-  - Nur die System-Trust-Anchors zaehlen.
-  - Keine Domain-Whitelist fuer Cleartext (es gibt keine Ausnahme).
+  FindUX Pro — Network Security Configuration
+  ════════════════════════════════════════════════════════════════════════════
+  Sicherheitsmodell (3 Schichten):
+
+  1. BASE-CONFIG: Globale Härtung
+     • Cleartext-HTTP vollständig verboten (kein http://)
+     • Nur System-CAs werden vertraut (keine User-installierten CAs)
+     → Schützt gegen MITM-Angriffe mit benutzerinstallierten Root-Zertifikaten.
+       Ein Angreifer der sein CA-Zertifikat auf dem Gerät installiert (z.B.
+       via "Mein WLAN-Router") kann den Traffic NICHT entschlüsseln.
+
+  2. DOMAIN-CONFIGS mit PIN-SET: Zertifikats-Pinning pro Such-Engine
+     • Pins basieren auf SHA-256 SPKI-Hashes der Intermediate-CAs
+       (stabiler als Leaf-Pins, da Intermediate-CAs seltener rotieren)
+     • Backup-Pin: Root-CA (rotiert praktisch nie)
+     • Expiration 2027-01-01: Erzwingt jährliche Pin-Überprüfung
+     • Gilt für: native HTTP-Calls (OkHttp, HttpsURLConnection)
+     → WebView-Traffic wird durch die trust-anchors-Policy (Schicht 1)
+       geschützt; Schicht 3 (TlsGuard in Dart) ergänzt WebView-Pinning.
+
+  3. KEIN DEBUG-OVERRIDE:
+     • Kein separater debugBuild-Block — verhindert dass ein Debug-Build
+       versehentlich in Produktion gelangt und Klartext/User-CAs erlaubt.
+     • Auditoren können dies als Privacy-Positivmerkmal werten.
+
+  Hashes verifiziert: 2026-05-02
+  Methode: openssl s_client -showcerts | openssl x509 -pubkey | openssl pkey -outform der | openssl dgst -sha256 -binary | base64
 -->
 <network-security-config>
+
+    <!-- ══ 1. Globale Basis-Policy ══════════════════════════════════════════ -->
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
+            <!-- Nur System-CAs: User-installierte CAs (z.B. Corporate-MITM,
+                 Charles Proxy, Burp Suite) werden kategorisch abgelehnt.
+                 WebView respektiert diese trust-anchors-Policy (Android 7+). -->
             <certificates src="system" />
         </trust-anchors>
     </base-config>
-    <!--
-      Debug-Overrides bewusst NICHT erlauben.
-      Falls du fuer Debug-Builds einen MITM-Proxy brauchst, kommt das in
-      einen separaten editor-Flavor (Stage G), nicht in den Hauptbuild.
-    -->
+
+    <!-- ══ 2. Google Search ══════════════════════════════════════════════════
+         Intermediate CA: Google Trust Services WE2
+         Issuer:          Google Trust Services LLC → GTS Root R4
+         Pins verifiziert: 2026-05-02                                        -->
+    <domain-config>
+        <domain includeSubdomains="false">www.google.com</domain>
+        <domain includeSubdomains="false">scholar.google.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+        <pin-set expiration="2027-01-01">
+            <!-- Intermediate: Google Trust Services WE2 -->
+            <pin digest="SHA-256">vh78KSg1Ry4NaqGDV10w/cTb9VH3BQUZoCWNa93W/EY=</pin>
+            <!-- Backup (Root): GTS Root R4 -->
+            <pin digest="SHA-256">mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=</pin>
+        </pin-set>
+    </domain-config>
+
+    <!-- ══ 3. Bing Search ════════════════════════════════════════════════════
+         Intermediate CA: Microsoft TLS G2 ECC CA OCSP 06
+         Issuer:          Microsoft Corporation → Microsoft TLS ECC Root G2
+         Pins verifiziert: 2026-05-02                                        -->
+    <domain-config>
+        <domain includeSubdomains="false">www.bing.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+        <pin-set expiration="2027-01-01">
+            <!-- Intermediate: Microsoft TLS G2 ECC CA OCSP 06 -->
+            <pin digest="SHA-256">eme/r3vqgVcNCluW5G00Myp2ijiTqbC5G5BSf8yrYyQ=</pin>
+            <!-- Backup (Root): Microsoft TLS ECC Root G2 -->
+            <pin digest="SHA-256">/iaJoX2sgHco2sluxlSWNmpO1d6/fSHGcMNwQGHqu6U=</pin>
+        </pin-set>
+    </domain-config>
+
+    <!-- ══ 4. DuckDuckGo Search ══════════════════════════════════════════════
+         Intermediate CA: DigiCert Global G2 TLS RSA SHA256 2020 CA1
+         Issuer:          DigiCert Inc → DigiCert Global Root G2
+         Pins verifiziert: 2026-05-02                                        -->
+    <domain-config>
+        <domain includeSubdomains="false">duckduckgo.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+        <pin-set expiration="2027-01-01">
+            <!-- Intermediate: DigiCert Global G2 TLS RSA SHA256 2020 CA1 -->
+            <pin digest="SHA-256">Wec45nQiFwKvHtuHxSAMGkt19k+uPSw9JlEkxhvYPHk=</pin>
+            <!-- Backup (Root): DigiCert Global Root G2 -->
+            <pin digest="SHA-256">i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=</pin>
+        </pin-set>
+    </domain-config>
+
+    <!-- ══ 5. Startpage Search ═══════════════════════════════════════════════
+         Intermediate CA: GeoTrust EV RSA CA G2
+         Issuer:          DigiCert Inc → DigiCert Global Root G2
+         Pins verifiziert: 2026-05-02                                        -->
+    <domain-config>
+        <domain includeSubdomains="false">www.startpage.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+        <pin-set expiration="2027-01-01">
+            <!-- Intermediate: GeoTrust EV RSA CA G2 (DigiCert) -->
+            <pin digest="SHA-256">VHUagq80gsWdvnfHL/+2XSLZrAJk4I9d8fx6N8UvWGM=</pin>
+            <!-- Backup (Root): DigiCert Global Root G2 -->
+            <pin digest="SHA-256">i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=</pin>
+        </pin-set>
+    </domain-config>
+
+    <!-- ══ 6. Brave Search ═══════════════════════════════════════════════════
+         Intermediate CA: Amazon RSA 2048 M04
+         Issuer:          Amazon → Amazon Root CA 1
+         Pins verifiziert: 2026-05-02                                        -->
+    <domain-config>
+        <domain includeSubdomains="false">search.brave.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+        <pin-set expiration="2027-01-01">
+            <!-- Intermediate: Amazon RSA 2048 M04 -->
+            <pin digest="SHA-256">G9LNNAql897egYsabashkzUCTEJkWBzgoEtk8X/678c=</pin>
+            <!-- Backup (Root): Amazon Root CA 1 -->
+            <pin digest="SHA-256">++MBgDH5WGvL9Bcn5Be30cRcL0f5O+NyoXuWtQdX1aI=</pin>
+        </pin-set>
+    </domain-config>
+
 </network-security-config>
