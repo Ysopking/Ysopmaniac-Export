@@ -338,6 +338,10 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     final newState = state.copyWith(
       plz: plz,
       employmentType: employmentType,
+      // Bug-Fix: familyStatus wurde zwar als Parameter empfangen,
+      // aber nie an copyWith weitergegeben — Familienstatus-Aenderungen
+      // gingen dadurch lautlos verloren.
+      familyStatus: familyStatus,
       beruf: beruf,
       searchEngine: searchEngine,
       language: language,

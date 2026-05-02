@@ -170,6 +170,15 @@ class _MyAppState extends ConsumerState<MyApp> {
     try {
       final securityService = ref.read(securityServiceProvider);
       final authenticated = await securityService.authenticate();
+      if (authenticated) {
+        // Bug-Fix: Nach _lockSession() schliesst closeBox() den Hive-Vault.
+        // Ohne initSecureBox() + loadSettings() hier wuerden alle
+        // verschluesselten PII (beruf, plz, familyStatus, jahr, interests)
+        // nach jedem Lock/Unlock-Zyklus auf Default-Werte zurueckfallen
+        // und die Suche / Stammdaten-Anreicherung komplett deaktivieren.
+        await securityService.initSecureBox();
+        await ref.read(settingsProvider.notifier).loadSettings();
+      }
       if (mounted) {
         ref.read(authProvider.notifier).state = authenticated;
       }

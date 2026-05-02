@@ -273,6 +273,13 @@ class _HomePageState extends ConsumerState<HomePage> {
       'plz': settings.plz,
       'beruf': settings.beruf,
       'employmentType': settings.employmentType,
+      // Bug-Fix: familyStatus, jahr und interests wurden bisher nicht
+      // an buildQuery/StammdatenResolver weitergegeben — alle
+      // Familienstatus- und Alters-Logik sowie Interesse-Anreicherung
+      // blieben dadurch wirkungslos.
+      'familyStatus': settings.familyStatus,
+      'jahr': settings.jahr,
+      'interests': settings.interests,
       'searchengine': settings.searchEngine,
       // Stage 14: EFFECTIVE Wert verwenden — wenn das Geburtsjahr Alter
       // unter 18 ergibt, wird der Jugendschutz hart erzwungen, egal was
