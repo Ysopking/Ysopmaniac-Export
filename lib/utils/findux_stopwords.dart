@@ -10,42 +10,34 @@
 library;
 
 const Set<String> kStopwordsDe = {
-  // Artikel + Pronomen
-  'der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'einen', 'einem',
-  'einer', 'eines', 'sie', 'ihm', 'ihn', 'ihnen', 'wir', 'uns', 'unser',
-  'unsere', 'euch', 'euer', 'eure', 'mein', 'meine', 'dein', 'deine',
-  'sein', 'seine', 'ihr', 'ihre', 'man',
-  // Konjunktionen + Praepositionen
-  'und', 'oder', 'aber', 'doch', 'sondern', 'denn', 'weil', 'wenn', 'dann',
-  'also', 'noch', 'nur', 'auch', 'als', 'ob', 'falls',
-  'mit', 'von', 'zu', 'zum', 'zur', 'auf', 'fuer', 'für', 'aus', 'bei',
-  'nach', 'ueber', 'über', 'unter', 'vor', 'durch', 'gegen', 'ohne',
-  // Verben
-  'ist', 'bin', 'bist', 'sind', 'seid', 'war', 'waren', 'wird', 'werden',
-  'wurde', 'wurden', 'haben', 'hat', 'hatte', 'hatten', 'sich',
-  'kann', 'koennen', 'können', 'soll', 'sollen', 'muss', 'muessen', 'müssen',
-  // W-Fragen
-  'wie', 'was', 'wer', 'wo', 'wann', 'warum', 'wieso', 'welche', 'welcher',
-  'welches', 'wohin', 'woher',
-  // Demonstrativ + Quantoren
-  'dass', 'dieser', 'diese', 'dieses', 'jener', 'jene', 'jenes',
-  'alle', 'alles', 'jeder', 'jede', 'jedes', 'kein', 'keine', 'einige',
-  'mehr', 'sehr', 'schon', 'immer', 'nie', 'nicht', 'kein',
+  'aber', 'alle', 'alles', 'als', 'also', 'auch', 'auf', 'aus', 'bei', 'bin',
+  'bist', 'dann', 'das', 'dass', 'dein', 'deine', 'dem', 'den', 'denn',
+  'der', 'des', 'die', 'diese', 'dieser', 'dieses', 'doch', 'durch', 'ein',
+  'eine', 'einem', 'einen', 'einer', 'eines', 'einige', 'euch', 'euer',
+  'eure', 'falls', 'fuer', 'für', 'gegen', 'haben', 'hat', 'hatte', 'hatten',
+  'ihm', 'ihn', 'ihnen', 'ihr', 'ihre', 'immer', 'ist', 'jede', 'jeder',
+  'jedes', 'jene', 'jener', 'jenes', 'kann', 'kein', 'keine', 'koennen',
+  'können', 'man', 'mehr', 'mein', 'meine', 'mit', 'muessen', 'muss',
+  'müssen', 'nach', 'nicht', 'nie', 'noch', 'nur', 'ob', 'oder', 'ohne',
+  'schon', 'sehr', 'seid', 'sein', 'seine', 'sich', 'sie', 'sind', 'soll',
+  'sollen', 'sondern', 'ueber', 'und', 'uns', 'unser', 'unsere', 'unter',
+  'von', 'vor', 'wann', 'war', 'waren', 'warum', 'was', 'weil', 'welche',
+  'welcher', 'welches', 'wenn', 'wer', 'werden', 'wie', 'wieso', 'wir',
+  'wird', 'wo', 'woher', 'wohin', 'wurde', 'wurden', 'zu', 'zum', 'zur',
+  'über',
 };
 
 const Set<String> kStopwordsEn = {
-  'the', 'a', 'an', 'and', 'or', 'but', 'so', 'because', 'if', 'when',
-  'while', 'than', 'then', 'this', 'that', 'these', 'those',
-  'with', 'from', 'into', 'onto', 'about', 'over', 'under', 'after',
-  'before', 'against', 'between', 'through',
-  'is', 'am', 'are', 'was', 'were', 'be', 'been', 'being', 'do', 'does',
-  'did', 'have', 'has', 'had', 'will', 'would', 'could', 'should', 'may',
-  'might', 'can',
-  'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us',
-  'them', 'my', 'your', 'his', 'its', 'our', 'their', 'mine', 'yours',
-  'what', 'which', 'who', 'whom', 'whose', 'why', 'how', 'where', 'when',
-  'all', 'any', 'every', 'each', 'no', 'not', 'only', 'just', 'also',
-  'very', 'much', 'many', 'most', 'some', 'such',
+  'a', 'about', 'after', 'against', 'all', 'also', 'am', 'an', 'and', 'any',
+  'are', 'be', 'because', 'been', 'before', 'being', 'between', 'but', 'can',
+  'could', 'did', 'do', 'does', 'each', 'every', 'from', 'had', 'has',
+  'have', 'he', 'her', 'him', 'his', 'how', 'i', 'if', 'into', 'is', 'it',
+  'its', 'just', 'many', 'may', 'me', 'might', 'mine', 'most', 'much', 'my',
+  'no', 'not', 'only', 'onto', 'or', 'our', 'over', 'she', 'should', 'so',
+  'some', 'such', 'than', 'that', 'the', 'their', 'them', 'then', 'these',
+  'they', 'this', 'those', 'through', 'under', 'us', 'very', 'was', 'we',
+  'were', 'what', 'when', 'where', 'which', 'while', 'who', 'whom', 'whose',
+  'why', 'will', 'with', 'would', 'you', 'your', 'yours',
 };
 
 /// Gibt das passende Stopwort-Set fuer eine Sprach-Auswahl zurueck.
