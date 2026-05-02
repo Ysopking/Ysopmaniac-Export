@@ -80,6 +80,53 @@ class StammdatenResolver {
     'geld-verdienen-sofort.de',
   ];
 
+  // ========== Familienstatus-Ausschluesse + Trust-Domains ==========
+
+  /// Familie: Pinterest-Schutz + Mommy-Blog-SEO-Spam
+  static const List<String> _familieExclusions = [
+    'pinterest.com', 'pinterest.de', 'pinterest.at',
+    // Affiliate-lastige Baby/Kind-Blogs ohne redaktionellen Mehrwert
+    'desired.de', 'gofeminin.de', 'mamaclub.de',
+    'babywelt.de',
+  ];
+
+  /// Familie: Trust-Domains fuer medizinische/erzieherische Suchen
+  static const List<String> _familieMedTrustDomains = [
+    'kindergesundheit-info.de', 'familienportal.de',
+    'stiftung-warentest.de', 'bundeszentrale-fuer-gesundheitliche-aufklaerung.de',
+    'bzga.de', 'bund.de', 'kinderrechte.de',
+  ];
+
+  /// Alleinerziehend: Staatliche Hilfs- und Informationsseiten
+  static const List<String> _alleinerziehendTrustDomains = [
+    'bmfsfj.de', 'arbeitsagentur.de', 'bundesregierung.de',
+    'bund.de', 'gesetze-im-internet.de', 'vamv.de',
+  ];
+
+  /// Alleinerziehend: Toxische Diskussionsforen + Scam-Anwaelte ausschliessen
+  static const List<String> _alleinerziehendExclusions = [
+    'pinterest.com', 'pinterest.de',
+    // Anwalts-Leadgenerierungs-Seiten (Spec: "Scam-Anwälte die Erstgespräche verkaufen")
+    'anwalt.de',
+    'anwalt24.de',
+    'anwaltshotline.de',
+  ];
+
+  // ========== Intent-Trigger: Familie / Recht / Antrag ==========
+
+  static const List<String> _familyMedicalIntentWords = [
+    'kita', 'kinder', 'kind', 'impfung', 'impfen', 'kinderarzt',
+    'fieber', 'allergie', 'erziehung', 'entwicklung', 'schulreife',
+    'kindergarten', 'schule', 'lernen', 'nachhilfe',
+  ];
+
+  static const List<String> _legalIntentWords = [
+    'unterhalt', 'sorgerecht', 'betreuung', 'recht', 'rechtlich',
+    'gesetz', 'antrag', 'antraege', 'beantragen', 'foerderung',
+    'unterstuetzung', 'hilfe', 'sozialleistung', 'buergergeld',
+    'hartz', 'wohngeld', 'kindergeld', 'elterngeld',
+  ];
+
   // ========== Trust-Domains fuer Rentner (Medizin + Finanzen) ==========
 
   static const List<String> _rentnerMedicalTrustDomains = [
@@ -159,8 +206,10 @@ class StammdatenResolver {
     final hasNews      = _containsAny(fullText, _newsIntentWords);
     final hasMedical   = _containsAny(fullText, _medicalIntentWords);
     final hasFinancial = _containsAny(fullText, _financialIntentWords);
-    final hasCvIntent  = _containsAny(fullText, _cvIntentWords);
-    final hasSoftware  = _containsAny(fullText, _softwareIntentWords);
+    final hasCvIntent      = _containsAny(fullText, _cvIntentWords);
+    final hasSoftware      = _containsAny(fullText, _softwareIntentWords);
+    final hasFamilyMedical = _containsAny(fullText, _familyMedicalIntentWords);
+    final hasLegal         = _containsAny(fullText, _legalIntentWords);
 
     final employmentType =
         ((settings['employmentType'] as String?) ?? 'student').trim();
@@ -274,6 +323,24 @@ class StammdatenResolver {
         fileTypeHints.addAll(['doc', 'pdf']);
         softTerms.add('Vorlage');
       }
+      // Antrags-/Hilfe-Intent (Buergergeld, Foerderung, Sozialleistung):
+      // Offizielle Behoerden-Seiten erzwingen, hilfreiche Foren dazu
+      if (hasLegal) {
+        trustDomains.addAll([
+          'arbeitsagentur.de', 'bmfsfj.de', 'bundesregierung.de',
+          'bund.de', 'gesetze-im-internet.de', 'sozialgesetzbuch.de',
+        ]);
+        if (!preferredSources.contains('offiziell')) {
+          preferredSources.insert(0, 'offiziell');
+        }
+        // Reddit/Foren fuer echte Erfahrungen (z.B. r/hartz4, r/sozialleistungen)
+        if (!preferredSources.contains('reddit')) {
+          preferredSources.add('reddit');
+        }
+        if (!preferredSources.contains('foren')) {
+          preferredSources.add('foren');
+        }
+      }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -324,20 +391,55 @@ class StammdatenResolver {
         employmentType == 'vollzeit';
 
     // ─────────────────────────────────────────────────────────────
-    // 8b. FAMILIENSTATUS — leichter Lokal-Bias
-    //     Kein starker Effekt; Interessen + Chronik haben Vorrang.
+    // 8b. FAMILIENSTATUS — spec-konform
     // ─────────────────────────────────────────────────────────────
-    if ((familyStatus == 'familie' || familyStatus == 'alleinerziehend') &&
-        plz.isNotEmpty && plz != '0' && !hardTerms.contains(plz)) {
-      // Familien suchen häufig lokal (Kita, Arzt, Angebote)
-      softTerms.add(plz);
-    }
-    if (familyStatus == 'alleinerziehend') {
-      // Allgemeiner Förderungs-Hint: wird nur eingeblendet wenn nicht schon vorhanden
-      if (!softTerms.contains('Förderung') && !fullText.contains('foerder')) {
-        softTerms.add('Förderung');
+    if (familyStatus == 'familie') {
+      // Schutz vor Pinterest + Affiliate-Mommy-Blog-Spam (immer aktiv)
+      excludeDomains.addAll(_familieExclusions);
+
+      // Lokal-Bias bei Familien (Kita, Arzt, Angebote)
+      if (plz.isNotEmpty && plz != '0' && !hardTerms.contains(plz)) {
+        softTerms.add(plz);
+      }
+
+      // Medizinisch/erzieherisch → Trust-Domains erzwingen
+      if (hasFamilyMedical || hasMedical) {
+        trustDomains.addAll(_familieMedTrustDomains);
+        if (!preferredSources.contains('offiziell')) {
+          preferredSources.insert(0, 'offiziell');
+        }
+      }
+    } else if (familyStatus == 'alleinerziehend') {
+      // Toxische Foren + Scam-Anwalts-Portale ausschliessen
+      excludeDomains.addAll(_alleinerziehendExclusions);
+
+      // Lokal-Bias noch stärker (Kita-Plätze, lokale Angebote)
+      if (plz.isNotEmpty && plz != '0' && !hardTerms.contains(plz)) {
+        softTerms.add(plz);
+      }
+
+      // Rechtlich/finanziell/Antrags-Intent → staatliche Seiten an die Spitze
+      if (hasLegal || hasFinancial) {
+        trustDomains.addAll(_alleinerziehendTrustDomains);
+        if (!preferredSources.contains('offiziell')) {
+          preferredSources.insert(0, 'offiziell');
+        }
+        // Reddit-Communities fuer echte Erfahrungen zusaetzlich boosten
+        if (!preferredSources.contains('reddit')) {
+          preferredSources.add('reddit');
+        }
+        // Allgemeiner Foerderungs-Hint
+        if (!softTerms.contains('Förderung') && !fullText.contains('foerder')) {
+          softTerms.add('Förderung');
+        }
+      } else {
+        // Ohne spezifischen Intent: nur effizienz-fokussierte Quellen
+        if (!preferredSources.contains('offiziell')) {
+          preferredSources.add('offiziell');
+        }
       }
     }
+    // 'single': Baseline — nur Berufstyp-Filter greifen, kein family overlay
 
     // ─────────────────────────────────────────────────────────────
     // 9. DEDUPLIZIEREN + ZUSAMMENFUEHREN

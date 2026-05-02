@@ -393,28 +393,33 @@ class LearningService {
         'weight_mode_discover':         1.2,
       },
       'erwerbslos': {
-        // Spec: Zielfokussierter — Stellenboersen, Behoerden, Lebenslauf-Vorlagen
-        'weight_kw_job':              1.7,
-        'weight_kw_jobs':             1.7,
-        'weight_kw_stelle':           1.6,
-        'weight_kw_bewerbung':        1.6,
-        'weight_kw_lebenslauf':       1.6,
-        'weight_kw_cv':               1.5,
-        'weight_kw_vorlage':          1.5, // filetype:doc/pdf fuer Vorlagen
-        'weight_kw_muster':           1.4,
-        'weight_kw_initiativbewerbung':1.4,
-        'weight_kw_karriere':         1.4,
-        'weight_kw_gehalt':           1.4,
-        'weight_kw_foerderung':       1.4,
-        'weight_kw_qualifikation':    1.3,
-        'weight_kw_weiterbildung':    1.3,
-        'weight_kw_arbeitsamt':       1.3,
-        'weight_filter_stellenboersen': 1.8,
-        'weight_filter_offiziell':    1.6,
-        'weight_filter_foren':        1.3,
-        // Coaching-Scams + Fake-Kurse abstrafen
-        'weight_domain_geld-verdienen-sofort.de': 0.1,
-        'weight_mode_standard':       1.3,
+        // Job-Suche (sanfte Vorgewichtung 1.08–1.12)
+        'weight_kw_job':              1.12,
+        'weight_kw_bewerbung':        1.12,
+        'weight_kw_lebenslauf':       1.10,
+        'weight_kw_vorlage':          1.10,
+        'weight_kw_karriere':         1.08,
+        // Antraege + staatliche Hilfen (Spec: offizielle Antraege + gute Foren)
+        'weight_kw_foerderung':       1.10,
+        'weight_kw_antrag':           1.10,
+        'weight_kw_buergergeld':      1.10,
+        'weight_kw_hartz':            1.08,
+        'weight_kw_sozialleistung':   1.08,
+        'weight_kw_wohngeld':         1.08,
+        'weight_kw_hilfe':            1.08,
+        // Behoerden aufwerten
+        'weight_domain_arbeitsagentur.de':      1.12,
+        'weight_domain_bmfsfj.de':              1.10,
+        'weight_domain_gesetze-im-internet.de': 1.08,
+        // Stellenboersen
+        'weight_filter_stellenboersen': 1.12,
+        'weight_filter_offiziell':    1.10,
+        // Echte Hilfe-Foren
+        'weight_filter_reddit':       1.08,
+        'weight_filter_foren':        1.08,
+        // Coaching-Scams abstrafen
+        'weight_domain_geld-verdienen-sofort.de': 0.88,
+        'weight_mode_standard':       1.06,
       },
     };
 
@@ -447,33 +452,71 @@ class LearningService {
   Future<void> seedStarterFamilyWeights(String familyStatus) async {
     final prefs = await SharedPreferences.getInstance();
 
+    // Spec-konforme Familie-Profile (Werte bewusst gering 1.05–1.12,
+    // Interessen + Chronik haben immer Vorrang).
     const familyWeights = <String, Map<String, double>>{
+      // Baseline: nur berufliche Filter greifen, kein family overlay
       'single': {
-        'weight_kw_freizeit':         1.08,
-        'weight_kw_reise':            1.06,
-        'weight_kw_lifestyle':        1.06,
-        'weight_filter_blogs':        1.08,
-        'weight_mode_discover':       1.08,
+        'weight_kw_freizeit':         1.06,
+        'weight_kw_reise':            1.05,
+        'weight_filter_blogs':        1.06,
+        'weight_mode_discover':       1.06,
       },
+
+      // Familie (mit Kindern): Schutz vor Pinterest + Mommy-Blog-Spam,
+      // Trust-Domains fuer Gesundheit/Erziehung aufwerten
       'familie': {
+        // Kinder-/Familien-Keywords
         'weight_kw_kinder':           1.10,
-        'weight_kw_familie':          1.10,
+        'weight_kw_kindheit':         1.08,
         'weight_kw_schule':           1.08,
-        'weight_kw_erziehung':        1.08,
-        'weight_kw_gesundheit':       1.06,
-        'weight_kw_regional':         1.08, // Lokal-Bias (Kita, Arzt, Schule)
-        'weight_filter_offiziell':    1.08,
-        'weight_filter_news':         1.06,
-        'weight_mode_standard':       1.06,
+        'weight_kw_kita':             1.08,
+        'weight_kw_erziehung':        1.10,
+        'weight_kw_impfung':          1.08,
+        'weight_kw_kinderarzt':       1.08,
+        'weight_kw_kindergarten':     1.08,
+        // Trust-Domains (medizinisch + erzieherisch)
+        'weight_domain_kindergesundheit-info.de': 1.12,
+        'weight_domain_familienportal.de':        1.12,
+        'weight_domain_stiftung-warentest.de':    1.10,
+        'weight_domain_bzga.de':                  1.10,
+        'weight_domain_bund.de':                  1.08,
+        // Mommy-Blog-SEO-Spam + Pinterest abstrafen
+        'weight_domain_pinterest.com':  0.88,
+        'weight_domain_pinterest.de':   0.88,
+        'weight_domain_desired.de':     0.88,
+        'weight_domain_gofeminin.de':   0.88,
+        'weight_domain_mamaclub.de':    0.88,
+        'weight_filter_offiziell':      1.10,
+        'weight_mode_standard':         1.06,
       },
+
+      // Alleinerziehend: Effizienz + staatliche Hilfen + echte Foren,
+      // Scam-Anwalts-Portale und toxische Foren raus
       'alleinerziehend': {
-        'weight_kw_kinder':           1.10,
-        'weight_kw_foerderung':       1.10,
-        'weight_kw_unterstuetzung':   1.10,
-        'weight_kw_recht':            1.08,
+        // Hilfe + Recht + Foerderung stark vorgewichten
+        'weight_kw_foerderung':       1.12,
+        'weight_kw_unterstuetzung':   1.12,
+        'weight_kw_recht':            1.10,
+        'weight_kw_unterhalt':        1.10,
+        'weight_kw_sorgerecht':       1.10,
+        'weight_kw_antrag':           1.10,
         'weight_kw_beratung':         1.08,
-        'weight_kw_regional':         1.10, // Starker Lokal-Bias (Kita, Angebote)
-        'weight_kw_kostenlos':        1.08,
+        'weight_kw_kostenlos':        1.10,
+        'weight_kw_kinder':           1.08,
+        // Staatliche Seiten stark aufwerten (Spec: maximale Effizienz)
+        'weight_domain_bmfsfj.de':           1.15,
+        'weight_domain_arbeitsagentur.de':   1.12,
+        'weight_domain_bundesregierung.de':  1.10,
+        'weight_domain_bund.de':             1.10,
+        'weight_domain_vamv.de':             1.10, // Verband alleinerziehender Muetter
+        // Echte Foren/Reddit-Communities aufwerten
+        'weight_filter_reddit':       1.12,
+        'weight_filter_foren':        1.08,
+        // Scam-Anwalts-Portale abstrafen (Spec)
+        'weight_domain_anwalt.de':    0.88,
+        'weight_domain_anwalt24.de':  0.85,
+        'weight_domain_pinterest.com':0.88,
         'weight_filter_offiziell':    1.12,
         'weight_mode_standard':       1.06,
       },
