@@ -48,6 +48,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   List<CoachChoice> _ambientCoachChoices = const [];
   List<String> _suggestedGoals = [];
   Timer? _analysisTimer;
+  Timer? _intentTimer;
+  String _lastIntentWord = '';
 
   String? _selectedRating;
   final TextEditingController _feedbackController = TextEditingController();
@@ -120,6 +122,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     super.initState();
     _loadAdvice();
     _maybeStartVolumeListener();
+    _whatController.addListener(_onWhatTextChanged);
   }
 
   Future<void> _maybeStartVolumeListener() async {
@@ -168,10 +171,219 @@ class _HomePageState extends ConsumerState<HomePage> {
     final r = await PrecisionAdvisor.analyze();
     if (mounted) setState(() => _advice = r);
   }
+  // ---------- Intent-Popup (10s Single-Word-Trigger) ----------
+
+  void _onWhatTextChanged() {
+    final text = _whatController.text.trim();
+    final words =
+        text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+
+    if (words.length == 1 &&
+        !_showWhyField &&
+        _whyController.text.trim().isEmpty &&
+        _viewState == 'dashboard') {
+      final word = words.first;
+      if (word != _lastIntentWord) {
+        _lastIntentWord = word;
+        _intentTimer?.cancel();
+        _intentTimer = Timer(const Duration(seconds: 10), () {
+          if (mounted && _viewState == 'dashboard') {
+            _showIntentPopup(word);
+          }
+        });
+      }
+    } else {
+      _intentTimer?.cancel();
+      if (text.isEmpty) _lastIntentWord = '';
+    }
+  }
+
+  void _showIntentPopup(String word) {
+    if (!mounted) return;
+    const intents = [
+      {
+        'icon': '📍',
+        'label': 'Wo kann ich das finden?',
+        'why': 'finden wo standort'
+      },
+      {
+        'icon': 'ℹ️',
+        'label': 'Informationen / Was ist das?',
+        'why': 'informationen erklärung hintergrund'
+      },
+      {
+        'icon': '💰',
+        'label': 'Kaufen / Preise vergleichen',
+        'why': 'kaufen preis vergleich günstig'
+      },
+      {
+        'icon': '📖',
+        'label': 'Anleitung / Wie geht das?',
+        'why': 'anleitung wie tipps schritt für schritt'
+      },
+      {
+        'icon': '⭐',
+        'label': 'Erfahrungen & Bewertungen',
+        'why': 'erfahrungen bewertungen meinungen empfehlungen'
+      },
+      {
+        'icon': '🗺️',
+        'label': 'In meiner Nähe',
+        'why': 'in meiner nähe regional lokal'
+      },
+    ];
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Drag-Handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.black12,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              // Titel
+              Text.rich(
+                TextSpan(
+                  children: [
+                    const TextSpan(text: 'Du suchst nach '),
+                    TextSpan(
+                      text: '"$word"',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: FindUXProTheme.primaryPurple,
+                      ),
+                    ),
+                    const TextSpan(text: '\n— was willst du damit?'),
+                  ],
+                ),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black87,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Intent-Optionen
+              ...intents.map((intent) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          Haptics.tap();
+                          setState(() {
+                            _whyController.text = intent['why']!;
+                            _showWhyField = true;
+                          });
+                        },
+                        child: Ink(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F3FF),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                                color: const Color(0xFFD4C8FF)),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 14),
+                            child: Row(
+                              children: [
+                                Text(intent['icon']!,
+                                    style:
+                                        const TextStyle(fontSize: 22)),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Text(
+                                    intent['label']!,
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                                const Icon(
+                                    Icons.arrow_forward_ios_rounded,
+                                    size: 14,
+                                    color: Colors.black38),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  )),
+              // "Selbst beschreiben" Option
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    Haptics.tap();
+                    setState(() => _showWhyField = true);
+                  },
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      child: Row(
+                        children: [
+                          Text('✍️', style: TextStyle(fontSize: 22)),
+                          SizedBox(width: 14),
+                          Text(
+                            'Selbst beschreiben...',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
 
   @override
   void dispose() {
     _analysisTimer?.cancel();
+    _intentTimer?.cancel();
     if (_volumeListenerActive) {
       try {
         VolumeController().removeListener();
@@ -259,6 +471,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     List<Map<String, dynamic>>? coachChoices,
   }) async {
     if (_whatController.text.trim().isEmpty) return;
+    _intentTimer?.cancel();
 
     // A1: Bekannte Mehr-Wort-Phrasen automatisch in Anführungszeichen setzen
     // (PhraseDetector.autoQuote) — nur wenn der User noch keine Quotes gesetzt hat.
@@ -697,6 +910,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       _buildContextChip(
                         onTap: () {
                           Haptics.tap();
+                          _intentTimer?.cancel();
                           setState(() => _showWhyField = true);
                         },
                       ),
