@@ -73,6 +73,15 @@ class SettingsScreen extends ConsumerWidget {
                     notifier.updateField(country: newCountry);
                   },
                 ),
+                _buildToggleTile(
+                  icon: Icons.open_in_browser,
+                  title: 'Ergebnisse in der App oeffnen',
+                  subtitle: settings.openInApp
+                      ? 'Custom Tabs / In-App Browser-View'
+                      : 'Externer Browser',
+                  value: settings.openInApp,
+                  onChanged: (v) => notifier.updateField(openInApp: v),
+                ),
                 _buildOptionTile(
                   icon: Icons.security_rounded,
                   title: AppLocalizations.of(context)!.reviewFeedback,
@@ -126,6 +135,45 @@ class SettingsScreen extends ConsumerWidget {
         onTap: () {
           HapticFeedback.selectionClick();
           onTap();
+        },
+      ),
+    );
+  }
+
+  Widget _buildToggleTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F0F5),
+        borderRadius: FindUXProTheme.largeSquircleRadius,
+      ),
+      child: SwitchListTile(
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        secondary: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: const BoxDecoration(
+              color: Colors.white, shape: BoxShape.circle),
+          child: Icon(icon, color: Colors.black, size: 24),
+        ),
+        title: Text(title,
+            style: const TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+                fontSize: 16)),
+        subtitle: Text(subtitle,
+            style: const TextStyle(color: Colors.black54, fontSize: 13)),
+        value: value,
+        activeThumbColor: FindUXProTheme.primaryPurple,
+        onChanged: (v) {
+          HapticFeedback.selectionClick();
+          onChanged(v);
         },
       ),
     );

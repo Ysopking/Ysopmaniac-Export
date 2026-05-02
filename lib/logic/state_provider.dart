@@ -35,6 +35,9 @@ class SettingsState {
   final List<String> sources;
   final List<String> files;
   final String mode;
+  /// true = Suchergebnisse in Custom Tabs / SFSafariViewController (in-app)
+  /// false = im externen Browser oeffnen
+  final bool openInApp;
 
   const SettingsState({
     required this.plz,
@@ -48,6 +51,7 @@ class SettingsState {
     required this.sources,
     required this.files,
     required this.mode,
+    required this.openInApp,
   });
 
   SettingsState copyWith({
@@ -62,6 +66,7 @@ class SettingsState {
     List<String>? sources,
     List<String>? files,
     String? mode,
+    bool? openInApp,
   }) {
     return SettingsState(
       plz: plz ?? this.plz,
@@ -76,6 +81,7 @@ class SettingsState {
       sources: sources ?? this.sources,
       files: files ?? this.files,
       mode: mode ?? this.mode,
+      openInApp: openInApp ?? this.openInApp,
     );
   }
 }
@@ -92,6 +98,7 @@ const SettingsState _defaultSettings = SettingsState(
   sources: ['alle'],
   files: ['alle'],
   mode: 'standard',
+  openInApp: true,
 );
 
 class SettingsNotifier extends StateNotifier<SettingsState> {
@@ -112,6 +119,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     'sources',
     'files',
     'mode',
+    'openInApp',
   ];
 
   Future<void> loadSettings() async {
@@ -162,6 +170,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       sources: prefs.getStringList('sources') ?? const ['alle'],
       files: prefs.getStringList('files') ?? const ['alle'],
       mode: prefs.getString('mode') ?? 'standard',
+      openInApp: prefs.getBool('openInApp') ?? true,
     );
   }
 
@@ -188,6 +197,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     await prefs.setStringList('sources', newState.sources);
     await prefs.setStringList('files', newState.files);
     await prefs.setString('mode', newState.mode);
+    await prefs.setBool('openInApp', newState.openInApp);
   }
 
   Future<void> updateField({
@@ -202,6 +212,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     List<String>? sources,
     List<String>? files,
     String? mode,
+    bool? openInApp,
   }) {
     final newState = state.copyWith(
       plz: plz,
@@ -215,6 +226,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       sources: sources,
       files: files,
       mode: mode,
+      openInApp: openInApp,
     );
     return updateSettings(newState);
   }

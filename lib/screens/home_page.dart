@@ -97,11 +97,24 @@ class _HomePageState extends ConsumerState<HomePage> {
       _showDeepAnalysisOverlay = false;
     });
 
-    // Suchanfrage tatsaechlich im externen Browser oeffnen.
+    // Suchanfrage oeffnen: per Default in-app via Custom Tabs (Android) /
+    // SFSafariViewController (iOS); Fallback: externer Browser.
     final uri = Uri.tryParse(url);
     if (uri != null) {
+      final preferInApp = settings.openInApp;
       try {
-        final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        bool ok = false;
+        if (preferInApp) {
+          // Erst-Versuch: in-app Browser-View (Custom Tabs)
+          ok = await launchUrl(
+            uri,
+            mode: LaunchMode.inAppBrowserView,
+            browserConfiguration: const BrowserConfiguration(showTitle: true),
+          );
+        }
+        if (!ok) {
+          ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
         if (!ok && mounted) {
           _showLaunchFailedSnack();
         }
