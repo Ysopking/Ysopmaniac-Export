@@ -1,15 +1,28 @@
 package com.example.findux
 
 import android.accessibilityservice.AccessibilityService
-import android.view.KeyEvent
-import android.view.accessibility.AccessibilityEvent
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.util.Log
+import android.view.KeyEvent
+import android.view.accessibility.AccessibilityEvent
 
 class FindUxAccessibilityService : AccessibilityService() {
 
     private var lastVolumeUpTime: Long = 0
     private val DOUBLE_TAP_TIMEOUT = 500L
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        Log.d("FindUX", "FindUX Accessibility Service verbunden")
+
+        val info = AccessibilityServiceInfo()
+        info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
+        info.flags = AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
+        info.notificationTimeout = 100
+        serviceInfo = info
+    }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val keyCode = event.keyCode
@@ -18,10 +31,10 @@ class FindUxAccessibilityService : AccessibilityService() {
         if (keyCode == KeyEvent.KEYCODE_VOLUME_UP && action == KeyEvent.ACTION_DOWN) {
             val currentTime = System.currentTimeMillis()
             if (currentTime - lastVolumeUpTime < DOUBLE_TAP_TIMEOUT) {
-                // Double Tap erkannt
-                openFindUxOverlay()
-                lastVolumeUpTime = 0 // Reset
-                return true // Event konsumieren, damit Lautstärke sich nicht ändert
+                // Doppel-Tap erkannt → FindUX öffnen
+                openFindUx()
+                lastVolumeUpTime = 0L // Reset
+                return true // Volume-Änderung unterdrücken
             }
             lastVolumeUpTime = currentTime
         }
@@ -33,23 +46,13 @@ class FindUxAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
-        // Service unterbrochen
+        Log.d("FindUX", "FindUX Accessibility Service unterbrochen")
     }
 
-    override fun onServiceConnected() {
-        super.onServiceConnected()
-        Log.d("FindUX", "FindUX Accessibility Service connected")
-
-        // TODO: Konfiguriere den Service für Volume-Key-Monitoring
-        // serviceInfo.eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED or AccessibilityEvent.TYPE_KEY_EVENT
-        // serviceInfo.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-        // serviceInfo.flags = AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
-    }
-
-    // TODO: Methode zum Öffnen der FindUX-App als Overlay hinzufügen
-    private fun openFindUxOverlay() {
-        val intent = Intent(this, MainActivity::class.java)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    private fun openFindUx() {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        }
         startActivity(intent)
     }
 }
