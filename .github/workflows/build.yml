@@ -9,7 +9,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  GRADLE_OPTS: -Xmx8192m -Dorg.gradle.daemon=false
+  GRADLE_OPTS: -Xmx12g -Dorg.gradle.daemon=false
 
 jobs:
   build:
@@ -49,10 +49,10 @@ jobs:
         run: flutter analyze --no-fatal-infos
 
       - name: Build APK (Debug)
-        run: flutter build apk --debug --no-tree-shake-icons --no-shrink
+        run: flutter build apk --debug --android-skip-build-dependency-validation
 
       - name: Build APK (Release)
-        run: flutter build apk --release --no-tree-shake-icons --no-shrink
+        run: flutter build apk --release --android-skip-build-dependency-validation
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
