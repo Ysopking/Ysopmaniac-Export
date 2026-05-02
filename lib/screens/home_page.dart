@@ -17,8 +17,6 @@ import '../logic/deep_analyzer.dart';
 import '../theme.dart';
 import '../utils/findux_stopwords.dart';
 import '../coach/coach_models.dart';
-import '../coach/coach_screen.dart';
-import '../coach/theme_detector.dart';
 import '../coach/precision_advisor.dart';
 import 'incognito_browser_screen.dart';
 import 'widgets/inline_coach_section.dart';
