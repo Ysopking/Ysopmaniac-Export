@@ -36,9 +36,11 @@ flutter:
     - assets/legal/
     - assets/data/
 
+# Adaptive Icon Background passt zur dunklen Logo-Farbe
 flutter_launcher_icons:
   android: true
   ios: false
   image_path: "assets/logo.png"
-  adaptive_icon_background: "#ffffff"
+  adaptive_icon_background: "#1A0F3D"
   adaptive_icon_foreground: "assets/logo.png"
+  min_sdk_android: 21

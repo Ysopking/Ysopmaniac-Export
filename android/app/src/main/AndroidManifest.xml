@@ -4,7 +4,11 @@
     <!-- Internet-Berechtigung fuer externes Oeffnen der Suchergebnisse -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Biometrie: USE_BIOMETRIC ab Android 9 (API 28),
+         USE_FINGERPRINT als Legacy-Fallback fuer aeltere Geraete. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
 
     <!-- Damit url_launcher mit Custom Tabs / Browser-Apps reden kann -->
     <queries>
@@ -15,6 +19,13 @@
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="http" />
+        </intent>
+        <!-- Damit der "Sperre einrichten"-Button die System-Einstellungen oeffnen kann -->
+        <intent>
+            <action android:name="android.settings.SECURITY_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.SETTINGS" />
         </intent>
     </queries>
 
