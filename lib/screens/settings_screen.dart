@@ -9,6 +9,21 @@ import '../theme.dart';
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
+  static const _modes = <String, String>{
+    'precise': 'Praezise – exakte Phrase + intitle:',
+    'standard': 'Standard – ausgewogen (Default)',
+    'discover': 'Entdecken – breiter, mit OR-Erweiterung',
+    'recent': 'Aktuell – nur letzte 12 Monate (after:)',
+  };
+
+  static const _engines = <String, String>{
+    'google': 'Google',
+    'bing': 'Bing',
+    'duckduckgo': 'DuckDuckGo',
+    'startpage': 'Startpage',
+    'brave': 'Brave Search',
+  };
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
@@ -33,74 +48,167 @@ class SettingsScreen extends ConsumerWidget {
               fontSize: 18),
         ),
       ),
-      body: Column(
+      body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         children: [
-          Expanded(
-            child: ListView(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              children: [
-                _buildOptionTile(
-                  icon: Icons.person_outline,
-                  title: 'Beruf',
-                  subtitle: settings.beruf.isNotEmpty
-                      ? settings.beruf
-                      : 'Nicht festgelegt',
-                  onTap: () => _showBerufDialog(context, ref),
-                ),
-                _buildOptionTile(
-                  icon: Icons.language,
-                  title: AppLocalizations.of(context)!.languageLabel,
-                  subtitle: settings.language == 'de' ? 'Deutsch' : 'English',
-                  onTap: () {
-                    final newLang = settings.language == 'de' ? 'en' : 'de';
-                    notifier.updateField(language: newLang);
-                  },
-                ),
-                _buildOptionTile(
-                  icon: Icons.location_on_outlined,
-                  title: AppLocalizations.of(context)!.zipLabel,
-                  subtitle:
-                      settings.plz.isEmpty ? 'Nicht festgelegt' : settings.plz,
-                  onTap: () => _showZipDialog(context, ref),
-                ),
-                _buildOptionTile(
-                  icon: Icons.public,
-                  title: AppLocalizations.of(context)!.countryLabel,
-                  subtitle: settings.country.toUpperCase(),
-                  onTap: () {
-                    final newCountry = settings.country == 'de' ? 'at' : 'de';
-                    notifier.updateField(country: newCountry);
-                  },
-                ),
-                _buildToggleTile(
-                  icon: Icons.open_in_browser,
-                  title: 'Ergebnisse in der App oeffnen',
-                  subtitle: settings.openInApp
-                      ? 'Custom Tabs / In-App Browser-View'
-                      : 'Externer Browser',
-                  value: settings.openInApp,
-                  onChanged: (v) => notifier.updateField(openInApp: v),
-                ),
-                _buildOptionTile(
-                  icon: Icons.security_rounded,
-                  title: AppLocalizations.of(context)!.reviewFeedback,
-                  subtitle: 'Datenexport manuell freigeben',
-                  onTap: () => _showFeedbackExportDialog(context, ref),
-                ),
-                _buildOptionTile(
-                  icon: Icons.delete_forever_outlined,
-                  title: 'Alle persoenlichen Daten loeschen',
-                  subtitle: 'Vault zuruecksetzen (Notbremse)',
-                  onTap: () => _confirmWipe(context, ref),
-                ),
-              ],
-            ),
+          _buildOptionTile(
+            icon: Icons.person_outline,
+            title: 'Beruf',
+            subtitle: settings.beruf.isNotEmpty
+                ? settings.beruf
+                : 'Nicht festgelegt',
+            onTap: () => _showBerufDialog(context, ref),
+          ),
+          _buildOptionTile(
+            icon: Icons.language,
+            title: AppLocalizations.of(context)!.languageLabel,
+            subtitle: settings.language == 'de' ? 'Deutsch' : 'English',
+            onTap: () {
+              final newLang = settings.language == 'de' ? 'en' : 'de';
+              notifier.updateField(language: newLang);
+            },
+          ),
+          _buildOptionTile(
+            icon: Icons.location_on_outlined,
+            title: AppLocalizations.of(context)!.zipLabel,
+            subtitle:
+                settings.plz.isEmpty ? 'Nicht festgelegt' : settings.plz,
+            onTap: () => _showZipDialog(context, ref),
+          ),
+          _buildOptionTile(
+            icon: Icons.public,
+            title: AppLocalizations.of(context)!.countryLabel,
+            subtitle: settings.country.toUpperCase(),
+            onTap: () {
+              final newCountry = settings.country == 'de' ? 'at' : 'de';
+              notifier.updateField(country: newCountry);
+            },
+          ),
+          _buildOptionTile(
+            icon: Icons.search,
+            title: 'Such-Modus',
+            subtitle: _modes[settings.mode] ?? settings.mode,
+            onTap: () => _showModePicker(context, ref, settings.mode),
+          ),
+          _buildOptionTile(
+            icon: Icons.travel_explore,
+            title: 'Such-Engine',
+            subtitle: _engines[settings.searchEngine] ?? settings.searchEngine,
+            onTap: () =>
+                _showEnginePicker(context, ref, settings.searchEngine),
+          ),
+          _buildToggleTile(
+            icon: Icons.open_in_browser,
+            title: 'Ergebnisse in der App oeffnen',
+            subtitle: settings.openInApp
+                ? 'Custom Tabs / In-App Browser-View'
+                : 'Externer Browser',
+            value: settings.openInApp,
+            onChanged: (v) => notifier.updateField(openInApp: v),
+          ),
+          _buildToggleTile(
+            icon: Icons.shield_outlined,
+            title: 'Jugendschutz',
+            subtitle: settings.enableYouthProtection
+                ? 'SafeSearch aktiv + Negativ-Filter'
+                : 'Aus',
+            value: settings.enableYouthProtection,
+            onChanged: (v) => notifier.updateField(enableYouthProtection: v),
+          ),
+          _buildOptionTile(
+            icon: Icons.security_rounded,
+            title: AppLocalizations.of(context)!.reviewFeedback,
+            subtitle: 'Datenexport manuell freigeben',
+            onTap: () => _showFeedbackExportDialog(context, ref),
+          ),
+          _buildOptionTile(
+            icon: Icons.delete_forever_outlined,
+            title: 'Alle persoenlichen Daten loeschen',
+            subtitle: 'Vault zuruecksetzen (Notbremse)',
+            onTap: () => _confirmWipe(context, ref),
           ),
         ],
       ),
     );
   }
+
+  // ---------- Mode-/Engine-Picker ----------
+
+  void _showModePicker(BuildContext context, WidgetRef ref, String current) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Text('Such-Modus waehlen',
+                  style:
+                      TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            ..._modes.entries.map((e) => RadioListTile<String>(
+                  title: Text(e.value),
+                  value: e.key,
+                  groupValue: current,
+                  activeColor: FindUXProTheme.primaryPurple,
+                  onChanged: (v) {
+                    if (v != null) {
+                      ref.read(settingsProvider.notifier).updateField(mode: v);
+                    }
+                    Navigator.pop(ctx);
+                  },
+                )),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEnginePicker(BuildContext context, WidgetRef ref, String current) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Text('Such-Engine waehlen',
+                  style:
+                      TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            ..._engines.entries.map((e) => RadioListTile<String>(
+                  title: Text(e.value),
+                  value: e.key,
+                  groupValue: current,
+                  activeColor: FindUXProTheme.primaryPurple,
+                  onChanged: (v) {
+                    if (v != null) {
+                      ref
+                          .read(settingsProvider.notifier)
+                          .updateField(searchEngine: v);
+                    }
+                    Navigator.pop(ctx);
+                  },
+                )),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------- Tiles ----------
 
   Widget _buildOptionTile({
     required IconData icon,
@@ -179,6 +287,8 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  // ---------- Dialoge ----------
+
   void _showZipDialog(BuildContext context, WidgetRef ref) {
     final controller =
         TextEditingController(text: ref.read(settingsProvider).plz);
@@ -218,7 +328,8 @@ class SettingsScreen extends ConsumerWidget {
         title: const Text('Beruf'),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(hintText: 'z.B. Softwareentwickler'),
+          decoration:
+              const InputDecoration(hintText: 'z.B. Softwareentwickler'),
         ),
         actions: [
           TextButton(
@@ -254,8 +365,8 @@ class SettingsScreen extends ConsumerWidget {
               await ref.read(settingsProvider.notifier).wipeAll();
               if (context.mounted) Navigator.pop(context);
             },
-            child: const Text('Loeschen',
-                style: TextStyle(color: Colors.red)),
+            child:
+                const Text('Loeschen', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -274,8 +385,7 @@ class SettingsScreen extends ConsumerWidget {
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(30),
-              topRight: Radius.circular(30)),
+              topLeft: Radius.circular(30), topRight: Radius.circular(30)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -347,8 +457,8 @@ class SettingsScreen extends ConsumerWidget {
                       await learningService.clearAllFeedback();
                       if (context.mounted) Navigator.pop(context);
                     },
-                    child:
-                        Text(AppLocalizations.of(context)!.deleteFeedback),
+                    child: Text(
+                        AppLocalizations.of(context)!.deleteFeedback),
                   ),
                 ),
               ],
