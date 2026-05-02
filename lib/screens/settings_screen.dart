@@ -5,10 +5,32 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../logic/state_provider.dart';
 import '../services/chrome_import_quick.dart';
+import '../services/haptic_helper.dart';
 import '../theme.dart';
 
-class SettingsScreen extends ConsumerWidget {
+/// Apple-UX-Settings (Stage G):
+///
+/// Frueher: 14 Tiles auf einer Ebene, jede in eigener Card mit Schatten,
+/// 4 Sektionen — visuelles Rauschen ueberall, jeder Toggle gleich
+/// gewichtet, jede Aktion gleich laut.
+///
+/// Jetzt im iOS-Stil:
+/// - 3 inhaltliche Bloecke ("Ueber mich", "Suche", "Datenschutz")
+/// - jeder Block ist EINE weisse Card, in der Zeilen durch
+///   Haar-Linien getrennt sind (kein Schatten pro Zeile)
+/// - die "lautesten" Aktionen oben, Power-User-Optionen hinter
+///   "Erweitert" (progressive disclosure)
+/// - destruktive Aktionen visuell separiert am Ende
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  bool _showAdvancedAboutMe = false;
+  bool _showAdvancedSearch = false;
 
   static const _employmentLabels = <String, String>{
     'student': 'Student / Schueler / Azubi',
@@ -19,25 +41,30 @@ class SettingsScreen extends ConsumerWidget {
   };
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
     final needsJob = settings.employmentType == 'vollzeit' ||
         settings.employmentType == 'teilzeit';
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
       appBar: AppBar(
         backgroundColor: const Color(0xFFF5F5F7),
         elevation: 0,
+        scrolledUnderElevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios,
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
               color: Colors.black, size: 20),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            Haptics.tap();
+            Navigator.pop(context);
+          },
         ),
         title: Text(
-          AppLocalizations.of(context)!.settingsTitle,
+          l10n.settingsTitle,
           style: const TextStyle(
               color: Colors.black,
               fontWeight: FontWeight.w900,
@@ -46,206 +73,269 @@ class SettingsScreen extends ConsumerWidget {
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          _sectionLabel('Profil'),
-          _optionTile(
-            icon: Icons.person_outline,
-            title: 'Beschaeftigung',
-            subtitle: _employmentLabels[settings.employmentType] ??
-                settings.employmentType,
-            onTap: () =>
-                _showEmploymentPicker(context, ref, settings.employmentType),
-          ),
-          if (needsJob)
-            _optionTile(
-              icon: Icons.work_outline,
-              title: 'Jobrichtung',
-              subtitle: settings.beruf.isEmpty
-                  ? 'Nicht festgelegt'
-                  : settings.beruf,
-              onTap: () => _showTextDialog(
-                context,
+          // -------- Block 1: Ueber mich --------
+          _sectionLabel('Ueber mich'),
+          _groupCard(children: [
+            _row(
+              icon: Icons.person_outline_rounded,
+              title: 'Beschaeftigung',
+              value: _employmentLabels[settings.employmentType] ??
+                  settings.employmentType,
+              onTap: () => _showEmploymentPicker(
+                  context, ref, settings.employmentType),
+            ),
+            if (needsJob)
+              _row(
+                icon: Icons.work_outline_rounded,
                 title: 'Jobrichtung',
-                hint: 'z.B. IT, Pflege, Marketing, Handwerk',
-                initial: settings.beruf,
-                onSave: (v) => notifier.updateField(beruf: v),
+                value: settings.beruf.isEmpty
+                    ? 'Optional'
+                    : settings.beruf,
+                onTap: () => _showTextDialog(
+                  context,
+                  title: 'Jobrichtung',
+                  hint: 'z.B. IT, Pflege, Marketing, Handwerk',
+                  initial: settings.beruf,
+                  onSave: (v) => notifier.updateField(beruf: v),
+                ),
+              ),
+            _row(
+              icon: Icons.cake_outlined,
+              title: 'Geburtsjahr',
+              value: '${settings.jahr}',
+              onTap: () => _showYearPicker(context, ref, settings.jahr),
+            ),
+            _expandRow(
+              expanded: _showAdvancedAboutMe,
+              onToggle: () => setState(
+                  () => _showAdvancedAboutMe = !_showAdvancedAboutMe),
+              hiddenCount: 3,
+            ),
+            if (_showAdvancedAboutMe) ...[
+              _row(
+                icon: Icons.location_on_outlined,
+                title: l10n.zipLabel,
+                value: settings.plz.isEmpty ? 'Optional' : settings.plz,
+                onTap: () => _showTextDialog(
+                  context,
+                  title: l10n.zipLabel,
+                  hint: 'z.B. 10115',
+                  initial: settings.plz,
+                  keyboard: TextInputType.number,
+                  onSave: (v) => notifier.updateField(plz: v),
+                ),
+              ),
+              _row(
+                icon: Icons.language_rounded,
+                title: l10n.languageLabel,
+                value: settings.language == 'de' ? 'Deutsch' : 'English',
+                onTap: () => notifier.updateField(
+                    language: settings.language == 'de' ? 'en' : 'de'),
+              ),
+              _row(
+                icon: Icons.public_rounded,
+                title: l10n.countryLabel,
+                value: settings.country.toUpperCase(),
+                onTap: () => notifier.updateField(
+                    country: settings.country == 'de' ? 'at' : 'de'),
+              ),
+            ],
+          ]),
+
+          // -------- Block 2: Suche --------
+          _sectionLabel('Suche'),
+          _groupCard(children: [
+            _toggleRow(
+              icon: Icons.open_in_new_rounded,
+              title: 'In privatem Browser oeffnen',
+              subtitle: 'Daten werden beim Schliessen verworfen',
+              value: settings.openInApp,
+              onChanged: (v) => notifier.updateField(openInApp: v),
+            ),
+            _toggleRow(
+              icon: Icons.shield_outlined,
+              title: 'Jugendschutz',
+              subtitle: 'SafeSearch + Negativ-Filter',
+              value: settings.enableYouthProtection,
+              onChanged: (v) =>
+                  notifier.updateField(enableYouthProtection: v),
+            ),
+            _expandRow(
+              expanded: _showAdvancedSearch,
+              onToggle: () => setState(
+                  () => _showAdvancedSearch = !_showAdvancedSearch),
+              hiddenCount: 2,
+            ),
+            if (_showAdvancedSearch) ...[
+              _toggleRow(
+                icon: Icons.volume_up_outlined,
+                title: 'Doppel-Lauter startet Suche',
+                subtitle: '2x Lauter-Taste innerhalb 600 ms',
+                value: settings.enableVolumeShortcut,
+                onChanged: (v) =>
+                    notifier.updateField(enableVolumeShortcut: v),
+              ),
+              _toggleRow(
+                icon: Icons.thumbs_up_down_outlined,
+                title: 'Feedback ermoeglichen',
+                subtitle: 'Lern-Modell wird verfeinert',
+                value: settings.allowFeedback,
+                onChanged: (v) => notifier.updateField(allowFeedback: v),
+              ),
+            ],
+          ]),
+
+          // -------- Block 3: Datenschutz --------
+          _sectionLabel('Datenschutz'),
+          _groupCard(children: [
+            _row(
+              icon: Icons.history_rounded,
+              title: 'Chrome-Verlauf importieren',
+              value: 'Ein Tap',
+              onTap: () {
+                Haptics.tap();
+                quickImportChrome(context);
+              },
+            ),
+            _row(
+              icon: Icons.security_rounded,
+              title: l10n.reviewFeedback,
+              value: 'Manuell freigeben',
+              onTap: () => _showFeedbackExportDialog(context, ref),
+            ),
+          ]),
+
+          // -------- Notbremse separiert --------
+          const SizedBox(height: 12),
+          _groupCard(
+            children: [
+              _row(
+                icon: Icons.delete_forever_outlined,
+                title: 'Alle persoenlichen Daten loeschen',
+                value: 'Notbremse',
+                destructive: true,
+                onTap: () => _confirmWipe(context, ref),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: Text(
+              'Alle Eingaben bleiben verschluesselt auf diesem Geraet.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.black.withValues(alpha: 0.45),
+                fontWeight: FontWeight.w500,
               ),
             ),
-          _optionTile(
-            icon: Icons.cake_outlined,
-            title: 'Geburtsjahr',
-            subtitle: '${settings.jahr}',
-            onTap: () => _showYearPicker(context, ref, settings.jahr),
           ),
-          _optionTile(
-            icon: Icons.location_on_outlined,
-            title: AppLocalizations.of(context)!.zipLabel,
-            subtitle:
-                settings.plz.isEmpty ? 'Nicht festgelegt' : settings.plz,
-            onTap: () => _showTextDialog(
-              context,
-              title: AppLocalizations.of(context)!.zipLabel,
-              hint: 'z.B. 10115',
-              initial: settings.plz,
-              keyboard: TextInputType.number,
-              onSave: (v) => notifier.updateField(plz: v),
-            ),
-          ),
-          const SizedBox(height: 8),
-          _sectionLabel('Region & Sprache'),
-          _optionTile(
-            icon: Icons.language,
-            title: AppLocalizations.of(context)!.languageLabel,
-            subtitle: settings.language == 'de' ? 'Deutsch' : 'English',
-            onTap: () => notifier.updateField(
-                language: settings.language == 'de' ? 'en' : 'de'),
-          ),
-          _optionTile(
-            icon: Icons.public,
-            title: AppLocalizations.of(context)!.countryLabel,
-            subtitle: settings.country.toUpperCase(),
-            onTap: () => notifier.updateField(
-                country: settings.country == 'de' ? 'at' : 'de'),
-          ),
-          const SizedBox(height: 8),
-          _sectionLabel('Suche & Browser'),
-          _toggleTile(
-            icon: Icons.open_in_browser,
-            title: 'Ergebnisse in der App oeffnen',
-            subtitle: settings.openInApp
-                ? 'Privater In-App-Browser (alles weg beim Schliessen)'
-                : 'Externer Browser',
-            value: settings.openInApp,
-            onChanged: (v) => notifier.updateField(openInApp: v),
-          ),
-          _toggleTile(
-            icon: Icons.volume_up_outlined,
-            title: 'Doppel-Lauter-Taste startet Suche',
-            subtitle: settings.enableVolumeShortcut
-                ? '2x Lauter-Taste innerhalb 600ms loest Suche aus'
-                : 'Aus',
-            value: settings.enableVolumeShortcut,
-            onChanged: (v) =>
-                notifier.updateField(enableVolumeShortcut: v),
-          ),
-          _toggleTile(
-            icon: Icons.shield_outlined,
-            title: 'Jugendschutz',
-            subtitle: settings.enableYouthProtection
-                ? 'SafeSearch + Negativ-Filter aktiv'
-                : 'Aus',
-            value: settings.enableYouthProtection,
-            onChanged: (v) =>
-                notifier.updateField(enableYouthProtection: v),
-          ),
-          _toggleTile(
-            icon: Icons.thumbs_up_down_outlined,
-            title: 'Feedback ermoeglichen',
-            subtitle: settings.allowFeedback
-                ? 'Lern-Modell wird verfeinert'
-                : 'Aus',
-            value: settings.allowFeedback,
-            onChanged: (v) => notifier.updateField(allowFeedback: v),
-          ),
-          const SizedBox(height: 8),
-          _sectionLabel('Datenschutz'),
-          _optionTile(
-            icon: Icons.history_rounded,
-            title: 'Chrome-Verlauf importieren',
-            subtitle: 'Ein Tap: Datei waehlen, lokal reduzieren, loeschen',
-            onTap: () {
-              // Stage F: Ein-Klick-Import — kein separater Screen mehr.
-              quickImportChrome(context);
-            },
-          ),
-          _optionTile(
-            icon: Icons.security_rounded,
-            title: AppLocalizations.of(context)!.reviewFeedback,
-            subtitle: 'Datenexport manuell freigeben',
-            onTap: () => _showFeedbackExportDialog(context, ref),
-          ),
-          _optionTile(
-            icon: Icons.delete_forever_outlined,
-            title: 'Alle persoenlichen Daten loeschen',
-            subtitle: 'Vault zuruecksetzen (Notbremse)',
-            destructive: true,
-            onTap: () => _confirmWipe(context, ref),
-          ),
-          const SizedBox(height: 24),
         ],
       ),
     );
   }
 
-  // ---------- Section + Tiles ----------
+  // ---------- Bausteine im iOS-Settings-Stil ----------
 
   Widget _sectionLabel(String label) => Padding(
-        padding: const EdgeInsets.fromLTRB(8, 12, 8, 6),
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 8),
         child: Text(
           label.toUpperCase(),
           style: const TextStyle(
-            fontSize: 11,
+            fontSize: 12,
             color: Colors.black54,
             fontWeight: FontWeight.w800,
-            letterSpacing: 1.0,
+            letterSpacing: 0.8,
           ),
         ),
       );
 
-  Widget _optionTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-    bool destructive = false,
-  }) {
+  /// Eine "Card-Gruppe": EIN weisses Container, Zeilen durch Hairlines.
+  Widget _groupCard({required List<Widget> children}) {
+    final separated = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      separated.add(children[i]);
+      if (i < children.length - 1) {
+        separated.add(const Padding(
+          padding: EdgeInsets.only(left: 56),
+          child: Divider(
+              height: 1,
+              thickness: 0.5,
+              color: Color(0xFFE5E5EA)),
+        ));
+      }
+    }
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2)),
-        ],
       ),
-      child: ListTile(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: destructive
-                ? Colors.red.withValues(alpha: 0.1)
-                : FindUXProTheme.primaryPurple.withValues(alpha: 0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon,
-              color: destructive ? Colors.red : FindUXProTheme.primaryPurple,
-              size: 20),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: separated),
+    );
+  }
+
+  /// Standard-Zeile: Icon + Titel links, Wert + Chevron rechts.
+  Widget _row({
+    required IconData icon,
+    required String title,
+    required String value,
+    required VoidCallback onTap,
+    bool destructive = false,
+  }) {
+    final color = destructive
+        ? const Color(0xFFE53935)
+        : FindUXProTheme.primaryPurple;
+    return InkWell(
+      onTap: () {
+        Haptics.tap();
+        onTap();
+      },
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 52),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color:
+                      destructive ? color : Colors.black87,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                value,
+                textAlign: TextAlign.right,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: Colors.black54,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Icon(Icons.chevron_right_rounded,
+                color: Colors.black26, size: 22),
+          ],
         ),
-        title: Text(title,
-            style: TextStyle(
-                color: destructive ? Colors.red : Colors.black87,
-                fontWeight: FontWeight.w700,
-                fontSize: 15)),
-        subtitle: Text(subtitle,
-            style:
-                const TextStyle(color: Colors.black54, fontSize: 12)),
-        trailing: const Icon(Icons.arrow_forward_ios,
-            color: Colors.black26, size: 14),
-        onTap: () {
-          HapticFeedback.selectionClick();
-          onTap();
-        },
       ),
     );
   }
 
-  Widget _toggleTile({
+  /// Toggle-Zeile: Icon + Titel + Subtitle links, Switch rechts.
+  Widget _toggleRow({
     required IconData icon,
     required String title,
     required String subtitle,
@@ -253,43 +343,110 @@ class SettingsScreen extends ConsumerWidget {
     required ValueChanged<bool> onChanged,
   }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2)),
+      constraints: const BoxConstraints(minHeight: 56),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon,
+              color: FindUXProTheme.primaryPurple, size: 22),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Transform.scale(
+            scale: 0.9,
+            child: CupertinoSwitch(
+              value: value,
+              activeTrackColor: FindUXProTheme.primaryPurple,
+              onChanged: (v) {
+                Haptics.pick();
+                onChanged(v);
+              },
+            ),
+          ),
         ],
       ),
-      child: SwitchListTile(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        secondary: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: FindUXProTheme.primaryPurple.withValues(alpha: 0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon,
-              color: FindUXProTheme.primaryPurple, size: 20),
+    );
+  }
+
+  /// "Mehr anzeigen / Weniger" — progressive disclosure.
+  Widget _expandRow({
+    required bool expanded,
+    required VoidCallback onToggle,
+    required int hiddenCount,
+  }) {
+    return InkWell(
+      onTap: () {
+        Haptics.tap();
+        onToggle();
+      },
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 44),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            const SizedBox(width: 40),
+            Expanded(
+              child: Text(
+                expanded ? 'Weniger anzeigen' : 'Mehr anzeigen',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: FindUXProTheme.primaryPurple,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (!expanded)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: FindUXProTheme.primaryPurple
+                      .withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '+$hiddenCount',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: FindUXProTheme.primaryPurple,
+                  ),
+                ),
+              ),
+            const SizedBox(width: 6),
+            Icon(
+              expanded
+                  ? Icons.expand_less_rounded
+                  : Icons.expand_more_rounded,
+              color: FindUXProTheme.primaryPurple,
+              size: 22,
+            ),
+          ],
         ),
-        title: Text(title,
-            style: const TextStyle(
-                color: Colors.black87,
-                fontWeight: FontWeight.w700,
-                fontSize: 15)),
-        subtitle: Text(subtitle,
-            style:
-                const TextStyle(color: Colors.black54, fontSize: 12)),
-        value: value,
-        activeThumbColor: FindUXProTheme.primaryPurple,
-        onChanged: (v) {
-          HapticFeedback.selectionClick();
-          onChanged(v);
-        },
       ),
     );
   }
@@ -312,7 +469,7 @@ class SettingsScreen extends ConsumerWidget {
               padding: EdgeInsets.all(20),
               child: Text('Beschaeftigung',
                   style: TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold)),
+                      fontSize: 18, fontWeight: FontWeight.w800)),
             ),
             ..._employmentLabels.entries.map((e) => RadioListTile<String>(
                   title: Text(e.value),
@@ -321,6 +478,7 @@ class SettingsScreen extends ConsumerWidget {
                   activeColor: FindUXProTheme.primaryPurple,
                   onChanged: (v) {
                     if (v != null) {
+                      Haptics.pick();
                       ref
                           .read(settingsProvider.notifier)
                           .updateField(employmentType: v);
@@ -353,9 +511,12 @@ class SettingsScreen extends ConsumerWidget {
                   scrollController: FixedExtentScrollController(
                       initialItem: initial < 0 ? 0 : initial),
                   itemExtent: 36,
-                  onSelectedItemChanged: (i) => ref
-                      .read(settingsProvider.notifier)
-                      .updateField(jahr: years[i]),
+                  onSelectedItemChanged: (i) {
+                    Haptics.pick();
+                    ref
+                        .read(settingsProvider.notifier)
+                        .updateField(jahr: years[i]);
+                  },
                   children:
                       years.map((y) => Center(child: Text('$y'))).toList(),
                 ),
@@ -400,6 +561,7 @@ class SettingsScreen extends ConsumerWidget {
               child: const Text('Abbrechen')),
           TextButton(
             onPressed: () {
+              Haptics.done();
               onSave(controller.text.trim());
               Navigator.pop(context);
             },
@@ -416,13 +578,15 @@ class SettingsScreen extends ConsumerWidget {
       builder: (context) => AlertDialog(
         title: const Text('Wirklich loeschen?'),
         content: const Text(
-            'Alle persoenlichen Daten (Beschaeftigung, PLZ, Jahrgang, Lern-Modell) werden unwiderruflich entfernt.'),
+            'Alle persoenlichen Daten (Beschaeftigung, PLZ, Jahrgang, '
+            'Lern-Modell) werden unwiderruflich entfernt.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Abbrechen')),
           TextButton(
             onPressed: () async {
+              Haptics.warn();
               await ref.read(settingsProvider.notifier).wipeAll();
               if (context.mounted) Navigator.pop(context);
             },
@@ -521,6 +685,7 @@ class SettingsScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(14)),
                 ),
                 onPressed: () async {
+                  Haptics.warn();
                   await learningService.clearAllFeedback();
                   if (context.mounted) Navigator.pop(context);
                 },

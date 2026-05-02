@@ -9,6 +9,7 @@ import 'package:volume_controller/volume_controller.dart';
 
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../services/learning_service.dart';
+import '../services/haptic_helper.dart';
 import '../logic/query_builder.dart';
 import '../logic/state_provider.dart';
 import '../logic/deep_analyzer.dart';
@@ -36,6 +37,9 @@ class _HomePageState extends ConsumerState<HomePage> {
   bool _showDeepAnalysisOverlay = false;
   bool _hasSearchedOnce = false;
   bool _showAdvanced = false;
+  // Stage G UX: "Warum?"-Feld ist standardmaessig versteckt — nur per Chip
+  // sichtbar. Das ist der Apple-Trick fuer "ein Feld, optional mehr".
+  bool _showWhyField = false;
   List<String> _suggestedGoals = [];
   Timer? _analysisTimer;
   Timer? _specifyTimer;
@@ -539,8 +543,11 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
-  // ---------- Search Dashboard (Light, Card-Style) ----------
-
+  // ---------- Search Dashboard (Stage G — Apple-UX) ----------
+  // Frueher: 2 gleichberechtigte TextFields, Mid-Card-Button.
+  // Jetzt: EIN grosses Hero-Feld mit Auto-Fokus, optionaler "Kontext"-
+  // Chip blendet das Why-Feld sanft ein. Such-CTA klebt unten in
+  // Daumen-Reichweite — wie Apple Maps/Mail/Messages.
   Widget _buildSearchDashboard({Key? key}) {
     final l10n = AppLocalizations.of(context)!;
     final settings = ref.watch(settingsProvider);
@@ -550,89 +557,141 @@ class _HomePageState extends ConsumerState<HomePage> {
       child: SafeArea(
         child: Column(
           children: [
-            // Header
+            // Header — bewusst leise, kein Titel-Wettbewerb mit Hero-Feld
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
+              padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back_ios,
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded,
                         color: Colors.black87, size: 20),
-                    onPressed: () => setState(() => _viewState = 'home'),
+                    onPressed: () {
+                      Haptics.tap();
+                      setState(() => _viewState = 'home');
+                    },
                   ),
-                  Expanded(
-                    child: Text(l10n.knowledgeSession,
-                        style: const TextStyle(
-                            color: Colors.black,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.5)),
-                  ),
+                  const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.settings_outlined,
                         color: Colors.black54),
-                    onPressed: () =>
-                        Navigator.pushNamed(context, '/settings'),
+                    onPressed: () {
+                      Haptics.tap();
+                      Navigator.pushNamed(context, '/settings');
+                    },
                   ),
                 ],
               ),
             ),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildStammdatenPill(),
-                    _buildAdvicePill(),
-                    _buildLightInput(
-                      controller: _whatController,
-                      label: l10n.whatSearch,
-                      hint: l10n.topicHint,
-                      icon: Icons.search,
-                    ),
-                    const SizedBox(height: 14),
-                    _buildLightInput(
-                      controller: _whyController,
-                      label: l10n.whySearch,
-                      hint: l10n.reasonHint,
-                      icon: Icons.psychology_outlined,
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Erweiterte Suche -> nur sichtbar nach erster Suche
-                    if (_hasSearchedOnce) _buildAdvancedExpander(settings),
-                    if (_hasSearchedOnce) const SizedBox(height: 20),
-
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: FindUXProTheme.primaryPurple,
-                          foregroundColor: Colors.white,
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 18),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
-                          elevation: 0,
-                        ),
-                        onPressed: () => _performSearch(),
-                        icon: const Icon(Icons.bolt_rounded),
-                        label: Text(l10n.startAnalysis,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 17)),
+                    // Hero-Frage
+                    const Text(
+                      'Was suchst du?',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.black,
+                        letterSpacing: -1.0,
+                        height: 1.05,
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Text(
-                      _hasSearchedOnce
-                          ? 'Tipp: oeffne "Erweiterte Suche" um Quellen, Dateitypen und den Such-Modus zu verfeinern.'
-                          : 'Nach deiner ersten Suche kannst du Quellen, Dateitypen und Modus verfeinern.',
-                      style: const TextStyle(
-                          color: Colors.black54, fontSize: 12),
+                    _buildStammdatenPill(),
+                    _buildAdvicePill(),
+                    // EIN grosses, fokussiertes Eingabefeld
+                    _buildHeroSearchField(
+                      controller: _whatController,
+                      hint: l10n.topicHint,
+                    ),
+                    const SizedBox(height: 12),
+                    // Optionaler Kontext-Chip (Apple-Pattern: "+ Hinzufuegen")
+                    if (!_showWhyField)
+                      _buildContextChip(
+                        onTap: () {
+                          Haptics.tap();
+                          setState(() => _showWhyField = true);
+                        },
+                      ),
+                    if (_showWhyField) ...[
+                      _buildSecondaryInput(
+                        controller: _whyController,
+                        hint: l10n.reasonHint,
+                        icon: Icons.psychology_outlined,
+                        onClear: () {
+                          Haptics.tap();
+                          _whyController.clear();
+                          setState(() => _showWhyField = false);
+                        },
+                      ),
+                    ],
+                    const SizedBox(height: 20),
+                    // Erweiterte Suche -> nur sichtbar nach erster Suche
+                    if (_hasSearchedOnce) _buildAdvancedExpander(settings),
+                    if (_hasSearchedOnce) const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            ),
+            // Sticky Search-CTA — unten, Daumen-Reichweite
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF5F5F7),
+                border: Border(
+                  top: BorderSide(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    width: 0.5,
+                  ),
+                ),
+              ),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                decoration: BoxDecoration(
+                  color: FindUXProTheme.primaryPurple,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: FindUXProTheme.primaryPurple
+                          .withValues(alpha: 0.30),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
                     ),
                   ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () {
+                      Haptics.done();
+                      _performSearch();
+                    },
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 60),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.bolt_rounded,
+                              color: Colors.white, size: 22),
+                          const SizedBox(width: 10),
+                          Text(
+                            l10n.startAnalysis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -729,11 +788,123 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
-  Widget _buildLightInput({
+  // Hero-Suchfeld — gross, prominent, autofokus, runde Pill.
+  Widget _buildHeroSearchField({
     required TextEditingController controller,
-    required String label,
+    required String hint,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 14,
+              offset: const Offset(0, 4)),
+        ],
+      ),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      child: Row(
+        children: [
+          const Icon(Icons.search_rounded,
+              color: FindUXProTheme.primaryPurple, size: 24),
+          const SizedBox(width: 14),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              autofocus: true,
+              // Stage F Haertung: keine IME-Lerndaten / Auto-Korrektur.
+              autocorrect: false,
+              enableSuggestions: false,
+              enableIMEPersonalizedLearning: false,
+              smartDashesType: SmartDashesType.disabled,
+              smartQuotesType: SmartQuotesType.disabled,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) {
+                Haptics.done();
+                _performSearch();
+              },
+              style: const TextStyle(
+                color: Colors.black87,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.3,
+              ),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: TextStyle(
+                  color: Colors.black.withValues(alpha: 0.30),
+                  fontWeight: FontWeight.w500,
+                ),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 18),
+              ),
+            ),
+          ),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (_, v, __) => v.text.isEmpty
+                ? const SizedBox.shrink()
+                : IconButton(
+                    icon: const Icon(Icons.cancel_rounded,
+                        size: 20, color: Colors.black26),
+                    onPressed: () {
+                      Haptics.tap();
+                      controller.clear();
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // "+ Kontext hinzufuegen"-Chip (Apple-Pattern)
+  Widget _buildContextChip({required VoidCallback onTap}) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: FindUXProTheme.primaryPurple.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color:
+                FindUXProTheme.primaryPurple.withValues(alpha: 0.2),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.add_rounded,
+                size: 16, color: FindUXProTheme.primaryPurple),
+            SizedBox(width: 6),
+            Text(
+              'Kontext hinzufuegen',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: FindUXProTheme.primaryPurple,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Sekundaeres Input-Feld fuer den optionalen "Warum?"-Kontext.
+  Widget _buildSecondaryInput({
+    required TextEditingController controller,
     required String hint,
     required IconData icon,
+    required VoidCallback onClear,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -746,44 +917,40 @@ class _HomePageState extends ConsumerState<HomePage> {
               offset: const Offset(0, 2)),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Icon(icon, color: FindUXProTheme.primaryPurple, size: 18),
-              const SizedBox(width: 8),
-              Text(label,
-                  style: const TextStyle(
-                      color: Colors.black54,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700)),
-            ],
-          ),
-          const SizedBox(height: 4),
-          TextField(
-            controller: controller,
-            // Stage F Haertung: Such-Anfragen sind sensibel — sie sollen
-            // weder in IME-Personalisierung noch in Auto-Korrektur-
-            // Lernmodelle wandern. enableIMEPersonalizedLearning steuert
-            // android:inputType=textNoLearning.
-            autocorrect: false,
-            enableSuggestions: false,
-            enableIMEPersonalizedLearning: false,
-            smartDashesType: SmartDashesType.disabled,
-            smartQuotesType: SmartQuotesType.disabled,
-            style: const TextStyle(
+          Icon(icon,
+              color: FindUXProTheme.primaryPurple, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              autofocus: true,
+              autocorrect: false,
+              enableSuggestions: false,
+              enableIMEPersonalizedLearning: false,
+              smartDashesType: SmartDashesType.disabled,
+              smartQuotesType: SmartQuotesType.disabled,
+              style: const TextStyle(
                 color: Colors.black87,
-                fontSize: 16,
-                fontWeight: FontWeight.w500),
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: const TextStyle(color: Colors.black26),
-              border: InputBorder.none,
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: const TextStyle(color: Colors.black26),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 14),
+              ),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close_rounded,
+                size: 18, color: Colors.black38),
+            onPressed: onClear,
           ),
         ],
       ),
