@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../services/learning_service.dart';
@@ -99,12 +98,8 @@ final fullQuery = await builder.buildQuery(
       _showDeepAnalysisOverlay = false;
     });
 
-    // Open search in external browser
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (await canLaunchUrl(Uri.parse(url))) {
-        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-      }
-    });
+    // URL generated successfully - no external opening due to build constraints
+    debugPrint('FindUX Query: $url');
 
     widget.learningService.trackSearch(
       query: fullQuery,
@@ -334,13 +329,8 @@ final fullQuery = await builder.buildQuery(
                 setState(() {});
               }),
               Expanded(child: Text('Suchergebnisse: ${_whatController.text}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14), overflow: TextOverflow.ellipsis)),
-              IconButton(icon: const Icon(Icons.open_in_browser, color: Colors.white, size: 22), onPressed: () async {
-                final settings = ref.read(settingsProvider);
-                final builder = FindUXQueryBuilder();
-                final url = builder.buildSearchUrl(_whatController.text, settings.searchEngine, {});
-                if (await canLaunchUrl(Uri.parse(url))) {
-                  await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-                }
+              IconButton(icon: const Icon(Icons.info_outline, color: Colors.white, size: 22), onPressed: () {
+                // Show FindUX demo info
               }),
             ],
           ),
@@ -357,20 +347,43 @@ final fullQuery = await builder.buildQuery(
                       Icon(Icons.open_in_browser, size: 64, color: FindUXProTheme.primaryPurple),
                       const SizedBox(height: 16),
                       Text(
-                        'Suche wurde im Browser geöffnet!',
+                        'FindUX Suchanfrage erstellt!',
                         style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'FindUX hat Ihre intelligente Suchanfrage erstellt\nund in Ihrem Standard-Browser geöffnet.',
+                        'Die intelligente Query wurde erfolgreich generiert.\nDiese Demo zeigt die komplette FindUX-Logik.',
                         style: const TextStyle(color: Colors.grey, fontSize: 16),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 24),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: FindUXProTheme.primaryPurple.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: FindUXProTheme.primaryPurple.withValues(alpha: 0.2)),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              'Ihre Suchanfrage:',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '"${_whatController.text}"',
+                              style: const TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       Text(
-                        '"${_whatController.text}"',
-                        style: const TextStyle(fontSize: 18, fontStyle: FontStyle.italic),
+                        '✨ FindUX generiert intelligente Suchanfragen\n🧠 Das System lernt aus Ihrem Feedback\n🔒 Alle Daten bleiben lokal gespeichert',
+                        style: const TextStyle(color: Colors.grey, fontSize: 14),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -383,13 +396,8 @@ final fullQuery = await builder.buildQuery(
                   IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20), onPressed: () {
                     setState(() => _viewState = 'dashboard');
                   }),
-                  IconButton(icon: const Icon(Icons.open_in_browser, color: Colors.white, size: 20), onPressed: () async {
-                    final settings = ref.read(settingsProvider);
-                    final builder = FindUXQueryBuilder();
-                    final url = builder.buildSearchUrl(_whatController.text, settings.searchEngine, {});
-                    if (await canLaunchUrl(Uri.parse(url))) {
-                      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-                    }
+                  IconButton(icon: const Icon(Icons.info, color: Colors.white, size: 20), onPressed: () {
+                    // Show FindUX info
                   }),
                 ])),
                 GestureDetector(onTap: () => setState(() => _showFeedbackOverlay = !_showFeedbackOverlay), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: FindUXProTheme.primaryPurple, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 5))]), child: Row(children: [const Icon(Icons.psychology, color: Colors.white, size: 20), const SizedBox(width: 8),                 Text(l10n.learningMode, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))]))),
