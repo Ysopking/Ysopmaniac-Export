@@ -18,6 +18,8 @@ import '../theme.dart';
 import '../utils/findux_stopwords.dart';
 import '../coach/coach_models.dart';
 import '../coach/precision_advisor.dart';
+import '../coach/phrase_detector.dart';
+import '../coach/vagueness_detector.dart';
 import 'incognito_browser_screen.dart';
 import 'widgets/inline_coach_section.dart';
 import 'widgets/trust_debug_overlay.dart';
@@ -258,6 +260,29 @@ class _HomePageState extends ConsumerState<HomePage> {
   }) async {
     if (_whatController.text.trim().isEmpty) return;
 
+    // A1: Bekannte Mehr-Wort-Phrasen automatisch in Anführungszeichen setzen
+    // (PhraseDetector.autoQuote) — nur wenn der User noch keine Quotes gesetzt hat.
+    // Controller-Text bleibt unveraendert; effectiveWhat fliesst nur in buildQuery.
+    final effectiveWhat =
+        PhraseDetector.autoQuote(_whatController.text.trim());
+
+    // A2: Vagheits-Erkennung — wenn WAS + WARUM beide zu kurz/leer,
+    // snackbar-Hinweis zeigen und InlineCoachSection sanft auffordern.
+    final isVague = VaguenessDetector.isVague(
+      what: _whatController.text.trim(),
+      why: _whyController.text.trim(),
+    );
+    if (isVague && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Tipp: Kontext schaerft die Ergebnisse — tippe ✨ Schaerfen auf'),
+          duration: Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+
     if (_viewState != 'results') {
       _startDeepAnalysis();
     }
@@ -300,7 +325,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     final effectiveMode = resolvedInjection?.modeOverride ?? settings.mode;
     final fullQuery = overrideQuery ??
         await builder.buildQuery(
-          what: _whatController.text,
+          what: effectiveWhat,
           why: contextWhy,
           filters: allFilters,
           settings: settingsMap,

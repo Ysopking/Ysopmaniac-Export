@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../coach/coach_models.dart';
 import '../../coach/theme_detector.dart';
 import '../../theme.dart';
@@ -7,9 +8,17 @@ import '../../theme.dart';
 /// Stage 18 — Ambient Coach
 ///
 /// Eine kollabierte Inline-Sektion unter dem Suchfeld.
-/// Header: "✨ Schärfen — N aktiv"
+/// Header: "✨ Schaerfen — N aktiv"
 /// Beim Antippen: Verfeinerungs-Chips passend zum erkannten Theme.
 /// Kein Popup, kein Timer — ruhig, durch Scrollen entdeckbar.
+///
+/// Personalisierung (B2):
+///   Beim Start und bei Theme-Wechsel werden weight_chip_*-Keys geladen.
+///   Chips mit Gewicht > 1.15 erhalten einen subtilen Tint als Hinweis,
+///   dass der User sie frueher oft genutzt und positiv bewertet hat.
+///
+///   ThemeDetector.detect() (B3) bekommt geladene weight_theme_*-Gewichte
+///   als Tiebreaker wenn kein Trigger-Wort matcht.
 class InlineCoachSection extends StatefulWidget {
   final String what;
   final String why;
@@ -33,6 +42,11 @@ class _InlineCoachSectionState extends State<InlineCoachSection>
   late AnimationController _animController;
   late Animation<double> _expandAnimation;
 
+  // B2: Gelernte Chip-Gewichte — key = "themeId__dimId__chipId"
+  Map<String, double> _chipWeights = {};
+  // B3: weight_theme_*-Gewichte fuer personalisierten ThemeDetector-Fallback
+  Map<String, double> _themeWeights = {};
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +58,7 @@ class _InlineCoachSectionState extends State<InlineCoachSection>
       parent: _animController,
       curve: Curves.easeOutCubic,
     );
+    _loadWeights();
   }
 
   @override
@@ -52,7 +67,28 @@ class _InlineCoachSectionState extends State<InlineCoachSection>
     super.dispose();
   }
 
-  CoachTheme get _theme => ThemeDetector.detect(widget.what, widget.why);
+  // B2 + B3: Lerngewichte einmalig laden (oder nach Theme-Wechsel neu laden)
+  Future<void> _loadWeights() async {
+    final prefs = await SharedPreferences.getInstance();
+    final chips = <String, double>{};
+    final themes = <String, double>{};
+    for (final k in prefs.getKeys()) {
+      if (k.startsWith('weight_chip_')) {
+        chips[k.substring('weight_chip_'.length)] = prefs.getDouble(k) ?? 1.0;
+      } else if (k.startsWith('weight_theme_')) {
+        themes[k] = prefs.getDouble(k) ?? 1.0;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _chipWeights = chips;
+      _themeWeights = themes;
+    });
+  }
+
+  // B3: personalisierten ThemeDetector nutzen
+  CoachTheme get _theme =>
+      ThemeDetector.detect(widget.what, widget.why, weights: _themeWeights);
 
   void _toggle() {
     HapticFeedback.selectionClick();
@@ -91,7 +127,8 @@ class _InlineCoachSectionState extends State<InlineCoachSection>
         ));
       }
     });
-    widget.onChanged(CoachInjection.fromChoices(_choices), List.unmodifiable(_choices));
+    widget.onChanged(
+        CoachInjection.fromChoices(_choices), List.unmodifiable(_choices));
   }
 
   bool _isSelected(String themeId, CoachDimension dim, CoachChip chip) =>
@@ -106,13 +143,17 @@ class _InlineCoachSectionState extends State<InlineCoachSection>
   void didUpdateWidget(InlineCoachSection old) {
     super.didUpdateWidget(old);
     if (old.what != widget.what || old.why != widget.why) {
-      final oldTheme = ThemeDetector.detect(old.what, old.why);
-      final newTheme = ThemeDetector.detect(widget.what, widget.why);
+      final oldTheme =
+          ThemeDetector.detect(old.what, old.why, weights: _themeWeights);
+      final newTheme = _theme;
       if (oldTheme.id != newTheme.id) {
         setState(() {
           _choices.removeWhere((c) => c.themeId == oldTheme.id);
         });
-        widget.onChanged(CoachInjection.fromChoices(_choices), List.unmodifiable(_choices));
+        widget.onChanged(
+            CoachInjection.fromChoices(_choices), List.unmodifiable(_choices));
+        // B2: Gewichte nach Theme-Wechsel neu laden (neue Chips sichtbar)
+        _loadWeights();
       }
     }
   }
@@ -150,8 +191,8 @@ class _InlineCoachSectionState extends State<InlineCoachSection>
                   Expanded(
                     child: Text(
                       activeCount == 0
-                          ? 'Schärfen — 0 aktiv'
-                          : 'Schärfen — $activeCount aktiv',
+                          ? 'Schaerfen — 0 aktiv'
+                          : 'Schaerfen — $activeCount aktiv',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -232,6 +273,10 @@ class _InlineCoachSectionState extends State<InlineCoachSection>
                             chip: chip,
                             selected: _isSelected(theme.id, dim, chip),
                             onTap: () => _toggleChip(theme, dim, chip),
+                            // B2: Gelernte Gewicht uebergeben
+                            learnedWeight: _chipWeights[
+                                    '${theme.id}__${dim.id}__${chip.id}'] ??
+                                1.0,
                           ),
                       ],
                     ),
@@ -251,15 +296,19 @@ class _ChipTile extends StatelessWidget {
   final CoachChip chip;
   final bool selected;
   final VoidCallback onTap;
+  /// B2: Lerngewicht — > 1.15 = subtiler Tint als Hinweis "oft genutzt"
+  final double learnedWeight;
 
   const _ChipTile({
     required this.chip,
     required this.selected,
     required this.onTap,
+    this.learnedWeight = 1.0,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isFav = learnedWeight > 1.15 && !selected;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -268,13 +317,17 @@ class _ChipTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected
               ? FindUXProTheme.primaryPurple
-              : FindUXProTheme.primaryPurple.withValues(alpha: 0.06),
+              : (isFav
+                  ? FindUXProTheme.primaryPurple.withValues(alpha: 0.10)
+                  : FindUXProTheme.primaryPurple.withValues(alpha: 0.06)),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: selected
                 ? FindUXProTheme.primaryPurple
-                : FindUXProTheme.primaryPurple.withValues(alpha: 0.2),
-            width: 1,
+                : (isFav
+                    ? FindUXProTheme.primaryPurple.withValues(alpha: 0.40)
+                    : FindUXProTheme.primaryPurple.withValues(alpha: 0.2)),
+            width: isFav ? 1.2 : 1,
           ),
         ),
         child: Row(
@@ -288,10 +341,28 @@ class _ChipTile extends StatelessWidget {
               chip.label,
               style: TextStyle(
                 fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: selected ? Colors.white : FindUXProTheme.primaryPurple,
+                fontWeight: isFav || selected
+                    ? FontWeight.w700
+                    : FontWeight.w600,
+                color: selected
+                    ? Colors.white
+                    : (isFav
+                        ? FindUXProTheme.primaryPurple
+                        : FindUXProTheme.primaryPurple.withValues(alpha: 0.8)),
               ),
             ),
+            // B2: Kleines Punkt-Badge fuer "oft genutzt"
+            if (isFav) ...[
+              const SizedBox(width: 5),
+              Container(
+                width: 5,
+                height: 5,
+                decoration: const BoxDecoration(
+                  color: FindUXProTheme.primaryPurple,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
           ],
         ),
       ),

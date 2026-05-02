@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../theme.dart';
 import '../logic/state_provider.dart';
@@ -17,6 +18,14 @@ import 'quality_estimator.dart';
 ///   - CoachResult(choices: [...])            -> normale Suche mit Auswahl
 ///   - CoachResult(overrideQuery: '...')      -> User hat manuell editiert
 ///   - null                                    -> User hat zurueckgenavigiert
+///
+/// Personalisierung (B1):
+///   Beim Start werden weight_chip_*-Keys aus SharedPreferences gelesen.
+///   Chips mit Gewicht > 1.30 werden automatisch vorausgewaehlt.
+///   Chips mit Gewicht > 1.15 erhalten ein "★ Oft genutzt"-Badge.
+///
+///   QualityEstimator (B4) wird mit QualityPersonalization aufgerufen:
+///   bevorzugter Modus + Zufriedenheits-Score aus weight_mode_*.
 class CoachScreen extends ConsumerStatefulWidget {
   final CoachTheme initialTheme;
   final String what;
@@ -50,11 +59,21 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
   final TextEditingController _previewCtrl = TextEditingController();
   final TextEditingController _customCtrl = TextEditingController();
 
+  // B1: Gelernte Chip-Praeferenzen aus SharedPreferences
+  // key = "themeId__dimId__chipId", value = true wenn Gewicht > 1.15
+  Map<String, bool> _learnedFav = {};
+  // Chips mit Gewicht > 1.30 werden vorausgewaehlt
+  Set<String> _learnedPre = {};
+  // B4: Personalisierungs-Daten fuer QualityEstimator
+  double _personalSatisfaction = 0.5;
+  String _personalPreferredMode = 'standard';
+
   @override
   void initState() {
     super.initState();
     _theme = widget.initialTheme;
     _rebuildPreview();
+    _loadLearnedData();
   }
 
   @override
@@ -63,6 +82,63 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
     _customCtrl.dispose();
     super.dispose();
   }
+
+  // ---------- B1 + B4: Lerngewichte laden ----------
+
+  Future<void> _loadLearnedData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final fav = <String, bool>{};
+    final pre = <String>{};
+    double bestModeW = 0.0;
+    String bestMode = 'standard';
+
+    for (final k in prefs.getKeys()) {
+      if (k.startsWith('weight_chip_')) {
+        final w = prefs.getDouble(k) ?? 1.0;
+        final chipKey = k.substring('weight_chip_'.length);
+        if (w > 1.15) fav[chipKey] = true;
+        if (w > 1.30) pre.add(chipKey);
+      }
+      if (k.startsWith('weight_mode_')) {
+        final w = prefs.getDouble(k) ?? 1.0;
+        if (w > bestModeW) {
+          bestModeW = w;
+          bestMode = k.substring('weight_mode_'.length);
+        }
+      }
+    }
+
+    // Approximation overallSatisfaction aus mode-Gewichten:
+    // Gewicht 1.0 = neutral (0.5), 2.5 = sehr hoch (1.0)
+    final sat = bestModeW > 1.0
+        ? ((bestModeW - 1.0) / 1.5).clamp(0.0, 1.0)
+        : 0.5;
+
+    if (!mounted) return;
+    setState(() {
+      _learnedFav = fav;
+      _learnedPre = pre;
+      _personalSatisfaction = sat;
+      _personalPreferredMode = bestMode;
+    });
+
+    // Vorauswahl: Chips mit Gewicht > 1.30 fuer aktuelles Theme markieren
+    if (pre.isNotEmpty) {
+      bool anyAdded = false;
+      for (final dim in _theme.dimensions) {
+        for (final chip in dim.chips) {
+          final key = '${_theme.id}__${dim.id}__${chip.id}';
+          if (pre.contains(key)) {
+            _selected.putIfAbsent(dim.id, () => <String>{}).add(chip.id);
+            anyAdded = true;
+          }
+        }
+      }
+      if (anyAdded && mounted) _rebuildPreview();
+    }
+  }
+
+  // ---------- Query / Preview ----------
 
   List<CoachChoice> _collectChoices() {
     final result = <CoachChoice>[];
@@ -160,9 +236,8 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Abbrechen')),
           TextButton(
-              onPressed: () =>
-                  Navigator.pop(ctx, _customCtrl.text.trim()),
-              child: const Text('Hinzufügen')),
+              onPressed: () => Navigator.pop(ctx, _customCtrl.text.trim()),
+              child: const Text('Hinzufuegen')),
         ],
       ),
     );
@@ -185,7 +260,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
           children: [
             const Padding(
               padding: EdgeInsets.all(16),
-              child: Text('Anderes Thema wählen',
+              child: Text('Anderes Thema waehlen',
                   style: TextStyle(
                       fontSize: 18, fontWeight: FontWeight.bold)),
             ),
@@ -210,6 +285,18 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
         _custom.clear();
       });
       _rebuildPreview();
+      // Vorauswahl fuer neues Theme neu anwenden
+      if (_learnedPre.isNotEmpty) {
+        for (final dim in _theme.dimensions) {
+          for (final chip in dim.chips) {
+            final key = '${_theme.id}__${dim.id}__${chip.id}';
+            if (_learnedPre.contains(key)) {
+              _selected.putIfAbsent(dim.id, () => <String>{}).add(chip.id);
+            }
+          }
+        }
+        if (mounted) _rebuildPreview();
+      }
     }
   }
 
@@ -218,8 +305,17 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
   @override
   Widget build(BuildContext context) {
     final choices = _collectChoices();
+    // B4: Personalisierter QualityEstimator
     final qr = QualityEstimator.estimate(
-        what: widget.what, why: widget.why, choices: choices);
+      what: widget.what,
+      why: widget.why,
+      choices: choices,
+      personalization: QualityPersonalization(
+        overallSatisfaction: _personalSatisfaction,
+        preferredMode: _personalPreferredMode,
+        currentMode: widget.currentMode,
+      ),
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
@@ -271,7 +367,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: Text(
-                    'Tippe Antworten an, um deine Suche zu schärfen.',
+                    'Tippe Antworten an, um deine Suche zu schaerfen.',
                     style: TextStyle(
                         color: Colors.black.withValues(alpha: 0.6),
                         fontSize: 13,
@@ -321,11 +417,14 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
             children: [
               ...dim.chips.map((chip) {
                 final isSel = selected.contains(chip.id);
+                final chipKey = '${_theme.id}__${dim.id}__${chip.id}';
+                final isFav = _learnedFav[chipKey] == true && !isSel;
                 return _chipButton(
                   label: chip.emoji.isEmpty
                       ? chip.label
                       : '${chip.emoji} ${chip.label}',
                   isSel: isSel,
+                  isFav: isFav,
                   onTap: () => _toggleChip(dim, chip),
                 );
               }),
@@ -345,37 +444,77 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
     );
   }
 
-  Widget _chipButton(
-      {required String label,
-      required bool isSel,
-      required VoidCallback onTap,
-      bool outlined = false}) {
+  Widget _chipButton({
+    required String label,
+    required bool isSel,
+    required VoidCallback onTap,
+    bool outlined = false,
+    bool isFav = false,
+  }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSel
-              ? FindUXProTheme.primaryPurple
-              : (outlined ? Colors.transparent : const Color(0xFFF0F0F5)),
-          border: outlined && !isSel
-              ? Border.all(
-                  color: FindUXProTheme.primaryPurple
-                      .withValues(alpha: 0.6),
-                  style: BorderStyle.solid)
-              : null,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(label,
-            style: TextStyle(
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
               color: isSel
-                  ? Colors.white
+                  ? FindUXProTheme.primaryPurple
                   : (outlined
-                      ? FindUXProTheme.primaryPurple
-                      : Colors.black87),
-              fontSize: 13,
-              fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
-            )),
+                      ? Colors.transparent
+                      : (isFav
+                          ? FindUXProTheme.primaryPurple.withValues(alpha: 0.10)
+                          : const Color(0xFFF0F0F5))),
+              border: outlined && !isSel
+                  ? Border.all(
+                      color: FindUXProTheme.primaryPurple
+                          .withValues(alpha: 0.6),
+                      style: BorderStyle.solid)
+                  : (isFav && !isSel
+                      ? Border.all(
+                          color: FindUXProTheme.primaryPurple
+                              .withValues(alpha: 0.35),
+                          width: 1)
+                      : null),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(label,
+                style: TextStyle(
+                  color: isSel
+                      ? Colors.white
+                      : (outlined
+                          ? FindUXProTheme.primaryPurple
+                          : (isFav
+                              ? FindUXProTheme.primaryPurple
+                              : Colors.black87)),
+                  fontSize: 13,
+                  fontWeight: isSel || isFav
+                      ? FontWeight.w700
+                      : FontWeight.w500,
+                )),
+          ),
+          // B1: Kleines Stern-Badge fuer oft genutzte Chips
+          if (isFav)
+            Positioned(
+              top: -4,
+              right: -4,
+              child: Container(
+                width: 14,
+                height: 14,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: FindUXProTheme.primaryPurple,
+                  shape: BoxShape.circle,
+                ),
+                child: const Text('★',
+                    style: TextStyle(
+                        fontSize: 7,
+                        color: Colors.white,
+                        height: 1)),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -440,9 +579,8 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
                 TextButton.icon(
                   onPressed: () => setState(
                       () => _previewCtrl.text = _previewText),
-                  icon:
-                      const Icon(Icons.refresh, size: 16),
-                  label: const Text('Auf Coach zurücksetzen',
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Auf Coach zuruecksetzen',
                       style: TextStyle(fontSize: 12)),
                 ),
               ],
@@ -475,7 +613,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
         children: [
           Row(
             children: [
-              const Text('Qualität',
+              const Text('Qualitaet',
                   style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
@@ -491,7 +629,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
                 Tooltip(
                   message: qr.warnings.join('\n'),
                   triggerMode: TooltipTriggerMode.tap,
-                  child: Icon(Icons.info_outline,
+                  child: const Icon(Icons.info_outline,
                       color: Colors.orange, size: 16),
                 ),
             ],
