@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../logic/state_provider.dart';
+import '../screens/interests_screen.dart';
 import '../services/chrome_import_quick.dart';
 import '../services/haptic_helper.dart';
 import '../theme.dart';
@@ -73,6 +74,22 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     Haptics.pick();
     await _persistDefaults();
     if (!mounted) return;
+    widget.onComplete();
+  }
+
+  Future<void> _handleInterests() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    Haptics.tap();
+    // Defaults schreiben, damit settingsProvider mit leeren Interessen
+    // initialisiert ist und die InterestsScreen sofort lesen/schreiben kann.
+    await _persistDefaults();
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const InterestsScreen()),
+    );
+    if (!mounted) return;
+    Haptics.done();
     widget.onComplete();
   }
 
@@ -177,18 +194,46 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 onTap: _busy ? null : _handleImport,
                 busy: _busy,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
+              // Sekundaerer CTA: Interessen waehlen statt Verlauf importieren.
+              // Bewusst Outline-Style — kein Konkurrenz-Lila zum Hero-Button.
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _handleInterests,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: FindUXProTheme.primaryPurple,
+                  side: BorderSide(
+                    color: FindUXProTheme.primaryPurple
+                        .withValues(alpha: 0.45),
+                    width: 1.4,
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  minimumSize: const Size.fromHeight(52),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                icon: const Icon(Icons.tune_rounded, size: 18),
+                label: const Text(
+                  'Statt Verlauf: Interessen waehlen',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
               TextButton(
                 onPressed: _busy ? null : _handleSkip,
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.black54,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  minimumSize: const Size.fromHeight(48),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  minimumSize: const Size.fromHeight(44),
                 ),
                 child: const Text(
-                  'Ohne Verlauf starten',
+                  'Ohne alles starten',
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
                 ),

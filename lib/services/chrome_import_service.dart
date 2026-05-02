@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -67,8 +68,8 @@ class ImportSummary {
 ///    und sehr milde Lern-Bumps auf `weight_kw_<wort>` /
 ///    `weight_domain_<host>` in SharedPreferences anwenden.
 ///
-/// Es verlaesst nichts das Geraet. Die Original-Datei (= temporaere
-/// Kopie aus dem System-Filepicker) wird in jedem Fall geloescht.
+/// Stage G: Akzeptiert jetzt auch Google-Takeout-ZIPs direkt — sucht
+/// darin Verlauf.json / BrowserHistory.json / History.json.
 class ChromeImportService {
   static const String _boxName = 'imported_chronicle';
   static const int _maxTriples = 1000;
@@ -77,6 +78,8 @@ class ChromeImportService {
   // ---------- Anti-Infiltration Limits ----------
   /// Datei groesser als 50 MB wird ohne Parsen verworfen.
   static const int _maxFileBytes = 50 * 1024 * 1024;
+  /// Stage G: ZIP-Inhalt nach Entpacken max 100 MB (Anti-ZIP-Bombe).
+  static const int _maxUnzippedBytes = 100 * 1024 * 1024;
   /// Mehr als 200_000 Roh-Eintraege werden hart abgeschnitten.
   static const int _maxRawEntries = 200000;
   /// URL laenger als 2000 Zeichen -> Eintrag verworfen.
@@ -138,6 +141,75 @@ class ChromeImportService {
     );
   }
 
+  // ---------- Stage G: ZIP-Extraction ----------
+
+  /// Sucht in einem Google-Takeout-ZIP die History-JSON. Erkennt:
+  /// - Verlauf.json   (DE-Locale)
+  /// - BrowserHistory.json / History.json
+  /// - Generell: jede *.json unter einem Ordner ".../Chrome/..."
+  ///
+  /// Anti-DoS: ungepackter Inhalt > 100 MB -> abgewiesen (Zip-Bombe).
+  /// Liefert leeren String wenn nichts Brauchbares gefunden.
+  static String _extractTakeoutJson(List<int> zipBytes) {
+    try {
+      final archive = ZipDecoder().decodeBytes(zipBytes, verify: false);
+
+      // 1) Anti-ZIP-Bombe: Summe der unkomprimierten Groessen pruefen
+      var total = 0;
+      for (final f in archive.files) {
+        if (f.isFile) total += f.size;
+        if (total > _maxUnzippedBytes) {
+          debugPrint('ZIP rejected: uncompressed size > limit');
+          return '';
+        }
+      }
+
+      // 2) Wunschdateien in Prioritaets-Reihenfolge
+      const preferredNames = <String>[
+        'verlauf.json',
+        'browserhistory.json',
+        'history.json',
+      ];
+
+      ArchiveFile? best;
+      var bestRank = 99;
+      for (final f in archive.files) {
+        if (!f.isFile) continue;
+        final lower = f.name.toLowerCase();
+        if (!lower.endsWith('.json')) continue;
+        if (!lower.contains('chrome')) continue;
+
+        // Bevorzugte Namen erkennen
+        final base = lower.split('/').last;
+        var rank = 50;
+        for (var i = 0; i < preferredNames.length; i++) {
+          if (base == preferredNames[i]) {
+            rank = i;
+            break;
+          }
+        }
+        if (rank < bestRank) {
+          best = f;
+          bestRank = rank;
+        }
+      }
+
+      if (best == null) {
+        debugPrint('ZIP: no Chrome history JSON found');
+        return '';
+      }
+
+      final raw = best.content;
+      if (raw is List<int>) {
+        return utf8.decode(raw, allowMalformed: true);
+      }
+      return raw.toString();
+    } catch (e) {
+      debugPrint('ZIP decode failed: $e');
+      return '';
+    }
+  }
+
   // ---------- Parser ----------
 
   static List<_RawEntry> _parseTakeoutJson(String content) {
@@ -149,6 +221,7 @@ class ChromeImportService {
       final entries = decoded['Browser History'] ??
           decoded['browser_history'] ??
           decoded['History'] ??
+          decoded['Browser-Verlauf'] ??
           const [];
       if (entries is! List) return out;
       for (final e in entries) {
@@ -321,16 +394,25 @@ class ChromeImportService {
 
   /// Liest Datei lokal, reduziert und LOESCHT die Datei in jedem Fall.
   /// Persistiert noch NICHT (User entscheidet via persistAndApply).
+  ///
+  /// Stage G: Wenn die Datei `.zip` heisst, wird sie als Google Takeout
+  /// behandelt — Verlauf.json (oder BrowserHistory.json) wird im Memory
+  /// extrahiert und durch den JSON-Parser gejagt.
   static Future<ImportSummary> analyzeFile(String filePath) async {
     final f = File(filePath);
     String content = '';
+    final lower = filePath.toLowerCase();
+    final isZip = lower.endsWith('.zip');
     try {
       if (await f.exists()) {
-        // Anti-DoS: zu grosse Dateien werden gar nicht erst geladen
         final size = await f.length();
         if (size > _maxFileBytes) {
           debugPrint('ChromeImport.skip: file too large ($size bytes)');
           // Datei trotzdem loeschen unten
+        } else if (isZip) {
+          // ZIP -> Bytes lesen, History-JSON darin extrahieren
+          final bytes = await f.readAsBytes();
+          content = _extractTakeoutJson(bytes);
         } else {
           content = await f.readAsString();
         }
@@ -340,9 +422,8 @@ class ChromeImportService {
     }
 
     List<_RawEntry> raw = const [];
-    final lower = filePath.toLowerCase();
     try {
-      if (lower.endsWith('.json')) {
+      if (isZip || lower.endsWith('.json')) {
         raw = _parseTakeoutJson(content);
       } else if (lower.endsWith('.html') || lower.endsWith('.htm')) {
         raw = _parseHtmlExport(content);
@@ -455,6 +536,38 @@ class ChromeImportService {
       final k = 'weight_domain_${e.key}';
       final cur = prefs.getDouble(k) ?? 1.0;
       final next = (cur + _domainBump).clamp(_domainMin, _domainMax);
+      await prefs.setDouble(k, next);
+    }
+  }
+
+  /// Stage G: Bump-Helper fuer das Interessen-Feature. Jedes Token
+  /// (top-cat, sub-cat, item) wird einzeln als weight_kw_<token>
+  /// gebumpt. Bewusst auch fuer kurze Tokens (>=3 Zeichen), weil
+  /// "Rap" oder "EDM" kuerzer sind als das normale Verlaufs-Filter.
+  static Future<void> applyInterestBumps(List<String> paths) async {
+    if (paths.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    final tokens = <String>{};
+    for (final p in paths) {
+      for (final t in p.split('/')) {
+        final clean = t
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^\w\s]'), ' ')
+            .trim()
+            .replaceAll(RegExp(r'\s+'), ' ');
+        for (final w in clean.split(' ')) {
+          if (w.length >= 3 && w.length <= 32) tokens.add(w);
+        }
+      }
+    }
+    // Kappung: max 100 Bumps pro Save-Aktion (gleiche Logik wie Import)
+    final list = tokens.take(_maxKwBumpsPerImport);
+    for (final w in list) {
+      final k = 'weight_kw_$w';
+      final cur = prefs.getDouble(k) ?? 1.0;
+      // Etwas hoeherer Bump als Auto-Import, weil der User explizit
+      // angegeben hat — aber immer noch sehr mild.
+      final next = (cur + 0.10).clamp(_kwMin, _kwMax);
       await prefs.setDouble(k, next);
     }
   }

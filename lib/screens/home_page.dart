@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:volume_controller/volume_controller.dart';
 
@@ -14,6 +15,7 @@ import '../logic/query_builder.dart';
 import '../logic/state_provider.dart';
 import '../logic/deep_analyzer.dart';
 import '../theme.dart';
+import '../utils/findux_stopwords.dart';
 import '../coach/coach_models.dart';
 import '../coach/coach_screen.dart';
 import '../coach/theme_detector.dart';
@@ -47,6 +49,18 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   String? _selectedRating;
   final TextEditingController _feedbackController = TextEditingController();
+
+  // Stage 14: Pflicht-Bewertung bei NEUEN Suchrichtungen.
+  // Wenn _performSearch erkennt, dass die Query Tokens enthaelt, die das
+  // Lern-Modell noch nie gesehen hat, oeffnet sich nach Rueckkehr vom
+  // Browser AUTOMATISCH der Bewertungs-Overlay — und ist dann nicht mehr
+  // per Tap-ins-Leere oder Close-X schliessbar (mandatory mode), bis der
+  // User up/down + Bewerten getippt hat. Lokaler Token-Set in
+  // SharedPreferences, kein Versand, kein Cloud-State.
+  bool _mandatoryRating = false;
+  Set<String> _newTokensThisSearch = const <String>{};
+  static const String _seenKwsKey = 'seen_query_kws';
+  static const int _seenKwsCap = 5000;
 
   String _viewState = 'home';
   PrecisionRecommendation? _advice;
@@ -175,7 +189,65 @@ class _HomePageState extends ConsumerState<HomePage> {
       _feedbackController.clear();
       _showDeepAnalysisOverlay = false;
       _showFeedbackOverlay = false;
+      // Hinweis: _mandatoryRating wird NICHT geleert — wenn der User
+      // mitten in einer Pflicht-Bewertung das Results-Screen schliesst,
+      // bleibt der Flag erhalten, sodass der Overlay bei der naechsten
+      // Suche wieder erscheint. _purgeAllSessionData wird nur ueber den
+      // X-Knopf erreicht, der ohnehin blockiert wird (siehe Results-
+      // Header).
     });
+  }
+
+  // ---------- Stage 14: Pflicht-Bewertung-Helfer ----------
+
+  /// Tokenisiert die "Was?"-Eingabe des Users analog zum Lern-Modell
+  /// (selbe Stopwort-Listen, selbe Mindestlaenge, selbe Operatoren-
+  /// Filterung) — wir wollen, dass "neue Tokens" hier exakt dasselbe
+  /// bedeuten wie "neue Tokens" im LearningService._extractAndWeightKeywords.
+  Set<String> _collectQueryTokens(String text, String language) {
+    final clean = text
+        .replaceAll(
+            RegExp(
+                r'\b(site|inurl|intitle|intext|filetype|ext|before|after|allintitle|allintext|allinurl):\S+'),
+            ' ')
+        .replaceAll(RegExp(r'-\S+'), ' ')
+        .replaceAll(RegExp(r'[^\w\s]'), ' ')
+        .toLowerCase();
+    final stopwords = stopwordsForLanguage(language);
+    return clean
+        .split(RegExp(r'\s+'))
+        .where((w) => w.length > 3 && !stopwords.contains(w))
+        .toSet();
+  }
+
+  Future<Set<String>> _detectNewTokens(Set<String> tokens) async {
+    if (tokens.isEmpty) return const <String>{};
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final seen =
+          (prefs.getStringList(_seenKwsKey) ?? const <String>[]).toSet();
+      return tokens.difference(seen);
+    } catch (e) {
+      debugPrint('detectNewTokens error: $e');
+      return const <String>{};
+    }
+  }
+
+  Future<void> _markTokensSeen(Set<String> tokens) async {
+    if (tokens.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final seen =
+          (prefs.getStringList(_seenKwsKey) ?? const <String>[]).toSet();
+      seen.addAll(tokens);
+      var list = seen.toList();
+      if (list.length > _seenKwsCap) {
+        list = list.sublist(list.length - _seenKwsCap);
+      }
+      await prefs.setStringList(_seenKwsKey, list);
+    } catch (e) {
+      debugPrint('markTokensSeen error: $e');
+    }
   }
 
   Future<void> _performSearch({
@@ -207,7 +279,11 @@ class _HomePageState extends ConsumerState<HomePage> {
       'beruf': settings.beruf,
       'employmentType': settings.employmentType,
       'searchengine': settings.searchEngine,
-      'enableYouthProtection': settings.enableYouthProtection,
+      // Stage 14: EFFECTIVE Wert verwenden — wenn das Geburtsjahr Alter
+      // unter 18 ergibt, wird der Jugendschutz hart erzwungen, egal was
+      // der User-Toggle sagt. So landet "&safe=active" / "&kp=1" /
+      // explicit-exclusions zuverlaessig in jeder Query Minderjaehriger.
+      'enableYouthProtection': settings.effectiveYouthProtection,
       'language': settings.language,
       'country': settings.country,
     };
@@ -231,37 +307,24 @@ class _HomePageState extends ConsumerState<HomePage> {
     final url = builder.buildSearchUrl(
         fullQuery, settings.searchEngine, settingsMap);
 
+    // Stage 14: VOR dem Suchstart neue Tokens erkennen — danach koennten
+    // sie schon als "seen" gespeichert sein.
+    final tokens =
+        _collectQueryTokens(_whatController.text, settings.language);
+    final newTokens = await _detectNewTokens(tokens);
+
+    if (!mounted) return;
+
     setState(() {
       _viewState = 'results';
       _showDeepAnalysisOverlay = false;
       _hasSearchedOnce = true;
     });
 
-    final uri = Uri.tryParse(url);
-    if (uri != null) {
-      try {
-        if (settings.openInApp) {
-          // IMMER Inkognito (eigener WebView mit incognito:true).
-          if (mounted) {
-            // ignore: discarded_futures
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => IncognitoBrowserScreen(url: url),
-              ),
-            );
-          }
-        } else {
-          final ok = await launchUrl(
-              uri, mode: LaunchMode.externalApplication);
-          if (!ok && mounted) _showLaunchFailedSnack();
-        }
-      } catch (e) {
-        debugPrint('launchUrl error: $e');
-        if (mounted) _showLaunchFailedSnack();
-      }
-    }
-
+    // Track BEFORE Navigation/Launch — damit trackFeedback die richtige
+    // search_id findet (letzter Eintrag im Hive-Box). Reihenfolge ist
+    // wichtig fuer Stage 14, da der Bewertungs-Overlay direkt nach
+    // Browser-Rueckkehr aufpoppt und sofort committen koennen muss.
     await widget.learningService.trackSearch(
       query: fullQuery,
       url: url,
@@ -271,6 +334,52 @@ class _HomePageState extends ConsumerState<HomePage> {
       mode: effectiveMode,
       coachChoices: coachChoices,
     );
+
+    final uri = Uri.tryParse(url);
+    bool launched = false;
+    if (uri != null) {
+      try {
+        if (settings.openInApp) {
+          // IMMER Inkognito (eigener WebView mit incognito:true).
+          // Stage 14: Navigation wird AWAITED — auf Rueckkehr aus dem
+          // In-App-Browser wird unten der Pflicht-Bewertungs-Overlay
+          // ausgeloest, falls neue Tokens entdeckt wurden.
+          if (mounted) {
+            launched = true;
+            await Navigator.push<void>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => IncognitoBrowserScreen(url: url),
+              ),
+            );
+          }
+        } else {
+          launched = await launchUrl(
+              uri, mode: LaunchMode.externalApplication);
+          if (!launched && mounted) _showLaunchFailedSnack();
+        }
+      } catch (e) {
+        debugPrint('launchUrl error: $e');
+        if (mounted) _showLaunchFailedSnack();
+      }
+    }
+
+    // Stage 14: Pflicht-Bewertung. Wir markieren die Tokens als "seen"
+    // BEVOR der Overlay erscheint — selbst wenn der User bewusst die App
+    // killt, wird die gleiche Suche beim naechsten Mal nicht mehr als
+    // "neu" erkannt (wir tracken nur "schonmal probiert", nicht "schon
+    // bewertet"). Das ist die Apple-konforme Variante: kein endloser
+    // Loop, aber ein einmaliger Pflicht-Touchpoint pro Suchrichtung.
+    if (mounted && launched && newTokens.isNotEmpty) {
+      await _markTokensSeen(newTokens);
+      if (mounted) {
+        setState(() {
+          _newTokensThisSearch = newTokens;
+          _mandatoryRating = true;
+          _showFeedbackOverlay = true;
+        });
+      }
+    }
 
     // Stil-Analyzer nach jeder Suche neu laden (asynchron, blockiert nichts)
     // ignore: discarded_futures
@@ -413,6 +522,9 @@ class _HomePageState extends ConsumerState<HomePage> {
       _showFeedbackOverlay = false;
       _selectedRating = null;
       _feedbackController.clear();
+      // Stage 14: Pflicht-Modus aufloesen.
+      _mandatoryRating = false;
+      _newTokensThisSearch = const <String>{};
     });
   }
 
@@ -1124,15 +1236,24 @@ class _HomePageState extends ConsumerState<HomePage> {
             child: Row(
               children: [
                 IconButton(
-                  icon:
-                      const Icon(Icons.close, color: Colors.white, size: 22),
-                  onPressed: () async {
-                    _analysisTimer?.cancel();
-                    _specifyTimer?.cancel();
-                    await _purgeAllSessionData();
-                    if (!mounted) return;
-                    setState(() => _viewState = 'dashboard');
-                  },
+                  icon: Icon(Icons.close,
+                      color: _mandatoryRating
+                          ? Colors.white38
+                          : Colors.white,
+                      size: 22),
+                  // Stage 14: Wenn eine Pflicht-Bewertung offen ist, wird
+                  // der Schliessen-X-Knopf deaktiviert. So kommt der User
+                  // nicht aus dem Results-Screen heraus, ohne die neue
+                  // Suchrichtung bewertet zu haben.
+                  onPressed: _mandatoryRating
+                      ? null
+                      : () async {
+                          _analysisTimer?.cancel();
+                          _specifyTimer?.cancel();
+                          await _purgeAllSessionData();
+                          if (!mounted) return;
+                          setState(() => _viewState = 'dashboard');
+                        },
                 ),
                 Expanded(
                   child: Text(
@@ -1366,14 +1487,25 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildEnhancedFeedbackOverlay() {
+    // Stage 14: Pflicht-Modus erkennt mandatoryRating und sperrt das
+    // Backdrop-Tap, zeigt einen roten "Pflicht"-Header und listet die
+    // neu gelernten Tokens als Chips auf — damit der User versteht,
+    // WARUM diese Bewertung gerade noetig ist.
+    final mandatory = _mandatoryRating;
+    final newTokens = _newTokensThisSearch;
+    final tokenPreview = newTokens.take(6).toList();
+    final extraCount = newTokens.length - tokenPreview.length;
+
     return Positioned.fill(
       child: GestureDetector(
+        // Backdrop-Tap schliesst nur, wenn NICHT pflicht.
         onTap: () {
+          if (mandatory) return;
           FocusScope.of(context).unfocus();
           setState(() => _showFeedbackOverlay = false);
         },
         child: Container(
-          color: Colors.black45,
+          color: mandatory ? Colors.black87 : Colors.black45,
           child: Center(
             child: SingleChildScrollView(
               child: Container(
@@ -1382,20 +1514,105 @@ class _HomePageState extends ConsumerState<HomePage> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
+                  border: mandatory
+                      ? Border.all(
+                          color: const Color(0xFFE53935), width: 2)
+                      : null,
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text('Spezifizierung praezise?',
+                    if (mandatory) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE53935)
+                              .withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.priority_high_rounded,
+                                color: Color(0xFFE53935), size: 16),
+                            SizedBox(width: 4),
+                            Text('Bewertung erforderlich',
+                                style: TextStyle(
+                                    color: Color(0xFFE53935),
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('Neue Suchrichtung',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 20)),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Dein Lern-Modell hat zu diesen Begriffen noch keine '
+                        'Gewichtung. Eine kurze Bewertung hilft, kuenftig '
+                        'praezisere Treffer fuer dich zu finden.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 20)),
-                    const SizedBox(height: 12),
-                    const Text(
-                        'Dieses Feedback verfeinert die Gewichtung deiner persoenlichen Daten.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            color: Colors.black54, fontSize: 14)),
+                            color: Colors.black54, fontSize: 13, height: 1.4),
+                      ),
+                      if (tokenPreview.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          alignment: WrapAlignment.center,
+                          children: [
+                            for (final t in tokenPreview)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: FindUXProTheme.primaryPurple
+                                      .withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(t,
+                                    style: const TextStyle(
+                                        color: FindUXProTheme.primaryPurple,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600)),
+                              ),
+                            if (extraCount > 0)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black12,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text('+$extraCount',
+                                    style: const TextStyle(
+                                        color: Colors.black54,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700)),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ] else ...[
+                      const Text('Spezifizierung praezise?',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 20)),
+                      const SizedBox(height: 12),
+                      const Text(
+                          'Dieses Feedback verfeinert die Gewichtung '
+                          'deiner persoenlichen Daten.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: Colors.black54, fontSize: 14)),
+                    ],
                     const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1409,7 +1626,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                     const SizedBox(height: 24),
                     CupertinoTextField(
                       controller: _feedbackController,
-                      placeholder: 'Details zur Sitzung...',
+                      placeholder: 'Details zur Sitzung (optional)...',
                       maxLines: 3,
                       padding: const EdgeInsets.all(12),
                       // Stage F Haertung: Feedback-Text bleibt strikt
@@ -1440,7 +1657,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                         ),
                         onPressed:
                             _selectedRating != null ? _submitFeedback : null,
-                        child: const Text('Sitzung bewerten'),
+                        child: Text(mandatory
+                            ? 'Bewertung speichern'
+                            : 'Sitzung bewerten'),
                       ),
                     ),
                   ],

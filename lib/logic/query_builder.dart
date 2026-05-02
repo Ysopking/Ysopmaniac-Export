@@ -302,6 +302,12 @@ class FindUXQueryBuilder {
         params.write('&filter=1');
         params.write('&num=20');
         if (isYouthActive) params.write('&safe=active');
+        // Stage 14: nfpr=1 (no fix prediction) verhindert, dass Google
+        // unsere ausgefeilte Suchformel "korrigiert" und ein
+        // "Meinten Sie ..."-Banner einblendet. Damit landen die User
+        // direkt auf den Treffern unserer optimierten Query, nicht auf
+        // einer von Google umformulierten Variante.
+        params.write('&nfpr=1');
     }
 
     if (query.length > 1800) query = query.substring(0, 1790).trim();

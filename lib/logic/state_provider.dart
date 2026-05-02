@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/chrome_import_service.dart';
 import '../services/security_service.dart';
 import '../services/learning_service.dart';
 
@@ -56,6 +57,15 @@ class SettingsState {
   final bool openInApp;
   /// Doppel-Druck der Lauter-Taste startet die Suche (nur Home-Page).
   final bool enableVolumeShortcut;
+  /// Stage G: hierarchische Interessen-Auswahl als Pfade
+  /// im Format `top/sub/item` (z.B. `musik/rap/sido`).
+  final List<String> interests;
+  /// Stage 14: Screenshot- + Recents-Sperre (Android FLAG_SECURE).
+  /// Default true (privacy-by-default). Wird nativ in MainActivity.kt
+  /// beim onCreate aus SharedPreferences gelesen — der Toggle hier
+  /// schreibt zurueck UND ruft per MethodChannel SecureFlag.setSecure()
+  /// fuer die Laufzeit auf.
+  final bool disableScreenshots;
 
   const SettingsState({
     required this.plz,
@@ -72,7 +82,16 @@ class SettingsState {
     required this.mode,
     required this.openInApp,
     required this.enableVolumeShortcut,
+    required this.interests,
+    required this.disableScreenshots,
   });
+
+  /// Stage 14: Wahre, EFFEKTIVE Jugendschutz-Einstellung.
+  /// Wenn der User noch minderjaehrig ist (Alter < 18 anhand des
+  /// Geburtsjahrs), wird Jugendschutz hart erzwungen — egal was der
+  /// Toggle sagt.
+  bool get isMinor => (DateTime.now().year - jahr) < 18;
+  bool get effectiveYouthProtection => enableYouthProtection || isMinor;
 
   SettingsState copyWith({
     String? plz,
@@ -89,6 +108,8 @@ class SettingsState {
     String? mode,
     bool? openInApp,
     bool? enableVolumeShortcut,
+    List<String>? interests,
+    bool? disableScreenshots,
   }) {
     return SettingsState(
       plz: plz ?? this.plz,
@@ -107,6 +128,8 @@ class SettingsState {
       openInApp: openInApp ?? this.openInApp,
       enableVolumeShortcut:
           enableVolumeShortcut ?? this.enableVolumeShortcut,
+      interests: interests ?? this.interests,
+      disableScreenshots: disableScreenshots ?? this.disableScreenshots,
     );
   }
 }
@@ -126,6 +149,8 @@ const SettingsState _defaultSettings = SettingsState(
   mode: 'standard',
   openInApp: true,
   enableVolumeShortcut: false,
+  interests: <String>[],
+  disableScreenshots: true,
 );
 
 class SettingsNotifier extends StateNotifier<SettingsState> {
@@ -149,6 +174,8 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     'mode',
     'openInApp',
     'enableVolumeShortcut',
+    'interests',
+    'disableScreenshots',
   ];
 
   Future<void> loadSettings() async {
@@ -178,6 +205,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     String pBeruf = '';
     String pEmploymentType = 'student';
     int pJahr = 1990;
+    List<String> pInterests = const [];
     try {
       final box = _security.vaultBox;
       pPlz = (box.get('plz') as String?) ?? '';
@@ -185,6 +213,11 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       pEmploymentType =
           (box.get('employmentType') as String?) ?? 'student';
       pJahr = (box.get('jahr') as int?) ?? 1990;
+      // Interessen liegen ebenfalls verschluesselt im Vault.
+      final raw = box.get('interests');
+      if (raw is List) {
+        pInterests = raw.whereType<String>().toList(growable: false);
+      }
     } catch (_) {
       // Vault nicht verfuegbar -> Defaults verwenden, KEIN Klartext-Fallback.
     }
@@ -205,10 +238,16 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       openInApp: prefs.getBool('openInApp') ?? true,
       enableVolumeShortcut:
           prefs.getBool('enableVolumeShortcut') ?? false,
+      interests: pInterests,
+      // Stage 14: Default ON (privacy-by-default). Der gleiche Default
+      // ist auch in MainActivity.kt verankert, sodass der allererste
+      // Frame schon geschuetzt ist.
+      disableScreenshots: prefs.getBool('disableScreenshots') ?? true,
     );
   }
 
   Future<void> updateSettings(SettingsState newState) async {
+    final prevInterests = state.interests;
     state = newState;
 
     // PII -> Vault (verschluesselt)
@@ -218,6 +257,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       await box.put('beruf', newState.beruf);
       await box.put('employmentType', newState.employmentType);
       await box.put('jahr', newState.jahr);
+      await box.put('interests', newState.interests);
     } catch (e) {
       debugPrint('Vault write failed: $e');
     }
@@ -235,6 +275,20 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     await prefs.setBool('openInApp', newState.openInApp);
     await prefs.setBool(
         'enableVolumeShortcut', newState.enableVolumeShortcut);
+    await prefs.setBool('disableScreenshots', newState.disableScreenshots);
+
+    // Stage G: nur die NEU hinzugekommenen Interessen lernen, sonst
+    // wuerden wir bei jeder Settings-Aenderung doppelt bumpen.
+    final added = newState.interests
+        .where((i) => !prevInterests.contains(i))
+        .toList(growable: false);
+    if (added.isNotEmpty) {
+      try {
+        await ChromeImportService.applyInterestBumps(added);
+      } catch (e) {
+        debugPrint('Interest bumps failed: $e');
+      }
+    }
   }
 
   Future<void> updateField({
@@ -252,7 +306,18 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     String? mode,
     bool? openInApp,
     bool? enableVolumeShortcut,
+    List<String>? interests,
+    bool? disableScreenshots,
   }) {
+    // Stage 14: Wenn das (neue oder bestehende) Geburtsjahr Alter < 18
+    // ergibt, wird Jugendschutz hart erzwungen — der Toggle kann ihn
+    // dann nicht mehr ausschalten. Das ist die Backend-Seite des
+    // gesperrten Toggles in der Settings-UI.
+    final effJahr = jahr ?? state.jahr;
+    final wouldBeMinor = (DateTime.now().year - effJahr) < 18;
+    final yp = wouldBeMinor
+        ? true
+        : (enableYouthProtection ?? state.enableYouthProtection);
     final newState = state.copyWith(
       plz: plz,
       employmentType: employmentType,
@@ -261,13 +326,15 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       language: language,
       country: country,
       allowFeedback: allowFeedback,
-      enableYouthProtection: enableYouthProtection,
+      enableYouthProtection: yp,
       jahr: jahr,
       sources: sources,
       files: files,
       mode: mode,
       openInApp: openInApp,
       enableVolumeShortcut: enableVolumeShortcut,
+      interests: interests,
+      disableScreenshots: disableScreenshots,
     );
     return updateSettings(newState);
   }

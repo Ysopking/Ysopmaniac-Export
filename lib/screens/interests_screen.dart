@@ -1,0 +1,538 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../data/interests_catalog.dart';
+import '../logic/state_provider.dart';
+import '../services/haptic_helper.dart';
+import '../theme.dart';
+
+/// Stage G: 3-Ebenen-Drill-down nach Apple-Music-Onboarding-Pattern.
+///
+///   Top-Kategorien (Grid)  ->  Unter-Kategorien (Liste mit Chevron)
+///   ->  Items (Multi-Select Chips)
+///
+/// Alle Aenderungen schreiben sofort in `settingsProvider.interests`.
+/// Beim ersten Hinzufuegen einer Interesse werden Lern-Bumps angewendet
+/// (siehe SettingsNotifier.updateSettings).
+class InterestsScreen extends ConsumerWidget {
+  const InterestsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(settingsProvider).interests;
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F7),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF5F5F7),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: Colors.black, size: 20),
+          onPressed: () {
+            Haptics.tap();
+            Navigator.pop(context);
+          },
+        ),
+        title: const Text(
+          'Meine Interessen',
+          style: TextStyle(
+            color: Colors.black,
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.5,
+          ),
+        ),
+        centerTitle: true,
+        actions: [
+          if (selected.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: FindUXProTheme.primaryPurple
+                        .withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${selected.length}',
+                    style: const TextStyle(
+                      color: FindUXProTheme.primaryPurple,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            child: Text(
+              'Tippe ein Thema an und gehe so tief, wie du moechtest. '
+              'Deine Auswahl bleibt verschluesselt auf diesem Geraet und '
+              'verbessert kuenftige Suchen.',
+              style: TextStyle(
+                fontSize: 13.5,
+                height: 1.4,
+                color: Colors.black.withValues(alpha: 0.6),
+              ),
+            ),
+          ),
+          Expanded(
+            child: GridView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+              gridDelegate:
+                  const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 1.1,
+              ),
+              itemCount: kInterestsCatalog.length,
+              itemBuilder: (ctx, i) {
+                final c = kInterestsCatalog[i];
+                final n = countSelectedInTop(c.id, selected);
+                return _CategoryTile(
+                  category: c,
+                  count: n,
+                  onTap: () {
+                    Haptics.tap();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) =>
+                              _SubcategoryScreen(category: c)),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryTile extends StatelessWidget {
+  final InterestCategory category;
+  final int count;
+  final VoidCallback onTap;
+  const _CategoryTile({
+    required this.category,
+    required this.count,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = count > 0;
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      elevation: 0,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected
+                  ? FindUXProTheme.primaryPurple.withValues(alpha: 0.5)
+                  : Colors.black.withValues(alpha: 0.04),
+              width: selected ? 1.6 : 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(category.emoji,
+                      style: const TextStyle(fontSize: 32)),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        category.label,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black87,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        selected
+                            ? '$count ausgewaehlt'
+                            : '${category.subs.length} Themen',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: selected
+                              ? FindUXProTheme.primaryPurple
+                              : Colors.black54,
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              if (selected)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: const BoxDecoration(
+                      color: FindUXProTheme.primaryPurple,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.check_rounded,
+                        size: 14, color: Colors.white),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// -------- Ebene 2: Unter-Kategorien --------
+
+class _SubcategoryScreen extends ConsumerWidget {
+  final InterestCategory category;
+  const _SubcategoryScreen({required this.category});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(settingsProvider).interests;
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F7),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF5F5F7),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: Colors.black, size: 20),
+          onPressed: () {
+            Haptics.tap();
+            Navigator.pop(context);
+          },
+        ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(category.emoji,
+                style: const TextStyle(fontSize: 18)),
+            const SizedBox(width: 8),
+            Text(
+              category.label,
+              style: const TextStyle(
+                color: Colors.black,
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.4,
+              ),
+            ),
+          ],
+        ),
+        centerTitle: true,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
+            child: Text(
+              'Waehle ein Thema, um genauer zu werden.',
+              style: TextStyle(
+                fontSize: 13.5,
+                color: Colors.black.withValues(alpha: 0.6),
+              ),
+            ),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                for (var i = 0; i < category.subs.length; i++) ...[
+                  _SubRow(
+                    sub: category.subs[i],
+                    count: countSelectedInSub(
+                        category.id, category.subs[i].id, selected),
+                    onTap: () {
+                      Haptics.tap();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => _ItemsScreen(
+                            category: category,
+                            sub: category.subs[i],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  if (i < category.subs.length - 1)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 16),
+                      child: Divider(
+                        height: 1,
+                        thickness: 0.5,
+                        color: Color(0xFFE5E5EA),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SubRow extends StatelessWidget {
+  final InterestSubcategory sub;
+  final int count;
+  final VoidCallback onTap;
+  const _SubRow({
+    required this.sub,
+    required this.count,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 56),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                sub.label,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ),
+            if (count > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: FindUXProTheme.primaryPurple
+                      .withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$count',
+                  style: const TextStyle(
+                    color: FindUXProTheme.primaryPurple,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                  ),
+                ),
+              )
+            else
+              Text(
+                '${sub.items.length}',
+                style: const TextStyle(
+                  color: Colors.black38,
+                  fontSize: 13,
+                ),
+              ),
+            const SizedBox(width: 6),
+            const Icon(Icons.chevron_right_rounded,
+                color: Colors.black26, size: 22),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// -------- Ebene 3: Multi-Select Items --------
+
+class _ItemsScreen extends ConsumerWidget {
+  final InterestCategory category;
+  final InterestSubcategory sub;
+  const _ItemsScreen({required this.category, required this.sub});
+
+  String _path(String itemId) => '${category.id}/${sub.id}/$itemId';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(settingsProvider).interests;
+    final notifier = ref.read(settingsProvider.notifier);
+
+    void toggle(String itemId) {
+      final p = _path(itemId);
+      final next = List<String>.from(selected);
+      if (next.contains(p)) {
+        next.remove(p);
+        Haptics.tap();
+      } else {
+        next.add(p);
+        Haptics.pick();
+      }
+      notifier.updateField(interests: next);
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F7),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF5F5F7),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: Colors.black, size: 20),
+          onPressed: () {
+            Haptics.tap();
+            Navigator.pop(context);
+          },
+        ),
+        title: Text(
+          sub.label,
+          style: const TextStyle(
+            color: Colors.black,
+            fontSize: 17,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.4,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
+            child: Text(
+              'Mehrfachauswahl moeglich. Antippen zum Setzen oder Loesen.',
+              style: TextStyle(
+                fontSize: 13.5,
+                color: Colors.black.withValues(alpha: 0.6),
+              ),
+            ),
+          ),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (final item in sub.items)
+                _ItemChip(
+                  item: item,
+                  selected: selected.contains(_path(item.id)),
+                  onTap: () => toggle(item.id),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ItemChip extends StatelessWidget {
+  final InterestItem item;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ItemChip({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOut,
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+        decoration: BoxDecoration(
+          color: selected
+              ? FindUXProTheme.primaryPurple
+              : Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: selected
+                ? FindUXProTheme.primaryPurple
+                : Colors.black.withValues(alpha: 0.08),
+            width: 1.4,
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: FindUXProTheme.primaryPurple
+                        .withValues(alpha: 0.25),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : [],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (selected) ...[
+              const Icon(Icons.check_rounded,
+                  color: Colors.white, size: 16),
+              const SizedBox(width: 6),
+            ],
+            Text(
+              item.label,
+              style: TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w700,
+                color: selected ? Colors.white : Colors.black87,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

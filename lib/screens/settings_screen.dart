@@ -4,8 +4,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../logic/state_provider.dart';
+import '../screens/interests_screen.dart';
 import '../services/chrome_import_quick.dart';
 import '../services/haptic_helper.dart';
+import '../services/secure_flag.dart';
 import '../theme.dart';
 
 /// Apple-UX-Settings (Stage G):
@@ -107,6 +109,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               value: '${settings.jahr}',
               onTap: () => _showYearPicker(context, ref, settings.jahr),
             ),
+            _row(
+              icon: Icons.interests_outlined,
+              title: 'Meine Interessen',
+              value: settings.interests.isEmpty
+                  ? 'Hinzufuegen'
+                  : '${settings.interests.length} ausgewaehlt',
+              onTap: () {
+                Haptics.tap();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const InterestsScreen()),
+                );
+              },
+            ),
             _expandRow(
               expanded: _showAdvancedAboutMe,
               onToggle: () => setState(
@@ -154,11 +171,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               value: settings.openInApp,
               onChanged: (v) => notifier.updateField(openInApp: v),
             ),
+            // Stage 14: Wenn das Geburtsjahr Alter <18 ergibt, ist der
+            // Jugendschutz Pflicht und der Toggle wird gesperrt — der
+            // angezeigte Wert ist dann unabhaengig vom rohen Feld immer
+            // ON, der Subtitle erklaert warum.
             _toggleRow(
               icon: Icons.shield_outlined,
               title: 'Jugendschutz',
-              subtitle: 'SafeSearch + Negativ-Filter',
-              value: settings.enableYouthProtection,
+              subtitle: settings.isMinor
+                  ? 'Automatisch aktiv (Geburtsjahr unter 18)'
+                  : 'SafeSearch + Negativ-Filter',
+              value: settings.effectiveYouthProtection,
+              enabled: !settings.isMinor,
               onChanged: (v) =>
                   notifier.updateField(enableYouthProtection: v),
             ),
@@ -166,7 +190,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               expanded: _showAdvancedSearch,
               onToggle: () => setState(
                   () => _showAdvancedSearch = !_showAdvancedSearch),
-              hiddenCount: 2,
+              hiddenCount: 1,
             ),
             if (_showAdvancedSearch) ...[
               _toggleRow(
@@ -177,19 +201,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 onChanged: (v) =>
                     notifier.updateField(enableVolumeShortcut: v),
               ),
-              _toggleRow(
-                icon: Icons.thumbs_up_down_outlined,
-                title: 'Feedback ermoeglichen',
-                subtitle: 'Lern-Modell wird verfeinert',
-                value: settings.allowFeedback,
-                onChanged: (v) => notifier.updateField(allowFeedback: v),
-              ),
             ],
           ]),
 
           // -------- Block 3: Datenschutz --------
+          // Stage 14: Feedback-Export entfernt — Bewertungen sind jetzt
+          // verpflichtend pro neuer Suchrichtung und werden ausschliesslich
+          // lokal in der Lern-Engine verwendet (kein Export, kein Versand).
           _sectionLabel('Datenschutz'),
           _groupCard(children: [
+            // Stage 14: Toggle fuer FLAG_SECURE (Screenshots, Screen-
+            // Recordings und Recents-Vorschau blockieren). Default ist
+            // ON. Aenderungen werden persistiert + sofort per
+            // MethodChannel an das native MainActivity weitergereicht.
+            _toggleRow(
+              icon: Icons.no_photography_outlined,
+              title: 'Screenshots blockieren',
+              subtitle:
+                  'Verhindert Screenshots, Aufnahmen und App-Vorschau',
+              value: settings.disableScreenshots,
+              onChanged: (v) async {
+                await notifier.updateField(disableScreenshots: v);
+                await SecureFlag.setSecure(v);
+              },
+            ),
             _row(
               icon: Icons.history_rounded,
               title: 'Chrome-Verlauf importieren',
@@ -198,12 +233,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Haptics.tap();
                 quickImportChrome(context);
               },
-            ),
-            _row(
-              icon: Icons.security_rounded,
-              title: l10n.reviewFeedback,
-              value: 'Manuell freigeben',
-              onTap: () => _showFeedbackExportDialog(context, ref),
             ),
           ]),
 
@@ -341,14 +370,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     required String subtitle,
     required bool value,
     required ValueChanged<bool> onChanged,
+    // Stage 14: Wenn enabled=false, wird der Switch ausgegraut und
+    // ignoriert Taps — fuer "Pflicht-ON-Zustaende" wie der erzwungene
+    // Jugendschutz bei Minderjaehrigen.
+    bool enabled = true,
   }) {
+    final iconColor = enabled
+        ? FindUXProTheme.primaryPurple
+        : FindUXProTheme.primaryPurple.withValues(alpha: 0.45);
+    final titleColor = enabled ? Colors.black87 : Colors.black54;
     return Container(
       constraints: const BoxConstraints(minHeight: 56),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
-          Icon(icon,
-              color: FindUXProTheme.primaryPurple, size: 22),
+          Icon(icon, color: iconColor, size: 22),
           const SizedBox(width: 18),
           Expanded(
             child: Column(
@@ -357,10 +393,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                    color: titleColor,
                     letterSpacing: -0.2,
                   ),
                 ),
@@ -380,10 +416,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             child: CupertinoSwitch(
               value: value,
               activeTrackColor: FindUXProTheme.primaryPurple,
-              onChanged: (v) {
-                Haptics.pick();
-                onChanged(v);
-              },
+              onChanged: enabled
+                  ? (v) {
+                      Haptics.pick();
+                      onChanged(v);
+                    }
+                  : null,
             ),
           ),
         ],
@@ -500,10 +538,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     showCupertinoModalPopup<void>(
       context: context,
       builder: (ctx) => Container(
-        height: 280,
+        // Stage 14 Fix: KEINE feste Hoehe mehr. Auf Geraeten mit Gesten-
+        // Leiste (Android 10+, iPhone X+) addiert SafeArea ~24-34 px Bottom-
+        // Inset, was zusammen mit dem CupertinoButton (~48 px) und dem
+        // 220 px-Picker das alte fixe 280 px-Container deutlich
+        // ueberschritten und einen "BOTTOM OVERFLOWED BY X PIXELS"-
+        // Flutter-Debug-Banner unten am Bildschirm angezeigt hat.
+        // Loesung: intrinsische Hoehe via MainAxisSize.min — der
+        // Container nimmt genau so viel Platz wie noetig.
         color: Colors.white,
         child: SafeArea(
+          top: false,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               SizedBox(
                 height: 220,
@@ -598,104 +645,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  void _showFeedbackExportDialog(BuildContext context, WidgetRef ref) {
-    final learningService = ref.read(learningServiceProvider);
-    final feedbacks = learningService.getFeedbackForReview();
-
-    showCupertinoModalPopup<void>(
-      context: context,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.7,
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(30), topRight: Radius.circular(30)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(AppLocalizations.of(context)!.feedbackTitle,
-                style: const TextStyle(
-                    fontSize: 22, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 8),
-            Text(AppLocalizations.of(context)!.feedbackDesc,
-                style: const TextStyle(color: Colors.black54)),
-            const SizedBox(height: 20),
-            Expanded(
-              child: feedbacks.isEmpty
-                  ? Center(
-                      child: Text(
-                          AppLocalizations.of(context)!.noFeedback))
-                  : ListView.builder(
-                      itemCount: feedbacks.length,
-                      itemBuilder: (context, i) {
-                        final f = feedbacks[i];
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                              color: const Color(0xFFF0F0F5),
-                              borderRadius: BorderRadius.circular(16)),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                      f['rating'] == 'up'
-                                          ? Icons.thumb_up
-                                          : Icons.thumb_down,
-                                      color: f['rating'] == 'up'
-                                          ? Colors.green
-                                          : Colors.red,
-                                      size: 18),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                      f['timestamp']
-                                          .toString()
-                                          .substring(0, 10),
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                              if (f['comment'] != null &&
-                                  f['comment'].toString().isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Text(f['comment'],
-                                      style: const TextStyle(
-                                          fontStyle: FontStyle.italic)),
-                                ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.red,
-                  side: const BorderSide(color: Colors.red),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-                onPressed: () async {
-                  Haptics.warn();
-                  await learningService.clearAllFeedback();
-                  if (context.mounted) Navigator.pop(context);
-                },
-                child:
-                    Text(AppLocalizations.of(context)!.deleteFeedback),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // Stage 14: _showFeedbackExportDialog entfernt — Bewertungen werden
+  // jetzt verpflichtend pro neuer Suchrichtung aufgenommen und
+  // ausschliesslich lokal im Lern-Modell verwendet (kein Export, kein
+  // Versand). Die zugehoerigen l10n-Strings (feedbackTitle, feedbackDesc,
+  // noFeedback, deleteFeedback, sendFeedbackSafe, reviewFeedback) bleiben
+  // als orphans im generierten l10n-File — sie schaden nicht.
 }
