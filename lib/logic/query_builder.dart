@@ -28,9 +28,8 @@ class FindUXQueryBuilder {
   static const List<String> noiseExclusions = ['-inurl:ads', '-inurl:promo', '-intitle:sponsored'];
   static const List<String> explicitExclusions = ['-sex', '-porn', '-nude', '-gambling', '-betting'];
 
-  Future<double> _getLearnedWeight(String key) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getDouble('weight_$key') ?? 1.0;
+  double _getLearnedWeight(String key, Map<String, double> weights) {
+    return weights['weight_$key'] ?? 1.0;
   }
 
   Future<String> buildQuery({
@@ -43,6 +42,15 @@ class FindUXQueryBuilder {
     String googleDork = '';
     final prefs = await SharedPreferences.getInstance();
 
+    // Cache alle Gewichte für Performance
+    final Map<String, double> weights = {};
+    final allKeys = prefs.getKeys();
+    for (var key in allKeys) {
+      if (key.startsWith('weight_')) {
+        weights[key] = prefs.getDouble(key) ?? 1.0;
+      }
+    }
+
     // 1. WAS (Das exakte Suchziel - Google "exact phrase" logic)
     if (what.isNotEmpty) {
       String cleanedWhat = what.replaceAll(RegExp(r'[“”„‟]'), '"').replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -51,15 +59,11 @@ class FindUXQueryBuilder {
 
     // 1.1 LERN-ERWEITERUNG: Stark gewichtete Keywords einfließen lassen (NEU)
     final List<String> learnedBoosts = [];
-    final allKeys = prefs.getKeys();
-    for (var key in allKeys) {
-      if (key.startsWith('weight_kw_')) {
-        final weight = prefs.getDouble(key) ?? 1.0;
-        if (weight > 1.5) { // Nur bei hoher Relevanz
-          learnedBoosts.add(key.replaceFirst('weight_kw_', ''));
-        }
+    weights.forEach((key, weight) {
+      if (key.startsWith('weight_kw_') && weight > 1.5) {
+        learnedBoosts.add(key.replaceFirst('weight_kw_', ''));
       }
-    }
+    });
     if (learnedBoosts.isNotEmpty) {
       googleDork += ' (' + learnedBoosts.take(3).join(' OR ') + ')';
     }
@@ -83,7 +87,7 @@ class FindUXQueryBuilder {
     // 4. LERN-OPTIMIERTE FILTER (Nutzung von Googles 'site:' und 'filetype:')
     Map<String, double> filterWeights = {};
     for (var f in filters) {
-      filterWeights[f] = await _getLearnedWeight('filter_$f');
+      filterWeights[f] = _getLearnedWeight('filter_$f', weights);
     }
 
     List<String> sortedFilters = List.from(filters);

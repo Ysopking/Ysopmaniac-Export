@@ -37,7 +37,10 @@ class SecurityService {
 
     // Schlüssel auslesen und Box verschlüsselt öffnen
     var keyString = await secureStorage.read(key: _encryptionKeyKey);
-    var key = base64Url.decode(keyString!);
+    if (keyString == null) {
+      throw Exception('Encryption key not found in secure storage');
+    }
+    var key = base64Url.decode(keyString);
     await Hive.openBox(_vaultBoxName, encryptionCipher: HiveAesCipher(key));
   }
 

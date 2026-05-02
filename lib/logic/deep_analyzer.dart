@@ -1,4 +1,3 @@
-
 class DeepAnalyzer {
   // Simuliert die Analyse der ersten 50 Websites basierend auf der Query
   // In einer echten Implementierung würde hier ein lokaler NLP-Prozess die Snippets/Meta-Tags scannen
@@ -10,8 +9,6 @@ class DeepAnalyzer {
       'shopping': ['Testberichte', 'Günstigste Anbieter', 'Nachhaltige Alternativen', 'Zubehör'],
       'news': ['Hintergrundanalyse', 'Live-Ticker', 'Internationale Presseschau', 'Faktencheck'],
     };
-
-    await Future.delayed(const Duration(seconds: 1)); // Simuliere Rechenzeit
 
     // Finde das passende Cluster oder nutze Standard
     String category = 'tech';
