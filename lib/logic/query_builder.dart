@@ -645,9 +645,10 @@ class FindUXQueryBuilder {
       return relevant.take(max).map((e) => e.key).toList();
     }
 
-    // 5) Fallback: keine thematische Uebereinstimmung → globale Top-N
-    //    (verhindert Regression bei kurzen/obskuren Queries)
-    return _topLearnedKeywords(weights, positive: positive, max: max);
+    // Kein Fallback: wenn kein gelerntes Keyword thematisch zur Suche passt,
+    // wird NICHTS injiziert. Lieber keine Personalisierung als falsche Ergebnisse
+    // (z.B. "Bundesliga" in eine "Grillplatz"-Suche mischen).
+    return [];
   }
 
   List<String> _resolveEffectiveFilters(
