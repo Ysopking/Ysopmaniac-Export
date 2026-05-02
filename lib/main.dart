@@ -12,6 +12,7 @@ import 'services/learning_service.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/unlock_screen.dart';
+import 'screens/passkey_setup_screen.dart';
 import 'screens/home_page.dart';
 import 'logic/state_provider.dart';
 import 'theme.dart';
@@ -74,6 +75,7 @@ class _MyAppState extends ConsumerState<MyApp> {
   Future<void> _initApp() async {
     final prefs = await SharedPreferences.getInstance();
     ref.read(onboardingDoneProvider.notifier).state = prefs.getBool('onboarding_done') ?? false;
+    ref.read(firstLaunchProvider.notifier).state = prefs.getBool('first_launch') ?? true;
     await ref.read(settingsProvider.notifier).loadSettings();
     _authenticate();
   }
@@ -94,6 +96,14 @@ class _MyAppState extends ConsumerState<MyApp> {
     }
   }
 
+  Future<void> _completeSetup() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('first_launch', false);
+    ref.read(firstLaunchProvider.notifier).state = false;
+    // Nach Setup direkt authentifizieren
+    _authenticate();
+  }
+
   Route<dynamic> _onGenerateRoute(RouteSettings settings) {
     return MaterialPageRoute(
       settings: settings,
@@ -102,8 +112,11 @@ class _MyAppState extends ConsumerState<MyApp> {
           final onboardingDone = ref.watch(onboardingDoneProvider);
           final authenticated = ref.watch(authProvider);
 
-          // Launch-Lock: Only request passkey on app start
-          if (!authenticated) {
+          // Launch-Lock: Require passkey setup on first launch
+          final firstLaunch = ref.watch(firstLaunchProvider);
+          if (firstLaunch) {
+            return PasskeySetupScreen(onSetupComplete: _completeSetup);
+          } else if (!authenticated) {
             return UnlockScreen(onUnlock: _authenticate);
           }
 

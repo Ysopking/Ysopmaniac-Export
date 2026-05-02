@@ -8,10 +8,13 @@ final securityServiceProvider = Provider((ref) => SecurityService());
 final learningServiceProvider = Provider((ref) => LearningService());
 
 // Auth State
-final authProvider = StateProvider<bool>((ref) => true); // Für Demo entsperrt starten
+final authProvider = StateProvider<bool>((ref) => false);
 
 // Onboarding State
 final onboardingDoneProvider = StateProvider<bool>((ref) => false);
+
+// First Launch State
+final firstLaunchProvider = StateProvider<bool>((ref) => true);
 
 // Settings State
 class SettingsState {
