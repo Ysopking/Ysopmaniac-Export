@@ -1,5 +1,3 @@
-
-
 class GeoLocation {
   final String country;
   final String region;
@@ -48,14 +46,18 @@ class GeoDataService {
 
   List<String> getCities(String country, String region) {
     if (!_mockData.containsKey(country) ||
-        !_mockData[country].containsKey(region)) return [];
+        !_mockData[country].containsKey(region)) {
+      return [];
+    }
     return (_mockData[country][region] as Map<String, dynamic>).keys.toList();
   }
 
   List<String> getZipCodes(String country, String region, String city) {
     if (!_mockData.containsKey(country) ||
         !_mockData[country].containsKey(region) ||
-        !_mockData[country][region].containsKey(city)) return [];
+        !_mockData[country][region].containsKey(city)) {
+      return [];
+    }
     return List<String>.from(_mockData[country][region][city]);
   }
 

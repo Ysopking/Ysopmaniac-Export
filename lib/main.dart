@@ -32,7 +32,7 @@ void main() async {
 
   } catch (e) {
     // Bei Fehlern trotzdem starten
-    print('Initialisierungsfehler: $e');
+    debugPrint('Initialisierungsfehler: $e');
   }
 
   runApp(

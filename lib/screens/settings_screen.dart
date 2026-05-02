@@ -7,6 +7,7 @@ import '../logic/state_provider.dart';
 import '../theme.dart';
 
 class SettingsScreen extends ConsumerWidget {
+  const SettingsScreen({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
@@ -233,7 +234,9 @@ class SettingsScreen extends ConsumerWidget {
                     style: FindUXProTheme.outlinePurpleButtonStyle,
                     onPressed: () async {
                       await learningService.clearAllFeedback();
-                      Navigator.pop(context);
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                      }
                     },
                     child: Text(AppLocalizations.of(context)!.deleteFeedback),
                   ),

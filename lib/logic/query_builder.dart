@@ -65,7 +65,7 @@ class FindUXQueryBuilder {
       }
     });
     if (learnedBoosts.isNotEmpty) {
-      googleDork += ' (' + learnedBoosts.take(3).join(' OR ') + ')';
+      googleDork += ' (${learnedBoosts.take(3).join(' OR ')})';
     }
 
     // 2. WARUM (Kontextuelle Erweiterung - Google "allintext" logic)
@@ -102,10 +102,10 @@ class FindUXQueryBuilder {
     }
 
     // 5. JUGENDSCHUTZ & ANTI-ADS (Googles native Exclusions)
-    googleDork += ' ' + noiseExclusions.join(' ');
+    googleDork += ' ${noiseExclusions.join(' ')}';
     final bool isYouthActive = settings['enableYouthProtection'] ?? true;
     if (isYouthActive) {
-      googleDork += ' ' + explicitExclusions.join(' ');
+      googleDork += ' ${explicitExclusions.join(' ')}';
     }
 
     return googleDork.replaceAll(RegExp(r'\s+'), ' ').trim();
