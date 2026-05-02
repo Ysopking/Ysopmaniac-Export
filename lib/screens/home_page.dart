@@ -776,7 +776,13 @@ class _HomePageState extends ConsumerState<HomePage> {
     final settings = ref.watch(settingsProvider);
     final plz = settings.plz.trim();
     final beruf = settings.beruf.trim();
-    if (plz.isEmpty && beruf.isEmpty) {
+    final familyStatus = settings.familyStatus;
+    const familyLabels = <String, String>{
+      'familie': 'Familie',
+      'alleinerziehend': 'Alleinerz.',
+    };
+    final familyLabel = familyLabels[familyStatus];
+    if (plz.isEmpty && beruf.isEmpty && familyLabel == null) {
       return GestureDetector(
         onTap: () => Navigator.pushNamed(context, '/settings'),
         child: Container(
@@ -792,7 +798,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Stammdaten ergaenzen fuer praezisere Suchen (PLZ, Beruf)',
+                'Stammdaten ergaenzen: PLZ, Beruf oder Familienstatus',
                 style: TextStyle(fontSize: 12, color: Colors.black87),
               ),
             ),
@@ -804,6 +810,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     final parts = <String>[];
     if (plz.isNotEmpty) parts.add('PLZ $plz');
     if (beruf.isNotEmpty) parts.add(beruf);
+    if (familyLabel != null) parts.add(familyLabel);
     return GestureDetector(
       onTap: () => Navigator.pushNamed(context, '/settings'),
       child: Container(
