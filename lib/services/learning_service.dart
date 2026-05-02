@@ -562,18 +562,6 @@ class LearningService {
       }
     }
 
-    // Initial family-status weight — analog zu employment weight (1.1 Startwert).
-    // Wird durch trackFeedback / _applyPendingFeedbacks kontinuierlich verfeinert.
-    //   < 0.7  : neg. Feedback dominiert → Overlay wird gedaempft
-    //   0.7–1.1: neutral / Standard-Overlay
-    //   >= 1.2 : positives Signal → erweitertes Overlay (mehr Trust-Domains)
-    //   >= 1.4 : starkes Signal  → zusaetzliche SoftTerms injiziert
-    final famKey = 'weight_family_' + familyStatus;
-    final currentFam = prefs.getDouble(famKey) ?? 0.0;
-    if (1.1 > currentFam) {
-      await prefs.setDouble(famKey, 1.1);
-    }
-
     if (kDebugMode) {
       if (kDebugMode) debugPrint(
         'seedStarterFamilyWeights: $familyStatus — ${weights.length} Keys gesetzt.',
