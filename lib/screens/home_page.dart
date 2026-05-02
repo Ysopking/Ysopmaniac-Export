@@ -61,6 +61,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   static const int _seenKwsCap = 5000;
 
   String _viewState = 'home';
+  String _previousViewState = 'home';
   PrecisionRecommendation? _advice;
 
   // ---------- Hardware-Trigger: Doppel-Lauter-Taste ----------
@@ -310,6 +311,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     if (!mounted) return;
 
     setState(() {
+      _previousViewState = _viewState;
       _viewState = 'results';
       _showDeepAnalysisOverlay = false;
       _hasSearchedOnce = true;
@@ -393,10 +395,28 @@ class _HomePageState extends ConsumerState<HomePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
       body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
+        duration: const Duration(milliseconds: 300),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) {
+          final forward = _viewRank(_viewState) >= _viewRank(_previousViewState);
+          final slide = Tween<Offset>(
+            begin: Offset(forward ? 0.06 : -0.06, 0),
+            end: Offset.zero,
+          ).animate(animation);
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(position: slide, child: child),
+          );
+        },
         child: _getViewForState(),
       ),
     );
+  }
+
+  int _viewRank(String state) {
+    const order = {'home': 0, 'dashboard': 1, 'results': 2};
+    return order[state] ?? 0;
   }
 
   Widget _getViewForState() {
@@ -502,7 +522,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         title: l10n.startSearch,
                         icon: Icons.search_rounded,
                         onTap: () =>
-                            setState(() => _viewState = 'dashboard'),
+                            setState(() { _previousViewState = _viewState; _viewState = 'dashboard'; }),
                       ),
                       const SizedBox(height: 16),
                       _buildMenuButton(
@@ -579,7 +599,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         color: Colors.black87, size: 20),
                     onPressed: () {
                       Haptics.tap();
-                      setState(() => _viewState = 'home');
+                      setState(() { _previousViewState = _viewState; _viewState = 'home'; });
                     },
                   ),
                   const Spacer(),
@@ -1160,7 +1180,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           _analysisTimer?.cancel();
                           await _purgeAllSessionData();
                           if (!mounted) return;
-                          setState(() => _viewState = 'dashboard');
+                          setState(() { _previousViewState = _viewState; _viewState = 'dashboard'; });
                         },
                 ),
                 Expanded(
@@ -1244,7 +1264,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                   borderRadius: BorderRadius.circular(12)),
                             ),
                             onPressed: () =>
-                                setState(() => _viewState = 'dashboard'),
+                                setState(() { _previousViewState = _viewState; _viewState = 'dashboard'; }),
                             icon: const Icon(Icons.tune),
                             label: const Text('Erweiterte Suche'),
                           ),
@@ -1272,7 +1292,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             icon: const Icon(Icons.arrow_back_ios_new,
                                 color: Colors.white, size: 20),
                             onPressed: () => setState(
-                                () => _viewState = 'dashboard'),
+                                () { setState(() { _previousViewState = _viewState; _viewState = 'dashboard'; }); }),
                           ),
                         ),
                         GestureDetector(
