@@ -1,45 +1,67 @@
 import 'dart:async';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-/// Auto-Clear-Mechanismus fuer die System-Zwischenablage.
+/// Clipboard-Guard (S-06).
 ///
-/// Stage F Haertung: wenn FindUX selbst etwas in die Zwischenablage legt
-/// (z.B. eine kopierte Suchanfrage oder ein Feedback-Text), planen wir
-/// nach 30 Sekunden ein automatisches Loeschen — aber nur, wenn der
-/// Inhalt sich seitdem nicht geaendert hat. So ueberschreiben wir nicht
-/// versehentlich Daten, die der User bewusst spaeter eingefuegt hat.
+/// Problem: Wenn der User eine Suchanfrage kopiert (oder die App intern
+/// etwas in die Zwischenablage schreibt), bleibt dieser Text unbegrenzt
+/// in der Zwischenablage — andere Apps koennen ihn mitlesen.
+///
+/// Loesung: Nach [ttl] Sekunden wird die Zwischenablage automatisch
+/// geloescht. Fuer Suchanfragen empfehlen wir ttl=30 Sekunden.
+///
+/// Verwendung:
+///   await ClipboardGuard.copyWithTtl('mein suchbegriff');
+///   // → kopiert + loesche nach 30s automatisch
 class ClipboardGuard {
-  static const Duration _ttl = Duration(seconds: 30);
+  ClipboardGuard._();
 
-  Timer? _timer;
-  String? _lastSet;
+  static Timer? _clearTimer;
+  static const Duration _defaultTtl = Duration(seconds: 30);
 
-  /// Schreibt [text] in die Zwischenablage und plant das Auto-Clear.
-  Future<void> copy(String text) async {
-    _timer?.cancel();
+  /// Kopiert [text] in die Zwischenablage und plant automatisches Loeschen.
+  ///
+  /// Falls vorher schon ein Text mit TTL kopiert wurde, wird der alte
+  /// Timer abgebrochen und der neue Text bekommt eine frische TTL.
+  static Future<void> copyWithTtl(
+    String text, {
+    Duration ttl = _defaultTtl,
+  }) async {
+    // Alten Timer abbrechen
+    _clearTimer?.cancel();
+
     await Clipboard.setData(ClipboardData(text: text));
-    _lastSet = text;
-    _timer = Timer(_ttl, _clearIfUnchanged);
-  }
+    if (kDebugMode) debugPrint('ClipboardGuard: Text kopiert, TTL=${ttl.inSeconds}s');
 
-  Future<void> _clearIfUnchanged() async {
-    try {
-      final current = await Clipboard.getData(Clipboard.kTextPlain);
-      if (current?.text == _lastSet) {
-        await Clipboard.setData(const ClipboardData(text: ''));
+    _clearTimer = Timer(ttl, () async {
+      try {
+        // Nur loeschen wenn der Inhalt noch von uns stammt
+        final current = await Clipboard.getData(Clipboard.kTextPlain);
+        if (current?.text == text) {
+          await Clipboard.setData(const ClipboardData(text: ''));
+          if (kDebugMode) debugPrint('ClipboardGuard: Zwischenablage nach TTL geloescht.');
+        }
+      } catch (e) {
+        if (kDebugMode) debugPrint('ClipboardGuard: Loeschen fehlgeschlagen: $e');
       }
-    } catch (_) {
-      // Best-effort: bei Fehler einfach nichts tun.
-    } finally {
-      _lastSet = null;
-      _timer = null;
-    }
+      _clearTimer = null;
+    });
   }
 
-  void dispose() {
-    _timer?.cancel();
-    _timer = null;
-    _lastSet = null;
+  /// Loescht die Zwischenablage sofort und bricht laufende Timer ab.
+  static Future<void> clearNow() async {
+    _clearTimer?.cancel();
+    _clearTimer = null;
+    try {
+      await Clipboard.setData(const ClipboardData(text: ''));
+    } catch (_) {}
+  }
+
+  /// Muss aufgerufen werden wenn die App in den Hintergrund geht
+  /// (z.B. in AutoLockObserver.onPaused) um keine Daten stehen zu lassen.
+  static void cancelTimer() {
+    _clearTimer?.cancel();
+    _clearTimer = null;
   }
 }
