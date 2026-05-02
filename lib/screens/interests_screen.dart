@@ -15,18 +15,44 @@ import '../theme.dart';
 ///   Top-Kategorien (Grid)  ->  Unter-Kategorien (Liste mit Chevron)
 ///   ->  Items (Multi-Select Chips)
 ///
-/// Alle Aenderungen schreiben sofort in `settingsProvider.interests`.
-/// Beim ersten Hinzufuegen einer Interesse werden Lern-Bumps angewendet
-/// (siehe SettingsNotifier.updateSettings).
+/// Kategorien werden nach Profil-Relevanz (employmentType, familyStatus, Alter)
+/// vorsortiert. Die Top-3 relevanten Kategorien erhalten ein "Empfohlen"-Badge.
 ///
-/// Stage 15: In jeder Sub-Sektion kann der User per Plus-Chip eigene
-/// Eintraege hinzufuegen — siehe _ItemsScreenState.
+/// Stage 15: Custom-Eintraege pro Sub-Sektion — siehe _ItemsScreenState.
 class InterestsScreen extends ConsumerWidget {
   const InterestsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selected = ref.watch(settingsProvider).interests;
+    final settings = ref.watch(settingsProvider);
+    final selected = settings.interests;
+
+    // Katalog nach Profil-Relevanz sortieren (stabiler Sort: gleicher Score → Originalreihenfolge)
+    final sorted = kInterestsCatalog.toList();
+    final scores = <String, double>{};
+    for (final c in sorted) {
+      scores[c.id] = categoryRelevance(
+          c, settings.employmentType, settings.familyStatus, settings.jahr);
+    }
+    sorted.sort((a, b) => scores[b.id]!.compareTo(scores[a.id]!));
+
+    // Top-3 nicht-null-Score-Kategorien gelten als "empfohlen"
+    final recommended = sorted
+        .where((c) => (scores[c.id] ?? 0) > 0)
+        .take(3)
+        .map((c) => c.id)
+        .toSet();
+
+    // Personalisierter Untertitel
+    final hasProfile = settings.employmentType != 'student' ||
+        settings.familyStatus != 'single' ||
+        settings.jahr != 1990;
+    final subtitle = hasProfile
+        ? 'Passend fuer dein Profil sortiert. Tippe tief, '
+          'um das Lern-Modell zu schalten.'
+        : 'Tippe ein Thema an und gehe so tief, wie du moechtest. '
+          'Deine Auswahl bleibt verschluesselt auf diesem Geraet.';
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
       appBar: AppBar(
@@ -81,15 +107,25 @@ class InterestsScreen extends ConsumerWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-            child: Text(
-              'Tippe ein Thema an und gehe so tief, wie du moechtest. '
-              'Deine Auswahl bleibt verschluesselt auf diesem Geraet und '
-              'verbessert kuenftige Suchen.',
-              style: TextStyle(
-                fontSize: 13.5,
-                height: 1.4,
-                color: Colors.black.withValues(alpha: 0.6),
-              ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (hasProfile) ...[
+                  const Icon(Icons.auto_awesome_rounded,
+                      size: 14, color: Color(0xFF6C4AB6)),
+                  const SizedBox(width: 5),
+                ],
+                Expanded(
+                  child: Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      height: 1.4,
+                      color: Colors.black.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           Expanded(
@@ -102,13 +138,14 @@ class InterestsScreen extends ConsumerWidget {
                 crossAxisSpacing: 12,
                 childAspectRatio: 1.1,
               ),
-              itemCount: kInterestsCatalog.length,
+              itemCount: sorted.length,
               itemBuilder: (ctx, i) {
-                final c = kInterestsCatalog[i];
+                final c = sorted[i];
                 final n = countSelectedInTop(c.id, selected);
                 return _CategoryTile(
                   category: c,
                   count: n,
+                  recommended: recommended.contains(c.id),
                   onTap: () {
                     Haptics.tap();
                     Navigator.push(
@@ -131,18 +168,26 @@ class InterestsScreen extends ConsumerWidget {
 class _CategoryTile extends StatelessWidget {
   final InterestCategory category;
   final int count;
+  final bool recommended;
   final VoidCallback onTap;
   const _CategoryTile({
     required this.category,
     required this.count,
     required this.onTap,
+    this.recommended = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final selected = count > 0;
+    final isSelected = count > 0;
+    // recommended && !isSelected → leichter Lila-Hintergrund als Hinweis
+    final bgColor = isSelected
+        ? Colors.white
+        : recommended
+            ? const Color(0xFFF3EEFF)
+            : Colors.white;
     return Material(
-      color: Colors.white,
+      color: bgColor,
       borderRadius: BorderRadius.circular(20),
       elevation: 0,
       child: InkWell(
@@ -153,10 +198,12 @@ class _CategoryTile extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: selected
+              color: isSelected
                   ? FindUXProTheme.primaryPurple.withValues(alpha: 0.5)
-                  : Colors.black.withValues(alpha: 0.04),
-              width: selected ? 1.6 : 1,
+                  : recommended
+                      ? FindUXProTheme.primaryPurple.withValues(alpha: 0.25)
+                      : Colors.black.withValues(alpha: 0.04),
+              width: (isSelected || recommended) ? 1.6 : 1,
             ),
             boxShadow: [
               BoxShadow(
@@ -189,15 +236,15 @@ class _CategoryTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        selected
+                        isSelected
                             ? '$count ausgewaehlt'
                             : '${category.subs.length} Themen',
                         style: TextStyle(
                           fontSize: 12,
-                          color: selected
+                          color: isSelected
                               ? FindUXProTheme.primaryPurple
                               : Colors.black54,
-                          fontWeight: selected
+                          fontWeight: isSelected
                               ? FontWeight.w700
                               : FontWeight.w500,
                         ),
@@ -206,7 +253,8 @@ class _CategoryTile extends StatelessWidget {
                   ),
                 ],
               ),
-              if (selected)
+              // Häkchen wenn ausgewählt
+              if (isSelected)
                 Positioned(
                   top: 0,
                   right: 0,
@@ -219,6 +267,29 @@ class _CategoryTile extends StatelessWidget {
                     ),
                     child: const Icon(Icons.check_rounded,
                         size: 14, color: Colors.white),
+                  ),
+                ),
+              // Stern-Badge wenn empfohlen (und noch nicht ausgewählt)
+              if (recommended && !isSelected)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: FindUXProTheme.primaryPurple,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Empfohlen',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
                   ),
                 ),
             ],

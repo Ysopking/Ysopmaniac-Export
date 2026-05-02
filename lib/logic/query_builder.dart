@@ -14,7 +14,7 @@ import 'stammdaten_resolver.dart';
 ///   3) Stammdaten-Resolver liefert harte/weiche Terme + Source-Bias
 ///   4) Coach-Injection (HardTerms, Phrases, Intitles, Sites, Excludes, after)
 ///   5) Lern-Boost (kontextuell gefilterte Keywords als OR-Erweiterung)
-///   6) Lern-Demote (negative Keywords + Domains)
+///   6) Lern-Demote (kontextuell gefilterte negative Keywords + Domains)
 ///   7) site:(...)-Gruppe + filetype:(...)-Gruppe (jeweils EINE)
 ///   8) Smart-Date: after:DATE wenn Intent es nahelegt (kein Coach-after gesetzt)
 ///   9) Spam-Filter + Jugendschutz
@@ -231,8 +231,16 @@ class FindUXQueryBuilder {
       }
     }
 
-    // 8. Lern-Demote: Top-3 negative Keywords als -term
-    final demoteKws = _topLearnedKeywords(weights, positive: false, max: 3);
+    // 8. Lern-Demote: negative Keywords — nur wenn thematisch relevant
+    //    Analog zu Schritt 7: -keyword wird nur injiziert wenn das Keyword
+    //    einen Prefix-Overlap >= 4 mit den aktuellen Query-Tokens hat.
+    //    Verhindert dass legitime Bereiche durch themenfremde Demotes gesperrt werden.
+    final demoteKws = _contextualBoostKws(
+      weights: weights,
+      queryTokens: usedTokens,
+      max: 3,
+      positive: false,
+    );
     for (final kw in demoteKws) {
       parts.add('-$kw');
     }
@@ -458,12 +466,16 @@ class FindUXQueryBuilder {
     required Set<String> queryTokens,
     int max = 3,
     int minPrefixLen = 4,
+    bool positive = true,
   }) {
-    // 1) Alle positiven kw-Eintraege (Gewicht > 1.05 = Lern-Schwelle)
+    // 1) kw-Eintraege nach Richtung filtern:
+    //    positive: Gewicht > 1.05 (gelernte Boost-Keywords)
+    //    negative: Gewicht < 0.92 (gelernte Demote-Keywords)
+    final threshold = positive ? 1.05 : 0.92;
     final candidates = <String, double>{};
     for (final entry in weights.entries) {
       if (!entry.key.startsWith('weight_kw_')) continue;
-      if (entry.value <= 1.05) continue;
+      if (positive ? entry.value <= threshold : entry.value >= threshold) continue;
       final kw = entry.key.substring('weight_kw_'.length);
       if (kw.isEmpty) continue;
       candidates[kw] = entry.value;
@@ -500,11 +512,15 @@ class FindUXQueryBuilder {
       return false;
     }
 
-    // 4) Relevante Keywords nach Gewicht sortieren
+    // 4) Relevante Keywords nach Gewicht sortieren:
+    //    positive → absteigend (hoechste Boosts zuerst)
+    //    negative → aufsteigend (niedrigste Gewichte = staerkste Penalisierung)
     final relevant = candidates.entries
         .where((e) => _isRelevant(e.key))
         .toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+      ..sort((a, b) => positive
+          ? b.value.compareTo(a.value)
+          : a.value.compareTo(b.value));
 
     if (relevant.isNotEmpty) {
       return relevant.take(max).map((e) => e.key).toList();
@@ -512,7 +528,7 @@ class FindUXQueryBuilder {
 
     // 5) Fallback: keine thematische Uebereinstimmung → globale Top-N
     //    (verhindert Regression bei kurzen/obskuren Queries)
-    return _topLearnedKeywords(weights, positive: true, max: max);
+    return _topLearnedKeywords(weights, positive: positive, max: max);
   }
 
   List<String> _resolveEffectiveFilters(
