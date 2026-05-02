@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../services/learning_service.dart';
@@ -27,8 +27,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   final TextEditingController _whatController = TextEditingController();
   final TextEditingController _whyController = TextEditingController();
 
-  late WebViewController _webViewController;
-  bool _webViewLoaded = false;
+  bool _searchPerformed = false;
   bool _showFeedbackOverlay = false;
   bool _showDeepAnalysisOverlay = false;
   List<String> _suggestedGoals = [];
@@ -42,24 +41,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   void initState() {
     super.initState();
-    _webViewController = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(FindUXProTheme.primaryPurple)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onProgress: (int progress) {
-            if (progress >= 80 && !_webViewLoaded) {
-              setState(() => _webViewLoaded = true);
-            }
-          },
-          onPageStarted: (String url) {
-            setState(() => _webViewLoaded = false);
-          },
-          onPageFinished: (String url) {
-            setState(() => _webViewLoaded = true);
-          },
-        ),
-      );
   }
 
   @override
@@ -72,11 +53,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _purgeAllSessionData() async {
-    try {
-      await _webViewController.clearCache();
-    } catch (e) {
-      debugPrint('Cache clear error: $e');
-    }
+    // External browser handles its own cache
   }
 
   Future<void> _performSearch({String? addedGoal}) async {
@@ -118,13 +95,15 @@ final fullQuery = await builder.buildQuery(
 
     setState(() {
       _viewState = 'results';
-      _webViewLoaded = false;
+      _searchPerformed = true;
       _showDeepAnalysisOverlay = false;
     });
 
-    // Load search in WebView
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _webViewController.loadRequest(Uri.parse(url));
+    // Open search in external browser
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      }
     });
 
     widget.learningService.trackSearch(
@@ -354,32 +333,62 @@ final fullQuery = await builder.buildQuery(
                 _viewState = 'dashboard';
                 setState(() {});
               }),
-              Expanded(child: Text('Mobile Sandbox: ${_whatController.text}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14), overflow: TextOverflow.ellipsis)),
-              IconButton(icon: const Icon(Icons.refresh, color: Colors.white, size: 22), onPressed: () => _webViewController.reload()),
+              Expanded(child: Text('Suchergebnisse: ${_whatController.text}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14), overflow: TextOverflow.ellipsis)),
+              IconButton(icon: const Icon(Icons.open_in_browser, color: Colors.white, size: 22), onPressed: () async {
+                final settings = ref.read(settingsProvider);
+                final builder = FindUXQueryBuilder();
+                final url = builder.buildSearchUrl(_whatController.text, settings.searchEngine, {});
+                if (await canLaunchUrl(Uri.parse(url))) {
+                  await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                }
+              }),
             ],
           ),
         ),
         Expanded(
           child: Stack(
             children: [
-              RepaintBoundary(
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 400),
-                  opacity: _webViewLoaded ? 1.0 : 0.0,
-                  child: WebViewWidget(controller: _webViewController),
+              Container(
+                color: Colors.white,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.open_in_browser, size: 64, color: FindUXProTheme.primaryPurple),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Suche wurde im Browser geöffnet!',
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'FindUX hat Ihre intelligente Suchanfrage erstellt\nund in Ihrem Standard-Browser geöffnet.',
+                        style: const TextStyle(color: Colors.grey, fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        '"${_whatController.text}"',
+                        style: const TextStyle(fontSize: 18, fontStyle: FontStyle.italic),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
                 ),
               ),
               if (!_webViewLoaded) Container(color: FindUXProTheme.primaryPurple, child: const Center(child: CupertinoActivityIndicator(color: Colors.white, radius: 14))),
               Positioned(bottom: 30, left: 20, right: 20, child: SafeArea(child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 Container(padding: const EdgeInsets.all(4), decoration: BoxDecoration(color: FindUXProTheme.primaryPurple.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(30)), child: Row(children: [
-                  IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20), onPressed: () async {
-                    if (await _webViewController.canGoBack()) {
-                      _webViewController.goBack();
-                    }
+                  IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20), onPressed: () {
+                    setState(() => _viewState = 'dashboard');
                   }),
-                  IconButton(icon: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 20), onPressed: () async {
-                    if (await _webViewController.canGoForward()) {
-                      _webViewController.goForward();
+                  IconButton(icon: const Icon(Icons.open_in_browser, color: Colors.white, size: 20), onPressed: () async {
+                    final settings = ref.read(settingsProvider);
+                    final builder = FindUXQueryBuilder();
+                    final url = builder.buildSearchUrl(_whatController.text, settings.searchEngine, {});
+                    if (await canLaunchUrl(Uri.parse(url))) {
+                      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
                     }
                   }),
                 ])),
