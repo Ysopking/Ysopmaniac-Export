@@ -16,6 +16,8 @@ jobs:
         with:
           flutter-version: '3.41.8'
 
+      - run: flutter clean
+
       - run: flutter pub get
 
       - run: flutter build apk --debug
