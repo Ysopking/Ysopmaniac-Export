@@ -242,6 +242,12 @@ class StammdatenResolver {
     required String why,
     required Map<String, dynamic> settings,
     double employmentWeight = 1.0,
+    /// Skalierung des Familienstatus-Overlays durch das Lernmodell.
+    ///   < 0.7  → Overlay gedaempft (neg. Feedback dominiert)
+    ///   0.7–1.1 → Standard
+    ///   >= 1.2  → Erweitertes Overlay (mehr Trust-Domains)
+    ///   >= 1.4  → Starkes Signal → zusaetzliche SoftTerms
+    double familyWeight = 1.0,
     List<String> interests = const [],
   }) {
     final softTerms = <String>[];
@@ -447,50 +453,84 @@ class StammdatenResolver {
         employmentType == 'vollzeit';
 
     // ─────────────────────────────────────────────────────────────
-    // 8b. FAMILIENSTATUS — spec-konform
+    // 8b. FAMILIENSTATUS — spec-konform, skaliert durch familyWeight
+    //
+    //   familyWeight < 0.7  → Lernmodell: Nutzer lehnt Family-Overlay ab.
+    //                          Spam-Schutz (excludeDomains) bleibt IMMER aktiv.
+    //                          Trust-Domains, Lokal-Bias und SoftTerms werden
+    //                          unterdrueckt.
+    //   familyWeight 0.7–1.1 → Neutral: Standard-Overlay (max. 2 Trust-Domains).
+    //   familyWeight >= 1.2  → Positives Lern-Signal: volles Overlay
+    //                          (alle Trust-Domains aus der jeweiligen Liste).
+    //   familyWeight >= 1.4  → Starkes positives Signal: zusaetzliche
+    //                          thematische SoftTerms werden injiziert.
     // ─────────────────────────────────────────────────────────────
     if (familyStatus == 'familie') {
-      // Schutz vor Pinterest + Affiliate-Mommy-Blog-Spam (immer aktiv)
+      // Spam-Schutz ist IMMER aktiv — unabhaengig vom Lerngewicht.
       excludeDomains.addAll(_familieExclusions);
 
-      // Lokal-Bias bei Familien (Kita, Arzt, Angebote)
-      if (plz.isNotEmpty && plz != '0' && !hardTerms.contains(plz)) {
+      // Lokal-Bias: erst ab familyWeight >= 0.7 sinnvoll
+      if (familyWeight >= 0.7 &&
+          plz.isNotEmpty && plz != '0' && !hardTerms.contains(plz)) {
         softTerms.add(plz);
       }
 
-      // Medizinisch/erzieherisch → Trust-Domains erzwingen
-      if (hasFamilyMedical || hasMedical) {
-        trustDomains.addAll(_familieMedTrustDomains);
+      // Trust-Domains: nur wenn Lernmodell nicht negativ signalisiert
+      if ((hasFamilyMedical || hasMedical) && familyWeight >= 0.7) {
+        final trustCount = familyWeight >= 1.2
+            ? _familieMedTrustDomains.length
+            : 2;
+        trustDomains.addAll(_familieMedTrustDomains.take(trustCount));
         if (!preferredSources.contains('offiziell')) {
           preferredSources.insert(0, 'offiziell');
+        }
+        // Starkes Signal: thematische SoftTerms + Ratgeber-Quellen erweiternd
+        if (familyWeight >= 1.4) {
+          if (hasFamilyMedical && !softTerms.contains('Kinderarzt')) {
+            softTerms.add('Kinderarzt');
+          }
+          if (!preferredSources.contains('ratgeber')) {
+            preferredSources.add('ratgeber');
+          }
         }
       }
     } else if (familyStatus == 'alleinerziehend') {
-      // Toxische Foren + Scam-Anwalts-Portale ausschliessen
+      // Spam-Schutz + Scam-Anwalt-Ausschluss: immer aktiv
       excludeDomains.addAll(_alleinerziehendExclusions);
 
-      // Lokal-Bias noch stärker (Kita-Plätze, lokale Angebote)
-      if (plz.isNotEmpty && plz != '0' && !hardTerms.contains(plz)) {
+      // Lokal-Bias: ab familyWeight >= 0.7
+      if (familyWeight >= 0.7 &&
+          plz.isNotEmpty && plz != '0' && !hardTerms.contains(plz)) {
         softTerms.add(plz);
       }
 
-      // Rechtlich/finanziell/Antrags-Intent → staatliche Seiten an die Spitze
+      // Rechtlich/finanziell/Antrags-Intent mit familyWeight-Skalierung
       if (hasLegal || hasFinancial) {
-        trustDomains.addAll(_alleinerziehendTrustDomains);
-        if (!preferredSources.contains('offiziell')) {
-          preferredSources.insert(0, 'offiziell');
-        }
-        // Reddit-Communities fuer echte Erfahrungen zusaetzlich boosten
-        if (!preferredSources.contains('reddit')) {
-          preferredSources.add('reddit');
-        }
-        // Allgemeiner Foerderungs-Hint
-        if (!softTerms.contains('Förderung') && !fullText.contains('foerder')) {
-          softTerms.add('Förderung');
+        if (familyWeight >= 0.7) {
+          final trustCount = familyWeight >= 1.2
+              ? _alleinerziehendTrustDomains.length
+              : 2;
+          trustDomains.addAll(_alleinerziehendTrustDomains.take(trustCount));
+          if (!preferredSources.contains('offiziell')) {
+            preferredSources.insert(0, 'offiziell');
+          }
+          if (!preferredSources.contains('reddit')) {
+            preferredSources.add('reddit');
+          }
+          // Foerderungs-Hint: erst ab neutralem Gewicht (>= 1.0)
+          if (familyWeight >= 1.0 &&
+              !softTerms.contains('Förderung') &&
+              !fullText.contains('foerder')) {
+            softTerms.add('Förderung');
+          }
+          // Starkes Signal: Antrags-Hint ergaenzend hinzufuegen
+          if (familyWeight >= 1.4 && !softTerms.contains('Antrag')) {
+            softTerms.add('Antrag');
+          }
         }
       } else {
-        // Ohne spezifischen Intent: nur effizienz-fokussierte Quellen
-        if (!preferredSources.contains('offiziell')) {
+        // Kein spezifischer Intent: offiziell erst ab neutralem Gewicht
+        if (familyWeight >= 1.0 && !preferredSources.contains('offiziell')) {
           preferredSources.add('offiziell');
         }
       }
