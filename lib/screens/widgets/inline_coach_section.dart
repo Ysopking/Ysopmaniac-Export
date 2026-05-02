@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../coach/coach_models.dart';
-import '../coach/theme_detector.dart';
+import '../../coach/coach_models.dart';
+import '../../coach/theme_detector.dart';
 import '../../theme.dart';
 
 /// Stage 18 — Ambient Coach
