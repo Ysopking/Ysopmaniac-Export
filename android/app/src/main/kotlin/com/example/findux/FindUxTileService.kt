@@ -1,4 +1,4 @@
-package com.example.findux
+package io.findux.app
 
 import android.service.quicksettings.TileService
 import android.content.Intent

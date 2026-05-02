@@ -13,8 +13,9 @@
 # ── FindUX Native Code ───────────────────────────────────────────────────────
 # MainActivity + MethodChannel-Handler muessen erhalten bleiben
 # (Flutter ruft sie ueber Reflection auf).
--keep class com.example.findux.MainActivity { *; }
--keep class com.example.findux.** { *; }
+-keep class io.findux.app.MainActivity { *; }
+# S-09: Keine Wildcard-keep-Regel fuer eigene Klassen — R8 darf alles verschleiern.
+# Nur MainActivity ist wegen MethodChannel-Reflection exempt.
 
 # ── Accessibility Service ────────────────────────────────────────────────────
 # FindUxAccessibilityService.kt: Android bindet ihn per Manifest, darf nicht
