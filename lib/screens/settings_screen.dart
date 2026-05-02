@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../logic/state_provider.dart';
+import '../services/learning_service.dart';
 import '../screens/interests_screen.dart';
 import '../services/chrome_import_quick.dart';
 import '../services/haptic_helper.dart';
@@ -234,22 +235,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           // lokal in der Lern-Engine verwendet (kein Export, kein Versand).
           _sectionLabel('Datenschutz'),
           _groupCard(children: [
-            // Stage 14: Toggle fuer FLAG_SECURE (Screenshots, Screen-
-            // Recordings und Recents-Vorschau blockieren). Default ist
-            // ON. Aenderungen werden persistiert + sofort per
-            // MethodChannel an das native MainActivity weitergereicht.
+            // FLAG_SECURE ist in MainActivity.kt IMMER hart gesetzt
+            // (kein Toggle moeglich). SecureFlag hebt es nur kurzzeitig
+            // fuer den eingebauten In-App-Browser auf (max 3 Screenshots
+            // / 30 s). Der Toggle ist deshalb als Read-Only dargestellt.
             _toggleRow(
               icon: Icons.no_photography_outlined,
               title: 'Screenshots blockieren',
-              subtitle:
-                  'Verhindert Screenshots, Aufnahmen und App-Vorschau',
-              value: settings.disableScreenshots,
-              onChanged: (v) async {
-                // FLAG_SECURE ist ab MainActivity.kt immer-on gesetzt.
-                // disableScreenshots-Pref bleibt fuer zuenftige Nutzung erhalten,
-                // hat aber keinen Einfluss mehr auf den Screenshot-Schutz.
-                await notifier.updateField(disableScreenshots: v);
-              },
+              subtitle: 'Immer aktiv — schuetzt vor Screenshots und Aufnahmen',
+              value: true,
+              onChanged: null,
             ),
             _row(
               icon: Icons.history_rounded,
@@ -546,6 +541,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ref
                           .read(settingsProvider.notifier)
                           .updateField(employmentType: v);
+                      // Beschaeftigung geaendert → Starter-Gewichte
+                      // (weight_employment_*, weight_kw_*, weight_filter_*,
+                      // weight_mode_*) fuer den neuen Typ neu einsetzen.
+                      // Fire-and-forget, da onChanged nicht async ist.
+                      // ignore: discarded_futures
+                      ref
+                          .read(learningServiceProvider)
+                          .seedStarterWeights(v);
                     }
                     Navigator.pop(ctx);
                   },
@@ -586,6 +589,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ref
                           .read(settingsProvider.notifier)
                           .updateField(familyStatus: v);
+                      // Familienstatus geaendert → Familiengewichte
+                      // (weight_family_*, zugehoerige kw/domain/filter)
+                      // fuer den neuen Status neu einsetzen.
+                      // ignore: discarded_futures
+                      ref
+                          .read(learningServiceProvider)
+                          .seedStarterFamilyWeights(v);
                     }
                     Navigator.pop(ctx);
                   },
@@ -804,7 +814,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onPressed: () async {
               Haptics.warn();
               await ref.read(settingsProvider.notifier).wipeAll();
-              if (context.mounted) Navigator.pop(context);
+              if (context.mounted) {
+                // In-Memory-Zustand zuruecksetzen: ohne diese Zeilen
+                // bleibt die App auf der Home-Seite stecken (onboarding-
+                // Done + auth bleiben im RAM true), obwohl alle Daten
+                // geloescht sind. Das Routing in main.dart prueft diese
+                // Provider und navigiert beim naechsten Rebuild automatisch
+                // zum OnboardingScreen.
+                ref.read(authProvider.notifier).state = false;
+                ref.read(onboardingDoneProvider.notifier).state = false;
+                Navigator.pop(context);
+              }
             },
             child:
                 const Text('Loeschen', style: TextStyle(color: Colors.red)),
