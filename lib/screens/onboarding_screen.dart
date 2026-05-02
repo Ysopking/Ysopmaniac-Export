@@ -51,6 +51,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       mode: 'standard',
       openInApp: true,
       enableVolumeShortcut: false,
+      interests: <String>[],
+      disableScreenshots: true,
     ));
   }
 
