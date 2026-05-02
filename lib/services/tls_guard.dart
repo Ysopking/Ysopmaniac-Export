@@ -73,7 +73,8 @@ class TlsGuard {
       );
     }
 
-    final issuerOrg = cert.issuedBy?.oName ?? '';
+    // flutter_inappwebview 6.x: SslCertificateDName verwendet OName (Großbuchstabe)
+    final issuerOrg = cert.issuedBy?.OName ?? '';
 
     final isKnown = allowedOrgs.any(
       (org) => issuerOrg.contains(org),

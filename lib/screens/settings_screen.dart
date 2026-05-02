@@ -7,7 +7,6 @@ import '../logic/state_provider.dart';
 import '../screens/interests_screen.dart';
 import '../services/chrome_import_quick.dart';
 import '../services/haptic_helper.dart';
-import '../services/secure_flag.dart';
 import '../theme.dart';
 import '../data/locale_catalog.dart';
 

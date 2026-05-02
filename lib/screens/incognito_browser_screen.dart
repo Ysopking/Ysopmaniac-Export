@@ -41,8 +41,6 @@ class _IncognitoBrowserScreenState extends State<IncognitoBrowserScreen> {
 
   // Screenshot rate-limiter Zustand (UI-Feedback)
   bool _screenshotLimitReached = false;
-  // S-07: Zeigt an ob FLAG_SECURE Screenshot verhindert (Android)
-  bool _screenshotBlockedBySecureFlag = false;
 
   @override
   void initState() {

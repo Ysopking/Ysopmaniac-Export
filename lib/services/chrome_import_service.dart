@@ -504,7 +504,6 @@ class ChromeImportService {
     // Recency-gewichtetes Scoring: neuere Eintraege zaehlen mehr als alte.
     // Recency-Multiplikator: ≤4 Wochen=1.0, 5-12=0.60, 13-26=0.30, >26=0.15
     final now = DateTime.now();
-    final nowYear = now.year;
     final nowDow = now.weekday;
     final nowThursday = now.add(Duration(days: 4 - nowDow));
     final nowYearStart = DateTime(nowThursday.year, 1, 1);
