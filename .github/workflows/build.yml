@@ -25,12 +25,12 @@ jobs:
           java-version: '17'
           cache: '' # Cache deaktiviert für frischen Build
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.41.8' # Ursprüngliche Codespace-Version
-          channel: 'stable'
-          cache: false
+       - name: Setup Flutter
+         uses: subosito/flutter-action@v2
+         with:
+           flutter-version: '3.41.8' # Ursprüngliche Codespace-Version
+           channel: 'stable'
+           cache: false
 
        - name: Setup Android SDK
          uses: android-actions/setup-android@v3
