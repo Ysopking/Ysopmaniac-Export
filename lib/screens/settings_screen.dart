@@ -9,95 +9,107 @@ import '../theme.dart';
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
-  static const _modes = <String, String>{
-    'precise': 'Praezise – exakte Phrase + intitle:',
-    'standard': 'Standard – ausgewogen (Default)',
-    'discover': 'Entdecken – breiter, mit OR-Erweiterung',
-    'recent': 'Aktuell – nur letzte 12 Monate (after:)',
-  };
-
-  static const _engines = <String, String>{
-    'google': 'Google',
-    'bing': 'Bing',
-    'duckduckgo': 'DuckDuckGo',
-    'startpage': 'Startpage',
-    'brave': 'Brave Search',
+  static const _employmentLabels = <String, String>{
+    'student': 'Student / Schueler / Azubi',
+    'rentner': 'Rentner / Pension',
+    'vollzeit': 'Vollzeit',
+    'teilzeit': 'Teilzeit',
+    'erwerbslos': 'Erwerbslos / Job-Suche',
   };
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
+    final needsJob = settings.employmentType == 'vollzeit' ||
+        settings.employmentType == 'teilzeit';
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF5F5F7),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFFF5F5F7),
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 20),
+          icon: const Icon(Icons.arrow_back_ios,
+              color: Colors.black, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          AppLocalizations.of(context)!.settingsTitle.toUpperCase(),
+          AppLocalizations.of(context)!.settingsTitle,
           style: const TextStyle(
               color: Colors.black,
               fontWeight: FontWeight.w900,
-              letterSpacing: 1.2,
-              fontSize: 18),
+              letterSpacing: -0.5,
+              fontSize: 20),
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         children: [
-          _buildOptionTile(
+          _sectionLabel('Profil'),
+          _optionTile(
             icon: Icons.person_outline,
-            title: 'Beruf',
-            subtitle: settings.beruf.isNotEmpty
-                ? settings.beruf
-                : 'Nicht festgelegt',
-            onTap: () => _showBerufDialog(context, ref),
+            title: 'Beschaeftigung',
+            subtitle: _employmentLabels[settings.employmentType] ??
+                settings.employmentType,
+            onTap: () =>
+                _showEmploymentPicker(context, ref, settings.employmentType),
           ),
-          _buildOptionTile(
-            icon: Icons.language,
-            title: AppLocalizations.of(context)!.languageLabel,
-            subtitle: settings.language == 'de' ? 'Deutsch' : 'English',
-            onTap: () {
-              final newLang = settings.language == 'de' ? 'en' : 'de';
-              notifier.updateField(language: newLang);
-            },
+          if (needsJob)
+            _optionTile(
+              icon: Icons.work_outline,
+              title: 'Jobrichtung',
+              subtitle: settings.beruf.isEmpty
+                  ? 'Nicht festgelegt'
+                  : settings.beruf,
+              onTap: () => _showTextDialog(
+                context,
+                title: 'Jobrichtung',
+                hint: 'z.B. IT, Pflege, Marketing, Handwerk',
+                initial: settings.beruf,
+                onSave: (v) => notifier.updateField(beruf: v),
+              ),
+            ),
+          _optionTile(
+            icon: Icons.cake_outlined,
+            title: 'Geburtsjahr',
+            subtitle: '${settings.jahr}',
+            onTap: () => _showYearPicker(context, ref, settings.jahr),
           ),
-          _buildOptionTile(
+          _optionTile(
             icon: Icons.location_on_outlined,
             title: AppLocalizations.of(context)!.zipLabel,
             subtitle:
                 settings.plz.isEmpty ? 'Nicht festgelegt' : settings.plz,
-            onTap: () => _showZipDialog(context, ref),
+            onTap: () => _showTextDialog(
+              context,
+              title: AppLocalizations.of(context)!.zipLabel,
+              hint: 'z.B. 10115',
+              initial: settings.plz,
+              keyboard: TextInputType.number,
+              onSave: (v) => notifier.updateField(plz: v),
+            ),
           ),
-          _buildOptionTile(
+          const SizedBox(height: 8),
+          _sectionLabel('Region & Sprache'),
+          _optionTile(
+            icon: Icons.language,
+            title: AppLocalizations.of(context)!.languageLabel,
+            subtitle: settings.language == 'de' ? 'Deutsch' : 'English',
+            onTap: () => notifier.updateField(
+                language: settings.language == 'de' ? 'en' : 'de'),
+          ),
+          _optionTile(
             icon: Icons.public,
             title: AppLocalizations.of(context)!.countryLabel,
             subtitle: settings.country.toUpperCase(),
-            onTap: () {
-              final newCountry = settings.country == 'de' ? 'at' : 'de';
-              notifier.updateField(country: newCountry);
-            },
+            onTap: () => notifier.updateField(
+                country: settings.country == 'de' ? 'at' : 'de'),
           ),
-          _buildOptionTile(
-            icon: Icons.search,
-            title: 'Such-Modus',
-            subtitle: _modes[settings.mode] ?? settings.mode,
-            onTap: () => _showModePicker(context, ref, settings.mode),
-          ),
-          _buildOptionTile(
-            icon: Icons.travel_explore,
-            title: 'Such-Engine',
-            subtitle: _engines[settings.searchEngine] ?? settings.searchEngine,
-            onTap: () =>
-                _showEnginePicker(context, ref, settings.searchEngine),
-          ),
-          _buildToggleTile(
+          const SizedBox(height: 8),
+          _sectionLabel('Suche & Browser'),
+          _toggleTile(
             icon: Icons.open_in_browser,
             title: 'Ergebnisse in der App oeffnen',
             subtitle: settings.openInApp
@@ -106,140 +118,105 @@ class SettingsScreen extends ConsumerWidget {
             value: settings.openInApp,
             onChanged: (v) => notifier.updateField(openInApp: v),
           ),
-          _buildToggleTile(
+          _toggleTile(
             icon: Icons.shield_outlined,
             title: 'Jugendschutz',
             subtitle: settings.enableYouthProtection
-                ? 'SafeSearch aktiv + Negativ-Filter'
+                ? 'SafeSearch + Negativ-Filter aktiv'
                 : 'Aus',
             value: settings.enableYouthProtection,
-            onChanged: (v) => notifier.updateField(enableYouthProtection: v),
+            onChanged: (v) =>
+                notifier.updateField(enableYouthProtection: v),
           ),
-          _buildOptionTile(
+          _toggleTile(
+            icon: Icons.thumbs_up_down_outlined,
+            title: 'Feedback ermoeglichen',
+            subtitle: settings.allowFeedback
+                ? 'Lern-Modell wird verfeinert'
+                : 'Aus',
+            value: settings.allowFeedback,
+            onChanged: (v) => notifier.updateField(allowFeedback: v),
+          ),
+          const SizedBox(height: 8),
+          _sectionLabel('Datenschutz'),
+          _optionTile(
             icon: Icons.security_rounded,
             title: AppLocalizations.of(context)!.reviewFeedback,
             subtitle: 'Datenexport manuell freigeben',
             onTap: () => _showFeedbackExportDialog(context, ref),
           ),
-          _buildOptionTile(
+          _optionTile(
             icon: Icons.delete_forever_outlined,
             title: 'Alle persoenlichen Daten loeschen',
             subtitle: 'Vault zuruecksetzen (Notbremse)',
+            destructive: true,
             onTap: () => _confirmWipe(context, ref),
           ),
+          const SizedBox(height: 24),
         ],
       ),
     );
   }
 
-  // ---------- Mode-/Engine-Picker ----------
+  // ---------- Section + Tiles ----------
 
-  void _showModePicker(BuildContext context, WidgetRef ref, String current) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(20),
-              child: Text('Such-Modus waehlen',
-                  style:
-                      TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ),
-            ..._modes.entries.map((e) => RadioListTile<String>(
-                  title: Text(e.value),
-                  value: e.key,
-                  groupValue: current,
-                  activeColor: FindUXProTheme.primaryPurple,
-                  onChanged: (v) {
-                    if (v != null) {
-                      ref.read(settingsProvider.notifier).updateField(mode: v);
-                    }
-                    Navigator.pop(ctx);
-                  },
-                )),
-            const SizedBox(height: 12),
-          ],
+  Widget _sectionLabel(String label) => Padding(
+        padding: const EdgeInsets.fromLTRB(8, 12, 8, 6),
+        child: Text(
+          label.toUpperCase(),
+          style: const TextStyle(
+            fontSize: 11,
+            color: Colors.black54,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.0,
+          ),
         ),
-      ),
-    );
-  }
+      );
 
-  void _showEnginePicker(BuildContext context, WidgetRef ref, String current) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(20),
-              child: Text('Such-Engine waehlen',
-                  style:
-                      TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ),
-            ..._engines.entries.map((e) => RadioListTile<String>(
-                  title: Text(e.value),
-                  value: e.key,
-                  groupValue: current,
-                  activeColor: FindUXProTheme.primaryPurple,
-                  onChanged: (v) {
-                    if (v != null) {
-                      ref
-                          .read(settingsProvider.notifier)
-                          .updateField(searchEngine: v);
-                    }
-                    Navigator.pop(ctx);
-                  },
-                )),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ---------- Tiles ----------
-
-  Widget _buildOptionTile({
+  Widget _optionTile({
     required IconData icon,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    bool destructive = false,
   }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F0F5),
-        borderRadius: FindUXProTheme.largeSquircleRadius,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2)),
+        ],
       ),
       child: ListTile(
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: const BoxDecoration(
-              color: Colors.white, shape: BoxShape.circle),
-          child: Icon(icon, color: Colors.black, size: 24),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: destructive
+                ? Colors.red.withValues(alpha: 0.1)
+                : FindUXProTheme.primaryPurple.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon,
+              color: destructive ? Colors.red : FindUXProTheme.primaryPurple,
+              size: 20),
         ),
         title: Text(title,
-            style: const TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.bold,
-                fontSize: 16)),
+            style: TextStyle(
+                color: destructive ? Colors.red : Colors.black87,
+                fontWeight: FontWeight.w700,
+                fontSize: 15)),
         subtitle: Text(subtitle,
-            style: const TextStyle(color: Colors.black54, fontSize: 13)),
+            style:
+                const TextStyle(color: Colors.black54, fontSize: 12)),
         trailing: const Icon(Icons.arrow_forward_ios,
-            color: Colors.black26, size: 16),
+            color: Colors.black26, size: 14),
         onTap: () {
           HapticFeedback.selectionClick();
           onTap();
@@ -248,7 +225,7 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildToggleTile({
+  Widget _toggleTile({
     required IconData icon,
     required String title,
     required String subtitle,
@@ -256,27 +233,37 @@ class SettingsScreen extends ConsumerWidget {
     required ValueChanged<bool> onChanged,
   }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F0F5),
-        borderRadius: FindUXProTheme.largeSquircleRadius,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2)),
+        ],
       ),
       child: SwitchListTile(
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         secondary: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: const BoxDecoration(
-              color: Colors.white, shape: BoxShape.circle),
-          child: Icon(icon, color: Colors.black, size: 24),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: FindUXProTheme.primaryPurple.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon,
+              color: FindUXProTheme.primaryPurple, size: 20),
         ),
         title: Text(title,
             style: const TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.bold,
-                fontSize: 16)),
+                color: Colors.black87,
+                fontWeight: FontWeight.w700,
+                fontSize: 15)),
         subtitle: Text(subtitle,
-            style: const TextStyle(color: Colors.black54, fontSize: 13)),
+            style:
+                const TextStyle(color: Colors.black54, fontSize: 12)),
         value: value,
         activeThumbColor: FindUXProTheme.primaryPurple,
         onChanged: (v) {
@@ -287,49 +274,100 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  // ---------- Dialoge ----------
+  // ---------- Picker / Dialoge ----------
 
-  void _showZipDialog(BuildContext context, WidgetRef ref) {
-    final controller =
-        TextEditingController(text: ref.read(settingsProvider).plz);
-    showDialog<void>(
+  void _showEmploymentPicker(
+      BuildContext context, WidgetRef ref, String current) {
+    showModalBottomSheet<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(AppLocalizations.of(context)!.zipLabel),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(hintText: 'z.B. 10115'),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Abbrechen')),
-          TextButton(
-            onPressed: () {
-              ref.read(settingsProvider.notifier).updateField(
-                    plz: controller.text.trim(),
-                  );
-              Navigator.pop(context);
-            },
-            child: Text(AppLocalizations.of(context)!.saveButton),
-          ),
-        ],
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-    ).whenComplete(controller.dispose);
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Text('Beschaeftigung',
+                  style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            ..._employmentLabels.entries.map((e) => RadioListTile<String>(
+                  title: Text(e.value),
+                  value: e.key,
+                  groupValue: current,
+                  activeColor: FindUXProTheme.primaryPurple,
+                  onChanged: (v) {
+                    if (v != null) {
+                      ref
+                          .read(settingsProvider.notifier)
+                          .updateField(employmentType: v);
+                    }
+                    Navigator.pop(ctx);
+                  },
+                )),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
   }
 
-  void _showBerufDialog(BuildContext context, WidgetRef ref) {
-    final controller =
-        TextEditingController(text: ref.read(settingsProvider).beruf);
+  void _showYearPicker(BuildContext context, WidgetRef ref, int current) {
+    final now = DateTime.now().year;
+    final years = List<int>.generate(now - 1919, (i) => now - i);
+    final initial = years.indexOf(current);
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => Container(
+        height: 280,
+        color: Colors.white,
+        child: SafeArea(
+          child: Column(
+            children: [
+              SizedBox(
+                height: 220,
+                child: CupertinoPicker(
+                  scrollController: FixedExtentScrollController(
+                      initialItem: initial < 0 ? 0 : initial),
+                  itemExtent: 36,
+                  onSelectedItemChanged: (i) => ref
+                      .read(settingsProvider.notifier)
+                      .updateField(jahr: years[i]),
+                  children:
+                      years.map((y) => Center(child: Text('$y'))).toList(),
+                ),
+              ),
+              CupertinoButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showTextDialog(
+    BuildContext context, {
+    required String title,
+    required String hint,
+    required String initial,
+    required ValueChanged<String> onSave,
+    TextInputType keyboard = TextInputType.text,
+  }) {
+    final controller = TextEditingController(text: initial);
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Beruf'),
+        title: Text(title),
         content: TextField(
           controller: controller,
-          decoration:
-              const InputDecoration(hintText: 'z.B. Softwareentwickler'),
+          keyboardType: keyboard,
+          decoration: InputDecoration(hintText: hint),
         ),
         actions: [
           TextButton(
@@ -337,12 +375,10 @@ class SettingsScreen extends ConsumerWidget {
               child: const Text('Abbrechen')),
           TextButton(
             onPressed: () {
-              ref.read(settingsProvider.notifier).updateField(
-                    beruf: controller.text.trim(),
-                  );
+              onSave(controller.text.trim());
               Navigator.pop(context);
             },
-            child: Text(AppLocalizations.of(context)!.saveButton),
+            child: const Text('Speichern'),
           ),
         ],
       ),
@@ -355,7 +391,7 @@ class SettingsScreen extends ConsumerWidget {
       builder: (context) => AlertDialog(
         title: const Text('Wirklich loeschen?'),
         content: const Text(
-            'Alle persoenlichen Daten (Beruf, PLZ, Jahrgang, Lern-Modell) werden unwiderruflich entfernt.'),
+            'Alle persoenlichen Daten (Beschaeftigung, PLZ, Jahrgang, Lern-Modell) werden unwiderruflich entfernt.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
@@ -391,7 +427,8 @@ class SettingsScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(AppLocalizations.of(context)!.feedbackTitle,
-                style: FindUXProTheme.titleStyle),
+                style: const TextStyle(
+                    fontSize: 22, fontWeight: FontWeight.w900)),
             const SizedBox(height: 8),
             Text(AppLocalizations.of(context)!.feedbackDesc,
                 style: const TextStyle(color: Colors.black54)),
@@ -399,8 +436,8 @@ class SettingsScreen extends ConsumerWidget {
             Expanded(
               child: feedbacks.isEmpty
                   ? Center(
-                      child:
-                          Text(AppLocalizations.of(context)!.noFeedback))
+                      child: Text(
+                          AppLocalizations.of(context)!.noFeedback))
                   : ListView.builder(
                       itemCount: feedbacks.length,
                       itemBuilder: (context, i) {
@@ -448,20 +485,23 @@ class SettingsScreen extends ConsumerWidget {
                     ),
             ),
             const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    style: FindUXProTheme.outlinePurpleButtonStyle,
-                    onPressed: () async {
-                      await learningService.clearAllFeedback();
-                      if (context.mounted) Navigator.pop(context);
-                    },
-                    child: Text(
-                        AppLocalizations.of(context)!.deleteFeedback),
-                  ),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  side: const BorderSide(color: Colors.red),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
                 ),
-              ],
+                onPressed: () async {
+                  await learningService.clearAllFeedback();
+                  if (context.mounted) Navigator.pop(context);
+                },
+                child:
+                    Text(AppLocalizations.of(context)!.deleteFeedback),
+              ),
             ),
           ],
         ),

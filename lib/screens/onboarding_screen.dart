@@ -6,6 +6,10 @@ import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../logic/state_provider.dart';
 import '../theme.dart';
 
+/// Schlankes 4-Schritt-Onboarding im Light-Card-Stil (Option 3 aus dem
+/// Mock-Up). Quellen-/Dateitypen-/Suchmaschinen-Auswahl ist bewusst raus –
+/// die Quellen+Dateitypen erscheinen erst NACH der ersten Suche als
+/// "Erweiterte Suche". Suchmaschine wird nicht mehr abgefragt (Default Google).
 class OnboardingScreen extends ConsumerStatefulWidget {
   final VoidCallback onComplete;
 
@@ -17,587 +21,37 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   int _page = 1;
-  static const int _totalPages = 8;
+  static const int _totalPages = 4;
 
+  // Schritt 1: Beschaeftigung
+  String _employmentType = 'student';
   final TextEditingController _berufController = TextEditingController();
-  final TextEditingController _jahrController = TextEditingController();
-  final TextEditingController _plzController = TextEditingController();
-  List<String> _sources = ['alle'];
-  List<String> _files = ['alle'];
+
+  // Schritt 2: Geburtsjahr
+  late int _geburtsjahr;
+
+  // Schritt 3: Sprache + Region + PLZ
   String _language = 'de';
   String _country = 'de';
-  String _searchengine = 'google';
+  final TextEditingController _plzController = TextEditingController();
+
+  // Schritt 4: Feedback + Jugendschutz
   bool _allowFeedback = false;
   bool _enableYouthProtection = true;
 
-  @override
-  void initState() {
-    super.initState();
-    _jahrController.text = '1990';
-  }
+  static const _employmentLabels = <String, String>{
+    'student': 'Student / Schueler / Azubi',
+    'rentner': 'Rentner / Pension',
+    'vollzeit': 'Vollzeit',
+    'teilzeit': 'Teilzeit',
+    'erwerbslos': 'Erwerbslos / Job-Suche',
+  };
 
-  void _go(int p) {
-    if (p < 1 || p > _totalPages) return;
-    setState(() => _page = p);
-  }
-
-  bool _validatePage1() {
-    if (_berufController.text.trim().isEmpty) {
-      _showError('Bitte gib deinen Beruf ein.');
-      return false;
-    }
-    return true;
-  }
-
-  bool _validatePage2() {
-    final jahr = int.tryParse(_jahrController.text);
-    if (jahr == null || jahr < 1930 || jahr > 2015) {
-      _showError('Bitte gueltiges Jahr (1930-2015) eingeben.');
-      return false;
-    }
-    return true;
-  }
-
-  void _showError(String msg) {
-    showCupertinoDialog<void>(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Fehler'),
-        content: Text(msg),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _saveAll() async {
-    final notifier = ref.read(settingsProvider.notifier);
-    final newState = SettingsState(
-      plz: _plzController.text.trim(),
-      beruf: _berufController.text.trim(),
-      searchEngine: _searchengine,
-      language: _language,
-      country: _country,
-      allowFeedback: _allowFeedback,
-      enableYouthProtection: _enableYouthProtection,
-      jahr: int.parse(_jahrController.text),
-      sources: _sources,
-      files: _files,
-      mode: 'standard',
-      openInApp: true,
-    );
-    await notifier.updateSettings(newState);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      backgroundColor: FindUXProTheme.primaryPurple,
-      child: Container(
-        decoration: const BoxDecoration(
-          gradient: FindUXProTheme.primaryGradient,
-        ),
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: ConstrainedBox(
-                  constraints:
-                      BoxConstraints(minHeight: constraints.maxHeight),
-                  child: IntrinsicHeight(
-                    child: Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Row(
-                            children: [
-                              Text(
-                                '${AppLocalizations.of(context)!.appTitle} Pro',
-                                style: FindUXProTheme.headlineStyle.copyWith(
-                                  color: Colors.white,
-                                  fontSize: 28,
-                                ),
-                              ),
-                              const Spacer(),
-                              Text(
-                                '$_page/$_totalPages',
-                                style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: _page / _totalPages,
-                              backgroundColor: Colors.white24,
-                              valueColor: const AlwaysStoppedAnimation<Color>(
-                                  Colors.white),
-                              minHeight: 6,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: _buildPage(),
-                          ),
-                        ),
-                        Padding(
-                          padding:
-                              const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                          child: Row(
-                            children: [
-                              if (_page > 1)
-                                Expanded(
-                                  child: ElevatedButton(
-                                    style: FindUXProTheme.glassButtonStyle,
-                                    onPressed: () => _go(_page - 1),
-                                    child: Text(
-                                        AppLocalizations.of(context)!.back),
-                                  ),
-                                ),
-                              if (_page > 1) const SizedBox(width: 16),
-                              Expanded(
-                                flex: 2,
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.white,
-                                    foregroundColor:
-                                        FindUXProTheme.primaryPurple,
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            FindUXProTheme.squircleRadius),
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 16),
-                                  ),
-                                  onPressed: () async {
-                                    HapticFeedback.selectionClick();
-                                    if (_page == 1 && !_validatePage1()) return;
-                                    if (_page == 2 && !_validatePage2()) return;
-
-                                    if (_page == _totalPages) {
-                                      await _saveAll();
-                                      widget.onComplete();
-                                    } else {
-                                      _go(_page + 1);
-                                    }
-                                  },
-                                  child: Text(
-                                    _page == _totalPages
-                                        ? AppLocalizations.of(context)!.start
-                                        : AppLocalizations.of(context)!.next,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 18),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPage() {
-    switch (_page) {
-      case 1:
-        return _buildPage1();
-      case 2:
-        return _buildPage2();
-      case 3:
-        return _buildPage3();
-      case 4:
-        return _buildPage4();
-      case 5:
-        return _buildPage5();
-      case 6:
-        return _buildPage6();
-      case 7:
-        return _buildPage7();
-      case 8:
-        return _buildPage8();
-      default:
-        return Container();
-    }
-  }
-
-  Widget _buildPage1() {
-    return _buildInputCard(
-      title: 'Dein Beruf',
-      description:
-          'In welchem Bereich arbeitest du? Dies hilft uns, passende Quellen vorzuwaehlen.',
-      child: CupertinoTextField(
-        controller: _berufController,
-        placeholder: 'z.B. Softwareentwickler, Student',
-        padding: const EdgeInsets.all(16),
-        style: const TextStyle(color: Colors.white),
-        placeholderStyle: const TextStyle(color: Colors.white54),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white24),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPage2() {
-    return _buildInputCard(
-      title: 'Jahrgang',
-      description:
-          'Dein Abiturjahr oder Geburtsjahr hilft uns, zeitliche Filter zu setzen.',
-      child: CupertinoTextField(
-        controller: _jahrController,
-        placeholder: 'z.B. 1990',
-        keyboardType: TextInputType.number,
-        padding: const EdgeInsets.all(16),
-        style: const TextStyle(color: Colors.white),
-        placeholderStyle: const TextStyle(color: Colors.white54),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white24),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPage3() {
-    return _buildInputCard(
-      title: 'Region (PLZ)',
-      description: 'Deine Postleitzahl ermoeglicht regionalisierte Suchen.',
-      child: CupertinoTextField(
-        controller: _plzController,
-        placeholder: 'z.B. 10115',
-        keyboardType: TextInputType.number,
-        padding: const EdgeInsets.all(16),
-        style: const TextStyle(color: Colors.white),
-        placeholderStyle: const TextStyle(color: Colors.white54),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white24),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPage4() {
-    return _buildChipSelectionPage(
-      title: 'Seitenquellen',
-      description: 'Waehle deine bevorzugten Quellen aus.',
-      items: const [
-        {'v': 'alle', 'icon': '🌐', 'label': 'Alle'},
-        {'v': 'foren', 'icon': '💬', 'label': 'Foren'},
-        {'v': 'reddit', 'icon': '🟠', 'label': 'Reddit'},
-        {'v': 'news', 'icon': '📰', 'label': 'News'},
-        {'v': 'wikipedia', 'icon': '📚', 'label': 'Wikipedia'},
-        {'v': 'offiziell', 'icon': '🏛️', 'label': 'Offiziell'},
-        {'v': 'academic', 'icon': '🎓', 'label': 'Akademisch'},
-        {'v': 'video', 'icon': '🎥', 'label': 'Video'},
-        {'v': 'blogs', 'icon': '✍️', 'label': 'Blogs'},
-        {'v': 'shops', 'icon': '🛒', 'label': 'Shops'},
-        {'v': 'social', 'icon': '👥', 'label': 'Sozial'},
-      ],
-      selected: _sources,
-      onChanged: (sel) => setState(() => _sources = sel),
-    );
-  }
-
-  Widget _buildPage5() {
-    return _buildChipSelectionPage(
-      title: 'Dateitypen',
-      description: 'Welche Dateiformate bevorzugst du?',
-      items: const [
-        {'v': 'alle', 'icon': '📄', 'label': 'Alle'},
-        {'v': 'pdf', 'icon': '📕', 'label': 'PDF'},
-        {'v': 'ppt', 'icon': '📊', 'label': 'PPT'},
-        {'v': 'doc', 'icon': '📝', 'label': 'DOC'},
-        {'v': 'xls', 'icon': '📈', 'label': 'XLS'},
-        {'v': 'code', 'icon': '💻', 'label': 'Code'},
-        {'v': 'images', 'icon': '🖼️', 'label': 'Bilder'},
-      ],
-      selected: _files,
-      onChanged: (sel) => setState(() => _files = sel),
-    );
-  }
-
-  Widget _buildPage6() {
-    return _buildInputCard(
-      title: 'Sprache & Region',
-      description: 'Waehle deine bevorzugte Sprache und dein Land.',
-      child: Column(
-        children: [
-          _buildPickerButton(
-              'Sprache',
-              _languages.firstWhere((l) => l[0] == _language)[1],
-              () {
-            _showPicker(
-                _languages, _language, (val) => setState(() => _language = val));
-          }),
-          const SizedBox(height: 16),
-          _buildPickerButton(
-              'Land', _countries.firstWhere((c) => c[0] == _country)[1], () {
-            _showPicker(
-                _countries, _country, (val) => setState(() => _country = val));
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPage7() {
-    return _buildInputCard(
-      title: 'Suchmaschine',
-      description: 'Welche Suchmaschine moechtest du nutzen?',
-      child: Column(
-        children: ['google', 'bing', 'duckduckgo'].map((e) {
-          final isSel = _searchengine == e;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: GestureDetector(
-              onTap: () => setState(() => _searchengine = e),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isSel
-                      ? Colors.white
-                      : Colors.white.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      e == 'google'
-                          ? 'Google'
-                          : e == 'bing'
-                              ? 'Bing'
-                              : 'DuckDuckGo',
-                      style: TextStyle(
-                        color: isSel
-                            ? FindUXProTheme.primaryPurple
-                            : Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Spacer(),
-                    if (isSel)
-                      const Icon(Icons.check_circle,
-                          color: FindUXProTheme.primaryPurple),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildPage8() {
-    return _buildInputCard(
-      title: 'Fast geschafft!',
-      description:
-          'Moechtest du uns Feedback geben, wenn ein Ergebnis nicht passt?',
-      child: Column(
-        children: [
-          _buildSwitchTile('Feedback ermoeglichen', _allowFeedback,
-              (v) => setState(() => _allowFeedback = v)),
-          const SizedBox(height: 12),
-          _buildSwitchTile('Jugendschutz aktivieren', _enableYouthProtection,
-              (v) => setState(() => _enableYouthProtection = v)),
-          const SizedBox(height: 32),
-          const Text(
-            'Deine Einstellungen werden verschluesselt auf diesem Geraet gespeichert.\nDu kannst sie jederzeit aendern.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white70, fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInputCard(
-      {required String title,
-      required String description,
-      required Widget child}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title,
-            style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white)),
-        const SizedBox(height: 12),
-        Text(description,
-            style: const TextStyle(fontSize: 15, color: Colors.white70)),
-        const SizedBox(height: 24),
-        child,
-      ],
-    );
-  }
-
-  Widget _buildChipSelectionPage({
-    required String title,
-    required String description,
-    required List<Map<String, String>> items,
-    required List<String> selected,
-    required void Function(List<String>) onChanged,
-  }) {
-    return _buildInputCard(
-      title: title,
-      description: description,
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        children: items.map((item) {
-          final isSel = selected.contains(item['v']!);
-          return GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              List<String> newSel = List.from(selected);
-              if (item['v'] == 'alle') {
-                newSel = isSel ? [] : [item['v']!];
-              } else {
-                if (isSel) {
-                  newSel.remove(item['v']!);
-                  if (newSel.isEmpty) newSel = ['alle'];
-                } else {
-                  newSel.add(item['v']!);
-                  newSel.remove('alle');
-                }
-              }
-              onChanged(newSel);
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: isSel
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(25),
-                border: Border.all(color: isSel ? Colors.white : Colors.white24),
-              ),
-              child: Text(
-                '${item['icon']} ${item['label']}',
-                style: TextStyle(
-                  color: isSel ? FindUXProTheme.primaryPurple : Colors.white,
-                  fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildPickerButton(String label, String value, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white24),
-        ),
-        child: Row(
-          children: [
-            Text(label, style: const TextStyle(color: Colors.white70)),
-            const Spacer(),
-            Text(value,
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
-            const Icon(Icons.arrow_drop_down, color: Colors.white),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSwitchTile(
-      String label, bool value, void Function(bool) onChanged) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Text(label,
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.w500)),
-          const Spacer(),
-          CupertinoSwitch(
-            value: value,
-            onChanged: onChanged,
-            activeTrackColor: Colors.white,
-            inactiveTrackColor: Colors.white24,
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showPicker(List<List<String>> data, String currentValue,
-      void Function(String) onSave) {
-    final initialIndex = data.indexWhere((d) => d[0] == currentValue);
-    showCupertinoModalPopup<void>(
-      context: context,
-      builder: (context) => Container(
-        height: 250,
-        color: Colors.white,
-        child: Column(
-          children: [
-            SizedBox(
-              height: 200,
-              child: CupertinoPicker(
-                scrollController:
-                    FixedExtentScrollController(initialItem: initialIndex),
-                itemExtent: 40,
-                onSelectedItemChanged: (i) => onSave(data[i][0]),
-                children:
-                    data.map((d) => Center(child: Text(d[1]))).toList(),
-              ),
-            ),
-            CupertinoButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK')),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Aktuell sind nur Deutsch und Englisch in der App lokalisiert.
-  // Weitere Sprachen werden ergaenzt, sobald die l10n-Dateien existieren.
-  static const List<List<String>> _languages = [
+  static const _languages = <List<String>>[
     ['de', 'Deutsch'],
     ['en', 'English'],
   ];
-  static const List<List<String>> _countries = [
+  static const _countries = <List<String>>[
     ['de', 'Deutschland'],
     ['at', 'Oesterreich'],
     ['ch', 'Schweiz'],
@@ -606,10 +60,639 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _geburtsjahr = 1990;
+  }
+
+  @override
   void dispose() {
     _berufController.dispose();
-    _jahrController.dispose();
     _plzController.dispose();
     super.dispose();
+  }
+
+  bool get _needsJobrichtung =>
+      _employmentType == 'vollzeit' || _employmentType == 'teilzeit';
+
+  void _go(int p) {
+    if (p < 1 || p > _totalPages) return;
+    setState(() => _page = p);
+  }
+
+  Future<void> _saveAll() async {
+    final notifier = ref.read(settingsProvider.notifier);
+    final newState = SettingsState(
+      plz: _plzController.text.trim(),
+      employmentType: _employmentType,
+      beruf: _needsJobrichtung ? _berufController.text.trim() : '',
+      searchEngine: 'google', // fest – nicht mehr im Onboarding
+      language: _language,
+      country: _country,
+      allowFeedback: _allowFeedback,
+      enableYouthProtection: _enableYouthProtection,
+      jahr: _geburtsjahr,
+      sources: const ['alle'],
+      files: const ['alle'],
+      mode: 'standard',
+      openInApp: true,
+    );
+    await notifier.updateSettings(newState);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F7),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Kopfbereich: Titel + Schritt-Anzeige
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+              child: Row(
+                children: [
+                  const Text(
+                    'FindUX Pro',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.black,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: FindUXProTheme.primaryPurple
+                          .withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '$_page / $_totalPages',
+                      style: const TextStyle(
+                        color: FindUXProTheme.primaryPurple,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: _page / _totalPages,
+                  backgroundColor: const Color(0xFFE5E5EA),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                      FindUXProTheme.primaryPurple),
+                  minHeight: 6,
+                ),
+              ),
+            ),
+            // Inhalt
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+                child: _buildPage(),
+              ),
+            ),
+            // Buttons
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Row(
+                children: [
+                  if (_page > 1)
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.black87,
+                          side: const BorderSide(color: Color(0xFFD1D1D6)),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                        onPressed: () => _go(_page - 1),
+                        child: Text(
+                            AppLocalizations.of(context)!.back),
+                      ),
+                    ),
+                  if (_page > 1) const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: FindUXProTheme.primaryPurple,
+                        foregroundColor: Colors.white,
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                        elevation: 0,
+                      ),
+                      onPressed: () async {
+                        HapticFeedback.selectionClick();
+                        if (_page == 1 && _needsJobrichtung &&
+                            _berufController.text.trim().isEmpty) {
+                          _showError(
+                              'Bitte gib deine Jobrichtung an (z.B. IT, Pflege, Handwerk).');
+                          return;
+                        }
+                        if (_page == _totalPages) {
+                          await _saveAll();
+                          widget.onComplete();
+                        } else {
+                          _go(_page + 1);
+                        }
+                      },
+                      child: Text(
+                        _page == _totalPages
+                            ? AppLocalizations.of(context)!.start
+                            : AppLocalizations.of(context)!.next,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 17),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // ---------- Pages ----------
+
+  Widget _buildPage() {
+    switch (_page) {
+      case 1:
+        return _buildPageBeruf();
+      case 2:
+        return _buildPageJahrgang();
+      case 3:
+        return _buildPageRegion();
+      case 4:
+        return _buildPageFinish();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildPageBeruf() {
+    return _section(
+      title: 'Was beschreibt dich am besten?',
+      subtitle:
+          'Wir nutzen das nur lokal, um dir passendere Quellen vorzuschlagen.',
+      child: Column(
+        children: [
+          ..._employmentLabels.entries.map((e) => _buildRadioCard(
+                value: e.key,
+                groupValue: _employmentType,
+                title: e.value,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() => _employmentType = e.key);
+                },
+              )),
+          if (_needsJobrichtung) ...[
+            const SizedBox(height: 16),
+            _whiteCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Jobrichtung',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 15)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _berufController,
+                    decoration: const InputDecoration(
+                      hintText: 'z.B. IT, Pflege, Marketing, Handwerk',
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPageJahrgang() {
+    final now = DateTime.now().year;
+    final years = List<int>.generate(now - 1919, (i) => now - i);
+    return _section(
+      title: 'Geburtsjahr',
+      subtitle:
+          'Hilft uns, zeitliche Filter und Themen sinnvoll vorzubelegen.',
+      child: _whiteCard(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _showYearPicker(years),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Row(
+              children: [
+                const Icon(Icons.cake_outlined,
+                    color: FindUXProTheme.primaryPurple),
+                const SizedBox(width: 12),
+                Text('$_geburtsjahr',
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w600)),
+                const Spacer(),
+                const Icon(Icons.arrow_drop_down, color: Colors.black54),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPageRegion() {
+    return _section(
+      title: 'Sprache & Region',
+      subtitle: 'Wir leiten daraus Such-Sprache und Land-Filter ab.',
+      child: Column(
+        children: [
+          _stackedPicker(
+            label: 'Sprache',
+            value: _languages
+                .firstWhere((l) => l[0] == _language,
+                    orElse: () => ['de', 'Deutsch'])[1],
+            icon: Icons.language,
+            onTap: () => _showStringPicker(
+              _languages,
+              _language,
+              (v) => setState(() => _language = v),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _stackedPicker(
+            label: 'Land',
+            value: _countries
+                .firstWhere((c) => c[0] == _country,
+                    orElse: () => ['de', 'Deutschland'])[1],
+            icon: Icons.public,
+            onTap: () => _showStringPicker(
+              _countries,
+              _country,
+              (v) => setState(() => _country = v),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _whiteCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: const [
+                    Icon(Icons.location_on_outlined,
+                        color: FindUXProTheme.primaryPurple, size: 20),
+                    SizedBox(width: 8),
+                    Text('Postleitzahl (optional)',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 14)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _plzController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    hintText: 'z.B. 10115',
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPageFinish() {
+    return _section(
+      title: 'Fast geschafft!',
+      subtitle: 'Du kannst diese Optionen spaeter jederzeit aendern.',
+      child: Column(
+        children: [
+          _switchCard(
+            icon: Icons.thumbs_up_down_outlined,
+            title: 'Feedback ermoeglichen',
+            subtitle: 'Hilft, deine Suche kontinuierlich zu verbessern.',
+            value: _allowFeedback,
+            onChanged: (v) => setState(() => _allowFeedback = v),
+          ),
+          const SizedBox(height: 12),
+          _switchCard(
+            icon: Icons.shield_outlined,
+            title: 'Jugendschutz',
+            subtitle: 'SafeSearch + Negativ-Filter aktivieren.',
+            value: _enableYouthProtection,
+            onChanged: (v) => setState(() => _enableYouthProtection = v),
+          ),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: FindUXProTheme.primaryPurple.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.lock_outline,
+                    color: FindUXProTheme.primaryPurple, size: 22),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Deine Daten werden verschluesselt nur auf diesem Geraet gespeichert.',
+                    style: TextStyle(fontSize: 13, color: Colors.black87),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------- Bausteine ----------
+
+  Widget _section(
+      {required String title,
+      required String subtitle,
+      required Widget child}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: const TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                color: Colors.black,
+                letterSpacing: -0.5)),
+        const SizedBox(height: 6),
+        Text(subtitle,
+            style: const TextStyle(fontSize: 15, color: Colors.black54)),
+        const SizedBox(height: 24),
+        child,
+      ],
+    );
+  }
+
+  Widget _whiteCard({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildRadioCard({
+    required String value,
+    required String groupValue,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    final selected = value == groupValue;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: selected
+                ? FindUXProTheme.primaryPurple.withValues(alpha: 0.08)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected
+                  ? FindUXProTheme.primaryPurple
+                  : const Color(0xFFE5E5EA),
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                selected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_off,
+                color: selected
+                    ? FindUXProTheme.primaryPurple
+                    : Colors.black26,
+                size: 22,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight:
+                        selected ? FontWeight.w700 : FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _stackedPicker({
+    required String label,
+    required String value,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return _whiteCard(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            children: [
+              Icon(icon, color: FindUXProTheme.primaryPurple, size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label,
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.black54,
+                            fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 2),
+                    Text(value,
+                        style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_drop_down, color: Colors.black54),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _switchCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return _whiteCard(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: FindUXProTheme.primaryPurple.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon,
+                  color: FindUXProTheme.primaryPurple, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 15)),
+                  const SizedBox(height: 2),
+                  Text(subtitle,
+                      style: const TextStyle(
+                          fontSize: 12, color: Colors.black54)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            CupertinoSwitch(
+              value: value,
+              onChanged: onChanged,
+              activeTrackColor: FindUXProTheme.primaryPurple,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------- Picker ----------
+
+  void _showYearPicker(List<int> years) {
+    final initial = years.indexOf(_geburtsjahr);
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => Container(
+        height: 280,
+        color: Colors.white,
+        child: SafeArea(
+          child: Column(
+            children: [
+              SizedBox(
+                height: 220,
+                child: CupertinoPicker(
+                  scrollController: FixedExtentScrollController(
+                      initialItem: initial < 0 ? 0 : initial),
+                  itemExtent: 36,
+                  onSelectedItemChanged: (i) =>
+                      setState(() => _geburtsjahr = years[i]),
+                  children:
+                      years.map((y) => Center(child: Text('$y'))).toList(),
+                ),
+              ),
+              CupertinoButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showStringPicker(List<List<String>> data, String currentValue,
+      void Function(String) onSave) {
+    final initialIndex = data.indexWhere((d) => d[0] == currentValue);
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => Container(
+        height: 260,
+        color: Colors.white,
+        child: SafeArea(
+          child: Column(
+            children: [
+              SizedBox(
+                height: 200,
+                child: CupertinoPicker(
+                  scrollController: FixedExtentScrollController(
+                      initialItem: initialIndex < 0 ? 0 : initialIndex),
+                  itemExtent: 40,
+                  onSelectedItemChanged: (i) => onSave(data[i][0]),
+                  children:
+                      data.map((d) => Center(child: Text(d[1]))).toList(),
+                ),
+              ),
+              CupertinoButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -23,8 +23,24 @@ final authErrorProvider = StateProvider<String?>((ref) => null);
 final onboardingDoneProvider = StateProvider<bool>((ref) => false);
 final firstLaunchProvider = StateProvider<bool>((ref) => true);
 
+/// Beschaeftigungstyp.
+/// - student: Schueler/Student/Auszubildender
+/// - rentner: Rente/Pension
+/// - vollzeit: Vollzeit-Job (loest "beruf"-Feld als Jobrichtung aus)
+/// - teilzeit: Teilzeit-Job (loest "beruf"-Feld als Jobrichtung aus)
+/// - erwerbslos: ohne Beschaeftigung / Job-Suche
+const employmentTypes = <String>[
+  'student',
+  'rentner',
+  'vollzeit',
+  'teilzeit',
+  'erwerbslos',
+];
+
 class SettingsState {
   final String plz;
+  final String employmentType;
+  /// Optionale Jobrichtung. Nur sinnvoll wenn employmentType in {vollzeit,teilzeit}.
   final String beruf;
   final String searchEngine;
   final String language;
@@ -41,6 +57,7 @@ class SettingsState {
 
   const SettingsState({
     required this.plz,
+    required this.employmentType,
     required this.beruf,
     required this.searchEngine,
     required this.language,
@@ -56,6 +73,7 @@ class SettingsState {
 
   SettingsState copyWith({
     String? plz,
+    String? employmentType,
     String? beruf,
     String? searchEngine,
     String? language,
@@ -70,6 +88,7 @@ class SettingsState {
   }) {
     return SettingsState(
       plz: plz ?? this.plz,
+      employmentType: employmentType ?? this.employmentType,
       beruf: beruf ?? this.beruf,
       searchEngine: searchEngine ?? this.searchEngine,
       language: language ?? this.language,
@@ -88,6 +107,7 @@ class SettingsState {
 
 const SettingsState _defaultSettings = SettingsState(
   plz: '',
+  employmentType: 'student',
   beruf: '',
   searchEngine: 'google',
   language: 'de',
@@ -110,6 +130,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
   static const _allPrefsKeys = <String>[
     'plz',
     'beruf',
+    'employmentType',
     'jahr',
     'searchengine',
     'language',
@@ -125,8 +146,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Einmal-Migration: alte Klartext-PII aus SharedPreferences in den Vault
-    // verschieben und danach aus Prefs entfernen.
+    // Einmal-Migration: alte Klartext-PII aus SharedPreferences in den Vault.
     try {
       final box = _security.vaultBox;
       final needsMigration = !box.containsKey('plz') &&
@@ -148,11 +168,14 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
 
     String pPlz = '';
     String pBeruf = '';
+    String pEmploymentType = 'student';
     int pJahr = 1990;
     try {
       final box = _security.vaultBox;
       pPlz = (box.get('plz') as String?) ?? '';
       pBeruf = (box.get('beruf') as String?) ?? '';
+      pEmploymentType =
+          (box.get('employmentType') as String?) ?? 'student';
       pJahr = (box.get('jahr') as int?) ?? 1990;
     } catch (_) {
       // Vault nicht verfuegbar -> Defaults verwenden, KEIN Klartext-Fallback.
@@ -161,6 +184,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     state = SettingsState(
       plz: pPlz,
       beruf: pBeruf,
+      employmentType: pEmploymentType,
       jahr: pJahr,
       searchEngine: prefs.getString('searchengine') ?? 'google',
       language: prefs.getString('language') ?? 'de',
@@ -182,6 +206,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       final box = _security.vaultBox;
       await box.put('plz', newState.plz);
       await box.put('beruf', newState.beruf);
+      await box.put('employmentType', newState.employmentType);
       await box.put('jahr', newState.jahr);
     } catch (e) {
       debugPrint('Vault write failed: $e');
@@ -202,6 +227,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
 
   Future<void> updateField({
     String? plz,
+    String? employmentType,
     String? beruf,
     String? searchEngine,
     String? language,
@@ -216,6 +242,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
   }) {
     final newState = state.copyWith(
       plz: plz,
+      employmentType: employmentType,
       beruf: beruf,
       searchEngine: searchEngine,
       language: language,
@@ -231,10 +258,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     return updateSettings(newState);
   }
 
-  // Komplettes Loeschen ALLER persistenten Settings (Privacy-"Notbremse").
-  // - Vault wird komplett geleert (PII)
-  // - alle Settings-Keys aus SharedPreferences entfernt
-  // - State wird auf Defaults zurueckgesetzt
+  /// Komplettes Loeschen ALLER persistenten Settings (Privacy-"Notbremse").
   Future<void> wipeAll() async {
     try {
       final box = _security.vaultBox;
@@ -246,7 +270,6 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     for (final key in _allPrefsKeys) {
       await prefs.remove(key);
     }
-    // Such-Historie / Lern-Gewichte ebenfalls entfernen
     final allKeys = prefs.getKeys().toList();
     for (final key in allKeys) {
       if (key.startsWith('weight_') ||
