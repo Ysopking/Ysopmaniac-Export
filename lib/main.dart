@@ -6,7 +6,7 @@ import 'package:findux_mobile/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:permission_handler/permission_handler.dart';
+
 import 'services/security_service.dart';
 import 'services/learning_service.dart';
 import 'screens/onboarding_screen.dart';
@@ -17,16 +17,7 @@ import 'screens/home_page.dart';
 import 'logic/state_provider.dart';
 import 'theme.dart';
 
-Future<void> _requestPermissions() async {
-  // Internet-Berechtigung (normalerweise automatisch)
-  await Permission.internet.request();
 
-  // Biometrische Authentifizierung
-  await Permission.sensors.request(); // Für Biometrie
-
-  // Speicher-Berechtigung für Hive/SharedPreferences (intern)
-  // await Permission.storage.request(); // Nicht notwendig für interne Speicherung
-}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,8 +39,7 @@ void main() async {
     debugPrint('Initialisierungsfehler: $e');
   }
 
-  // Berechtigungen anfragen
-  await _requestPermissions();
+
 
   runApp(
     ProviderScope(
