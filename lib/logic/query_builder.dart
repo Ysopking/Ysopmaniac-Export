@@ -63,6 +63,10 @@ class FindUXQueryBuilder {
       'developer.mozilla.org', 'docs.python.org', 'docs.microsoft.com',
       'developer.apple.com', 'docs.flutter.dev',
     ],
+    'stellenboersen': [
+      'stepstone.de', 'indeed.com', 'monster.de', 'arbeitsagentur.de',
+      'xing.com', 'linkedin.com', 'jobware.de', 'stellenanzeigen.de',
+    ],
   };
 
   static const Map<String, List<String>> fileExtensions = {
@@ -112,10 +116,14 @@ class FindUXQueryBuilder {
     final language = (settings['language'] as String?) ?? 'de';
     final stopwords = stopwordsForLanguage(language);
 
+    final employmentType = (settings['employmentType'] as String?) ?? 'student';
+    final employmentWeight = weights['weight_employment_$employmentType'] ?? 1.0;
+
     final stamm = _stammdaten.resolve(
       what: what,
       why: why,
       settings: settings,
+      employmentWeight: employmentWeight,
     );
 
     final parts = <String>[];

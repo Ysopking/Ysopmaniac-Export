@@ -286,6 +286,121 @@ class LearningService {
         .toList();
   }
 
+  
+  /// Setzt initiale Keyword- und Filter-Gewichte basierend auf dem
+  /// gewaehlten Beschaeftigungstyp aus dem Onboarding.
+  ///
+  /// Wird genau einmal am Ende des Onboarding-Wizards aufgerufen.
+  /// Vorhandene Gewichte werden nur angehoben, nie abgesenkt —
+  /// so dass spaetere Nutzungs-Signale immer Vorrang haben.
+  ///
+  /// Schluessel:
+  ///   weight_kw_*             Keyword-Affinitaet   (1.2–1.6)
+  ///   weight_filter_*         Quellen-Affinitaet   (1.3–1.7)
+  ///   weight_mode_*           bevorzugter Modus    (1.2–1.4)
+  ///   weight_employment_*     Beschaeftigungs-Bias (initial 1.3)
+  Future<void> seedStarterWeights(String employmentType) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    const starterWeights = <String, Map<String, double>>{
+      'student': {
+        'weight_kw_studie':           1.5,
+        'weight_kw_studien':          1.5,
+        'weight_kw_paper':            1.5,
+        'weight_kw_forschung':        1.4,
+        'weight_kw_wissenschaft':     1.4,
+        'weight_kw_journal':          1.4,
+        'weight_kw_thesis':           1.3,
+        'weight_kw_literatur':        1.3,
+        'weight_kw_erklaerung':       1.3,
+        'weight_kw_loesung':          1.2,
+        'weight_filter_academic':     1.6,
+        'weight_filter_wikipedia':    1.4,
+        'weight_filter_docs':         1.3,
+        'weight_mode_precise':        1.4,
+        'weight_mode_standard':       1.2,
+      },
+      'vollzeit': {
+        'weight_kw_anleitung':        1.4,
+        'weight_kw_howto':            1.4,
+        'weight_kw_tool':             1.3,
+        'weight_kw_software':         1.3,
+        'weight_kw_workflow':         1.3,
+        'weight_kw_produktiv':        1.2,
+        'weight_kw_effizienz':        1.2,
+        'weight_kw_vorlage':          1.2,
+        'weight_filter_docs':         1.5,
+        'weight_filter_foren':        1.4,
+        'weight_filter_blogs':        1.3,
+        'weight_mode_precise':        1.4,
+        'weight_mode_standard':       1.2,
+      },
+      'teilzeit': {
+        'weight_kw_tipps':            1.4,
+        'weight_kw_ratgeber':         1.4,
+        'weight_kw_aktuell':          1.3,
+        'weight_kw_news':             1.3,
+        'weight_kw_vergleich':        1.2,
+        'weight_filter_news':         1.5,
+        'weight_filter_offiziell':    1.4,
+        'weight_filter_blogs':        1.3,
+        'weight_mode_standard':       1.4,
+        'weight_mode_discover':       1.2,
+      },
+      'rentner': {
+        'weight_kw_einfach':          1.5,
+        'weight_kw_erklaerung':       1.5,
+        'weight_kw_schritt':          1.4,
+        'weight_kw_anleitung':        1.4,
+        'weight_kw_gesundheit':       1.4,
+        'weight_kw_medizin':          1.3,
+        'weight_kw_rente':            1.3,
+        'weight_kw_pension':          1.2,
+        'weight_filter_wikipedia':    1.6,
+        'weight_filter_news':         1.5,
+        'weight_filter_offiziell':    1.5,
+        'weight_mode_standard':       1.4,
+        'weight_mode_discover':       1.2,
+      },
+      'erwerbslos': {
+        'weight_kw_job':              1.6,
+        'weight_kw_jobs':             1.6,
+        'weight_kw_stelle':           1.6,
+        'weight_kw_bewerbung':        1.5,
+        'weight_kw_lebenslauf':       1.5,
+        'weight_kw_karriere':         1.4,
+        'weight_kw_gehalt':           1.4,
+        'weight_kw_foerderung':       1.3,
+        'weight_kw_qualifikation':    1.3,
+        'weight_kw_arbeitsamt':       1.3,
+        'weight_filter_stellenboersen': 1.7,
+        'weight_filter_offiziell':    1.5,
+        'weight_filter_foren':        1.3,
+        'weight_mode_standard':       1.3,
+      },
+    };
+
+    final weights = starterWeights[employmentType] ?? {};
+    for (final entry in weights.entries) {
+      final current = prefs.getDouble(entry.key) ?? 0.0;
+      if (entry.value > current) {
+        await prefs.setDouble(entry.key, entry.value);
+      }
+    }
+
+    final empKey = 'weight_employment_$employmentType';
+    final currentEmp = prefs.getDouble(empKey) ?? 0.0;
+    if (1.3 > currentEmp) {
+      await prefs.setDouble(empKey, 1.3);
+    }
+
+    if (kDebugMode) {
+      debugPrint(
+        'seedStarterWeights: $employmentType — ${weights.length} Keys gesetzt.',
+      );
+    }
+  }
+
   Future<void> clearAllFeedback() async {
     if (!Hive.isBoxOpen(_feedbackBoxName)) return;
     await Hive.box<dynamic>(_feedbackBoxName).clear();

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../logic/state_provider.dart';
+import '../services/learning_service.dart';
 import '../screens/interests_screen.dart';
 import '../services/chrome_import_quick.dart';
 import '../services/haptic_helper.dart';
@@ -126,6 +127,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     } else {
       setState(() => _busy = true);
       await _persistAll();
+      if (!mounted) return;
+      // Starter-Gewichte einmalig basierend auf Beschaeftigung setzen
+      await ref.read(learningServiceProvider).seedStarterWeights(_jobLocal);
       if (!mounted) return;
       Haptics.done();
       widget.onComplete();
