@@ -125,20 +125,39 @@ class LearningService {
       'timestamp': DateTime.now().toIso8601String(),
       'applied': false,
     });
+
+    // Sofortige Verarbeitung — kein 7-Tage-Warten.
+    // SharedPreferences laden und Gewichte direkt aktualisieren.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await _applyPendingFeedbacks(prefs);
+    } catch (e) {
+      if (kDebugMode) debugPrint('Sofort-Feedback-Apply fehlgeschlagen: $e');
+    }
   }
 
+  /// Wöchentliches Maintenance-Fenster.
+  ///
+  /// Feedback wird seit v4 sofort in [trackFeedback] verarbeitet.
+  /// [checkAndAnalyze] übernimmt jetzt zwei Aufgaben:
+  ///   1) Decay: alle weight_*-Werte sanft Richtung 1.0 ziehen (wöchentlich).
+  ///   2) Safety-Net: verbleibende unangewendete Feedbacks nachholen,
+  ///      die z.B. durch App-Absturz noch nicht verarbeitet wurden.
   Future<void> checkAndAnalyze() async {
     final prefs = await SharedPreferences.getInstance();
     final lastAnalysis = prefs.getInt('last_analysis') ?? 0;
     final now = DateTime.now().millisecondsSinceEpoch;
-    if (now - lastAnalysis > 7 * 24 * 60 * 60 * 1000) {
-      await _analyzeAndOptimize(prefs);
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
+    if (now - lastAnalysis > weekMs) {
+      // Safety-Net: orphaned Feedbacks aufholen
+      await _applyPendingFeedbacks(prefs);
+      // Decay nur wöchentlich — nicht bei jedem App-Start
       await _applyDecay(prefs);
       await prefs.setInt('last_analysis', now);
     }
   }
 
-  Future<void> _analyzeAndOptimize(SharedPreferences prefs) async {
+  Future<void> _applyPendingFeedbacks(SharedPreferences prefs) async {
     if (!Hive.isBoxOpen(_boxName) ||
         !Hive.isBoxOpen(_feedbackBoxName)) return;
     final searchBox = Hive.box<dynamic>(_boxName);
@@ -222,10 +241,10 @@ class LearningService {
     }
 
     await _logPrivacyAction(
-        'Interessen-Modell verfeinert ($processed Feedbacks).');
+        'Gewichte sofort angewendet ($processed Feedbacks).');
 
     if (kDebugMode) {
-      debugPrint('Analyzer: applied $processed feedback events');
+      debugPrint('_applyPendingFeedbacks: $processed Feedbacks sofort verarbeitet');
     }
   }
 
