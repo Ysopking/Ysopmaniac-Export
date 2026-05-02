@@ -1,4 +1,4 @@
-name: Build APK (Debug)
+name: Build APK (Debug + Release)
 
 on:
   push:
@@ -48,12 +48,44 @@ jobs:
       - name: App analysieren
         run: flutter analyze --no-fatal-infos
 
+      # ── DEBUG ──────────────────────────────────────────────────────────────
       - name: Debug-APK bauen
         run: flutter build apk --debug --split-per-abi
 
-      - name: APKs hochladen
+      - name: Debug-APKs umbenennen
+        run: |
+          cd build/app/outputs/flutter-apk/
+          for f in app-*-debug.apk; do
+            ABI=$(echo "$f" | sed 's/app-//;s/-debug.apk//')
+            mv "$f" "FindUX-DEBUG-#${{ github.run_number }}-${ABI}.apk"
+          done
+          echo "--- Debug APKs ---"
+          ls -lh FindUX-DEBUG-*.apk
+
+      - name: Debug-APKs hochladen
         uses: actions/upload-artifact@v4
         with:
-          name: debug-apk-${{ github.run_number }}
-          path: build/app/outputs/flutter-apk/app-*-debug.apk
+          name: FindUX-DEBUG-${{ github.run_number }}
+          path: build/app/outputs/flutter-apk/FindUX-DEBUG-*.apk
+          retention-days: 14
+
+      # ── RELEASE (unsigned) ─────────────────────────────────────────────────
+      - name: Release-APK bauen
+        run: flutter build apk --release --split-per-abi
+
+      - name: Release-APKs umbenennen
+        run: |
+          cd build/app/outputs/flutter-apk/
+          for f in app-*-release.apk; do
+            ABI=$(echo "$f" | sed 's/app-//;s/-release.apk//')
+            mv "$f" "FindUX-RELEASE-#${{ github.run_number }}-${ABI}.apk"
+          done
+          echo "--- Release APKs ---"
+          ls -lh FindUX-RELEASE-*.apk
+
+      - name: Release-APKs hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: FindUX-RELEASE-${{ github.run_number }}
+          path: build/app/outputs/flutter-apk/FindUX-RELEASE-*.apk
           retention-days: 14
