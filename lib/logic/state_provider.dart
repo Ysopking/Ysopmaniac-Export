@@ -8,7 +8,7 @@ final securityServiceProvider = Provider((ref) => SecurityService());
 final learningServiceProvider = Provider((ref) => LearningService());
 
 // Auth State
-final authProvider = StateProvider<bool>((ref) => false);
+final authProvider = StateProvider<bool>((ref) => true); // Für Demo entsperrt starten
 
 // Onboarding State
 final onboardingDoneProvider = StateProvider<bool>((ref) => false);
