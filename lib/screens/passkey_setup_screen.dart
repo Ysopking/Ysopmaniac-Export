@@ -54,7 +54,7 @@ class _PasskeySetupScreenState extends State<PasskeySetupScreen> {
                   'Danach können Sie FindUX sicher verwenden.',
                   style: const TextStyle(
                     fontSize: 16,
-                    color: Colors.white.withOpacity(0.9),
+                    color: Color(0xE6FFFFFF), // Weiß mit 90% Alpha (const-fähig)
                     height: 1.5,
                   ),
                   textAlign: TextAlign.center,

@@ -63,11 +63,16 @@ class _MyAppState extends ConsumerState<MyApp> {
   }
 
   Future<void> _initApp() async {
-    final prefs = await SharedPreferences.getInstance();
-    ref.read(onboardingDoneProvider.notifier).state = prefs.getBool('onboarding_done') ?? false;
-    ref.read(firstLaunchProvider.notifier).state = prefs.getBool('first_launch') ?? true;
-    await ref.read(settingsProvider.notifier).loadSettings();
-    _authenticate();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      ref.read(onboardingDoneProvider.notifier).state = prefs.getBool('onboarding_done') ?? false;
+      ref.read(firstLaunchProvider.notifier).state = prefs.getBool('first_launch') ?? true;
+      await ref.read(settingsProvider.notifier).loadSettings();
+    } catch (e) {
+      debugPrint('initApp error: $e');
+    }
+    if (mounted) _authenticate();
   }
 
   Future<void> _authenticate() async {
@@ -127,7 +132,10 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
-    final locale = Locale(settings.language);
+    // Defensive: nur unterstützte Locales setzen, sonst Fallback auf Deutsch
+    const supported = {'de', 'en', 'fr', 'es', 'it'};
+    final lang = supported.contains(settings.language) ? settings.language : 'de';
+    final locale = Locale(lang);
 
     if (Platform.isIOS) {
       return CupertinoApp(
