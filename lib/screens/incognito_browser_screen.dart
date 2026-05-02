@@ -211,6 +211,20 @@ class _IncognitoBrowserScreenState extends State<IncognitoBrowserScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          // S-07: Screenshot-Schutz-Indikator (FLAG_SECURE ist aktiv).
+          // Erklaert dem User warum Screenshots schwarz erscheinen.
+          Tooltip(
+            message: 'Screenshots sind durch Android FLAG_SECURE\n'
+                'deaktiviert. Deine Privat-Session ist geschuetzt.',
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4),
+              child: Icon(
+                Icons.no_photography_outlined,
+                size: 18,
+                color: Colors.amber,
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.open_in_new),
             tooltip: 'In externer App oeffnen',

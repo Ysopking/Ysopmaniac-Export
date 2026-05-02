@@ -1,6 +1,8 @@
 package io.findux.app
 
 import android.os.Bundle
+import android.os.Debug
+import android.util.Log
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -29,6 +31,14 @@ class MainActivity : FlutterFragmentActivity() {
             WindowManager.LayoutParams.FLAG_SECURE,
             WindowManager.LayoutParams.FLAG_SECURE
         )
+        // S-05: Anti-Debugger-Check auf nativer Ebene.
+        // Debug.isDebuggerConnected() ist sicherer als TracerPid-Datei-Lesen
+        // weil sie direkt die JVM/ART-Debug-Session abfragt.
+        if (Debug.isDebuggerConnected()) {
+            Log.w("FindUX", "Debugger angehaengt — eingeschraenkter Modus.")
+            // Kein Abbruch: Legitime ADB-Nutzer sollen weiterarbeiten koennen.
+            // Der Dart-RootDetector meldet debuggerAttached an die UI.
+        }
         super.onCreate(savedInstanceState)
     }
 

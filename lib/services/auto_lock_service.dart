@@ -1,3 +1,4 @@
+import 'clipboard_guard.dart';
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
@@ -58,6 +59,9 @@ class AutoLockObserver with WidgetsBindingObserver {
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
       case AppLifecycleState.detached:
+        // S-06: Clipboard-Timer stoppen wenn App in Hintergrund geht.
+        // Sensible Suchinhalte bleiben nicht in der Zwischenablage.
+        ClipboardGuard.cancelTimer();
         _pendingLock?.cancel();
         _pendingLock = Timer(timeout, () {
           _pendingLock = null;

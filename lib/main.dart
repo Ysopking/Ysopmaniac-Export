@@ -11,6 +11,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import 'services/security_service.dart';
 import 'services/root_detector.dart';
+import 'services/clipboard_guard.dart';
 import 'services/pin_rotation_checker.dart';
 import 'services/learning_service.dart';
 import 'services/auto_lock_service.dart';
@@ -133,6 +134,8 @@ class _MyAppState extends ConsumerState<MyApp> {
       ref.read(securityServiceProvider).closeBox().catchError((e) {
         if (kDebugMode) debugPrint('Hive closeBox error: $e');
       });
+      // S-06: Zwischenablage sofort loeschen wenn Session gesperrt.
+      ClipboardGuard.clearNow();
     }
   }
 
