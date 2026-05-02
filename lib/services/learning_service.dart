@@ -605,6 +605,475 @@ class LearningService {
     await Hive.box<dynamic>(_feedbackBoxName).clear();
   }
 
+
+  /// Setzt sofortige Starter-Gewichte fuer spezifische Interesse-Items.
+  ///
+  /// Wird aufgerufen wenn der User neue Interessen hinzufuegt (added-Liste).
+  /// Jedes bekannte Item-Path wird einer Menge von weight_kw_* / weight_domain_*
+  /// zugeordnet und sofort in SharedPreferences gesetzt.
+  ///
+  /// Regeln:
+  ///   • Nur angehoben, nie abgesenkt (vorhandene Lern-Gewichte haben Vorrang)
+  ///   • Werte: kw_* 1.20–1.35, domain_* 1.25–1.40 (unter Employment-Seed-Werten)
+  ///   • Unbekannte Paths werden ignoriert — kein Fehler
+  static Future<void> seedInterestItemWeights(List<String> paths) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // ── Item-Gewichts-Map ──────────────────────────────────────────────────
+    // Format: 'top/sub/item' → { 'weight_kw_X': value, 'weight_domain_Y': value }
+    const itemWeights = <String, Map<String, double>>{
+      // ── Finanzen / Haushalt & Sparen ──
+      'finanzen/haushalt/budgetplan': {
+        'weight_kw_haushalt':    1.28,
+        'weight_kw_budgetplan':  1.30,
+        'weight_kw_sparen':      1.25,
+        'weight_kw_ausgaben':    1.22,
+      },
+      'finanzen/haushalt/strom': {
+        'weight_kw_strom':       1.28,
+        'weight_kw_energie':     1.25,
+        'weight_kw_tarif':       1.22,
+        'weight_kw_vergleich':   1.20,
+        'weight_domain_verivox.de': 1.30,
+        'weight_domain_check24.de': 1.28,
+      },
+      'finanzen/haushalt/lebensmittel': {
+        'weight_kw_lebensmittel': 1.25,
+        'weight_kw_guenstig':    1.28,
+        'weight_kw_supermarkt':  1.22,
+        'weight_kw_angebot':     1.20,
+      },
+      'finanzen/haushalt/rabattcodes': {
+        'weight_kw_rabatt':      1.28,
+        'weight_kw_coupon':      1.28,
+        'weight_kw_gutschein':   1.25,
+        'weight_domain_gutscheinpony.de': 1.25,
+      },
+      'finanzen/haushalt/secondhand': {
+        'weight_kw_secondhand':  1.28,
+        'weight_kw_gebraucht':   1.25,
+        'weight_domain_kleinanzeigen.de': 1.35,
+        'weight_domain_vinted.de': 1.30,
+      },
+
+      // ── Finanzen / Sozialleistungen ──
+      'finanzen/soziales/buergergeld': {
+        'weight_kw_buergergeld':    1.35,
+        'weight_kw_sozialleistung': 1.28,
+        'weight_kw_antrag':         1.28,
+        'weight_kw_foerderung':     1.25,
+        'weight_domain_arbeitsagentur.de':       1.40,
+        'weight_domain_bund.de':                 1.35,
+        'weight_domain_gesetze-im-internet.de':  1.30,
+      },
+      'finanzen/soziales/kindergeld': {
+        'weight_kw_kindergeld':     1.35,
+        'weight_kw_kinderzuschlag': 1.30,
+        'weight_kw_antrag':         1.25,
+        'weight_domain_familienkasse.de': 1.40,
+        'weight_domain_bund.de':          1.30,
+      },
+      'finanzen/soziales/wohngeld': {
+        'weight_kw_wohngeld':    1.35,
+        'weight_kw_antrag':      1.25,
+        'weight_kw_miete':       1.22,
+        'weight_domain_bund.de': 1.35,
+      },
+      'finanzen/soziales/bafoegsoz': {
+        'weight_kw_bafoeg':      1.35,
+        'weight_kw_foerderung':  1.28,
+        'weight_kw_antrag':      1.25,
+        'weight_domain_bafoeg.de': 1.40,
+        'weight_domain_bund.de':   1.30,
+      },
+      'finanzen/soziales/grundsicherung': {
+        'weight_kw_grundsicherung': 1.35,
+        'weight_kw_rente':          1.28,
+        'weight_kw_alter':          1.22,
+        'weight_domain_bund.de':    1.35,
+        'weight_domain_deutsche-rentenversicherung.de': 1.35,
+      },
+      'finanzen/soziales/sozialticket': {
+        'weight_kw_sozialticket':   1.30,
+        'weight_kw_ermaessigung':   1.28,
+        'weight_kw_ticket':         1.22,
+        'weight_kw_oeffentlich':    1.20,
+      },
+
+      // ── Finanzen / Steuern ──
+      'finanzen/steuern/steuererklaerung': {
+        'weight_kw_steuererklaerung': 1.35,
+        'weight_kw_steuern':          1.28,
+        'weight_kw_finanzamt':        1.25,
+        'weight_domain_elster.de':    1.40,
+        'weight_domain_lohnsteuer-kompakt.de': 1.30,
+      },
+      'finanzen/steuern/werbungskosten': {
+        'weight_kw_werbungskosten': 1.32,
+        'weight_kw_absetzbar':      1.28,
+        'weight_kw_steuertipp':     1.25,
+        'weight_domain_lohnsteuer-kompakt.de': 1.30,
+      },
+      'finanzen/steuern/elster': {
+        'weight_kw_elster':         1.32,
+        'weight_kw_steuerportal':   1.25,
+        'weight_domain_elster.de':  1.40,
+      },
+      'finanzen/steuern/minijob': {
+        'weight_kw_minijob':             1.32,
+        'weight_kw_steuerpflicht':       1.28,
+        'weight_domain_minijob-zentrale.de': 1.38,
+      },
+      'finanzen/steuern/gewerbeanmeldung': {
+        'weight_kw_gewerbe':         1.30,
+        'weight_kw_umsatzsteuer':    1.28,
+        'weight_kw_selbststaendig':  1.25,
+        'weight_domain_ihk.de':      1.30,
+      },
+
+      // ── Finanzen / Investieren ──
+      'finanzen/investieren/etf': {
+        'weight_kw_etf':          1.32,
+        'weight_kw_indexfonds':   1.30,
+        'weight_kw_sparplan':     1.28,
+        'weight_kw_geldanlage':   1.25,
+        'weight_domain_justetf.com':       1.38,
+        'weight_domain_finanztip.de':      1.35,
+        'weight_domain_extraetf.com':      1.30,
+      },
+      'finanzen/investieren/aktien': {
+        'weight_kw_aktien':       1.30,
+        'weight_kw_dividende':    1.28,
+        'weight_kw_boerse':       1.25,
+        'weight_domain_onvista.de':   1.35,
+        'weight_domain_finanzen.net': 1.30,
+      },
+      'finanzen/investieren/immobilien': {
+        'weight_kw_immobilien':   1.30,
+        'weight_kw_kapitalanlage':1.28,
+        'weight_kw_rendite':      1.25,
+        'weight_domain_immobilienscout24.de': 1.32,
+      },
+      'finanzen/investieren/krypto': {
+        'weight_kw_krypto':       1.28,
+        'weight_kw_bitcoin':      1.25,
+        'weight_kw_blockchain':   1.22,
+        'weight_domain_coinmarketcap.com': 1.30,
+      },
+
+      // ── Finanzen / Mietrecht ──
+      'finanzen/mietrecht/mietvertrag': {
+        'weight_kw_mietvertrag':  1.32,
+        'weight_kw_kuendigung':   1.28,
+        'weight_kw_mietrecht':    1.25,
+        'weight_domain_mieterbund.de':       1.38,
+        'weight_domain_verbraucherzentrale.de': 1.30,
+      },
+      'finanzen/mietrecht/nebenkosten': {
+        'weight_kw_nebenkosten':  1.32,
+        'weight_kw_betriebskosten':1.28,
+        'weight_domain_mieterbund.de': 1.35,
+      },
+      'finanzen/mietrecht/mietpreisbremse': {
+        'weight_kw_mietpreisbremse': 1.30,
+        'weight_kw_mietspiegel':     1.28,
+        'weight_domain_mieterbund.de': 1.35,
+      },
+      'finanzen/mietrecht/vermieter': {
+        'weight_kw_vermieter':    1.28,
+        'weight_kw_rechte':       1.25,
+        'weight_kw_mietrecht':    1.25,
+        'weight_domain_mieterbund.de': 1.35,
+      },
+
+      // ── Finanzen / Familienrecht ──
+      'finanzen/familienrecht/unterhalt': {
+        'weight_kw_unterhalt':          1.35,
+        'weight_kw_unterhaltsrechner':  1.30,
+        'weight_kw_duesseldorfer':      1.25,
+        'weight_domain_bmj.de':         1.35,
+        'weight_domain_gesetze-im-internet.de': 1.28,
+      },
+      'finanzen/familienrecht/sorgerecht': {
+        'weight_kw_sorgerecht':   1.35,
+        'weight_kw_umgangsrecht': 1.30,
+        'weight_kw_familiengericht': 1.25,
+        'weight_domain_bmj.de':   1.35,
+      },
+      'finanzen/familienrecht/scheidung': {
+        'weight_kw_scheidung':    1.35,
+        'weight_kw_trennung':     1.28,
+        'weight_kw_zugewinn':     1.25,
+        'weight_domain_bmj.de':   1.35,
+      },
+      'finanzen/familienrecht/erbrecht': {
+        'weight_kw_erbrecht':     1.32,
+        'weight_kw_testament':    1.30,
+        'weight_kw_erbe':         1.28,
+        'weight_domain_bmj.de':   1.35,
+      },
+
+      // ── Finanzen / Rente ──
+      'finanzen/rente/gesetzlichrente': {
+        'weight_kw_rente':        1.32,
+        'weight_kw_renteninfo':   1.30,
+        'weight_kw_rentenpunkt':  1.28,
+        'weight_domain_deutsche-rentenversicherung.de': 1.40,
+        'weight_domain_bund.de':  1.30,
+      },
+      'finanzen/rente/riester': {
+        'weight_kw_riester':      1.32,
+        'weight_kw_ruerup':       1.28,
+        'weight_kw_foerderung':   1.25,
+        'weight_domain_finanztip.de': 1.35,
+      },
+      'finanzen/rente/betriebsrente': {
+        'weight_kw_betriebsrente':  1.30,
+        'weight_kw_entgeltumwandlung': 1.28,
+        'weight_domain_finanztip.de': 1.32,
+      },
+      'finanzen/rente/fruehverrentung': {
+        'weight_kw_fruehverrentung': 1.30,
+        'weight_kw_renteneintritt':  1.28,
+        'weight_kw_rentenalter':     1.25,
+        'weight_domain_deutsche-rentenversicherung.de': 1.38,
+      },
+
+      // ── Bildung / Bewerbung ──
+      'bildung/bewerbung/lebenslauf': {
+        'weight_kw_lebenslauf':   1.32,
+        'weight_kw_vorlage':      1.28,
+        'weight_kw_cv':           1.25,
+        'weight_kw_bewerbung':    1.25,
+        'weight_domain_lebenslauf.de': 1.30,
+      },
+      'bildung/bewerbung/anschreiben': {
+        'weight_kw_anschreiben':  1.32,
+        'weight_kw_bewerbung':    1.28,
+        'weight_kw_vorlage':      1.25,
+      },
+      'bildung/bewerbung/linkedinprofil': {
+        'weight_kw_linkedin':     1.30,
+        'weight_kw_profil':       1.25,
+        'weight_kw_netzwerk':     1.22,
+        'weight_domain_linkedin.com': 1.35,
+      },
+      'bildung/bewerbung/vorstellungsgespraech': {
+        'weight_kw_vorstellungsgesprach': 1.32,
+        'weight_kw_interview':            1.28,
+        'weight_kw_fragen':               1.22,
+      },
+      'bildung/bewerbung/gehaltsverhandlung': {
+        'weight_kw_gehalt':            1.30,
+        'weight_kw_gehaltsverhandlung':1.32,
+        'weight_kw_verhandlung':       1.25,
+        'weight_domain_stepstone.de':  1.28,
+      },
+      'bildung/bewerbung/quereinstieg': {
+        'weight_kw_quereinstieg': 1.32,
+        'weight_kw_umschulung':   1.28,
+        'weight_kw_umorientierung':1.25,
+        'weight_domain_arbeitsagentur.de': 1.35,
+      },
+
+      // ── Bildung / Studium ──
+      'bildung/studium/hochschulbewerbung': {
+        'weight_kw_hochschule':   1.30,
+        'weight_kw_nc':           1.28,
+        'weight_kw_zulassung':    1.28,
+        'weight_kw_studiengang':  1.25,
+        'weight_domain_hochschulstart.de': 1.35,
+        'weight_domain_anabin.kmk.org':   1.28,
+      },
+      'bildung/studium/bafoegstudy': {
+        'weight_kw_bafoeg':        1.35,
+        'weight_kw_foerderung':    1.28,
+        'weight_domain_bafoeg.de': 1.40,
+        'weight_domain_bund.de':   1.28,
+      },
+      'bildung/studium/lerntechniken': {
+        'weight_kw_lernmethode':  1.28,
+        'weight_kw_pruefung':     1.28,
+        'weight_kw_vorbereitung': 1.25,
+        'weight_kw_pomodoro':     1.22,
+      },
+      'bildung/studium/auslandsstudium': {
+        'weight_kw_auslandsstudium': 1.30,
+        'weight_kw_erasmus':         1.30,
+        'weight_kw_ausland':         1.25,
+        'weight_domain_daad.de':     1.38,
+      },
+      'bildung/studium/berufsausbildung': {
+        'weight_kw_ausbildung':      1.30,
+        'weight_kw_berufsausbildung':1.30,
+        'weight_kw_azubi':           1.25,
+        'weight_domain_ausbildung.de': 1.32,
+      },
+
+      // ── Bildung / Weiterbildung ──
+      'bildung/weiterbildung/onlinekurse': {
+        'weight_kw_onlinekurs':   1.30,
+        'weight_kw_kurs':         1.25,
+        'weight_domain_udemy.com':    1.35,
+        'weight_domain_coursera.org': 1.35,
+        'weight_domain_edx.org':      1.28,
+      },
+      'bildung/weiterbildung/zertifikate': {
+        'weight_kw_zertifikat':   1.30,
+        'weight_kw_aws':          1.28,
+        'weight_kw_azure':        1.28,
+        'weight_kw_comptia':      1.25,
+        'weight_domain_aws.amazon.com':   1.30,
+        'weight_domain_microsoft.com':    1.28,
+      },
+      'bildung/weiterbildung/umschulung': {
+        'weight_kw_umschulung':   1.35,
+        'weight_kw_foerderung':   1.28,
+        'weight_kw_bildungsgutschein': 1.30,
+        'weight_domain_arbeitsagentur.de': 1.40,
+      },
+      'bildung/weiterbildung/sprachkurse': {
+        'weight_kw_sprachkurs':   1.28,
+        'weight_kw_vhs':          1.25,
+        'weight_domain_goethe.de':    1.35,
+        'weight_domain_vhs.de':       1.30,
+      },
+      'bildung/weiterbildung/coaching': {
+        'weight_kw_coaching':     1.25,
+        'weight_kw_mentaltraining':1.22,
+        'weight_kw_karriere':     1.22,
+      },
+
+      // ── Bildung / Selbststaendigkeit ──
+      'bildung/selbststaendig/gruendung': {
+        'weight_kw_gruendung':    1.30,
+        'weight_kw_startup':      1.25,
+        'weight_kw_unternehmen':  1.22,
+        'weight_domain_gruenderplattform.de': 1.38,
+        'weight_domain_ihk.de':             1.30,
+      },
+      'bildung/selbststaendig/freelance': {
+        'weight_kw_freelance':     1.32,
+        'weight_kw_freiberuflich': 1.28,
+        'weight_kw_auftraege':     1.25,
+        'weight_domain_gulp.de':      1.28,
+        'weight_domain_freelance.de': 1.28,
+      },
+      'bildung/selbststaendig/businessplan': {
+        'weight_kw_businessplan': 1.30,
+        'weight_kw_geschaeftsplan':1.28,
+        'weight_kw_vorlage':      1.22,
+        'weight_domain_gruenderplattform.de': 1.35,
+      },
+      'bildung/selbststaendig/foerdermittel': {
+        'weight_kw_foerdermittel':    1.32,
+        'weight_kw_gruenderzuschuss': 1.30,
+        'weight_kw_foerderung':       1.28,
+        'weight_domain_arbeitsagentur.de': 1.35,
+        'weight_domain_bund.de':           1.28,
+      },
+
+      // ── Bildung / Kinder ──
+      'bildung/kinder/hausaufgaben': {
+        'weight_kw_hausaufgaben': 1.28,
+        'weight_kw_schule':       1.25,
+        'weight_kw_erklaerung':   1.22,
+        'weight_domain_sofatutor.com':  1.30,
+        'weight_domain_studysmarter.de':1.28,
+      },
+      'bildung/kinder/nachhilfe': {
+        'weight_kw_nachhilfe':    1.30,
+        'weight_kw_foerderunterricht':1.28,
+        'weight_domain_sofatutor.com':    1.32,
+        'weight_domain_schuelerhilfe.de': 1.30,
+      },
+      'bildung/kinder/schulwahl': {
+        'weight_kw_schulsystem':  1.28,
+        'weight_kw_schulwahl':    1.28,
+        'weight_kw_gymnasium':    1.22,
+        'weight_domain_bildungsserver.de': 1.30,
+      },
+      'bildung/kinder/lernspiele': {
+        'weight_kw_lernspiel':    1.28,
+        'weight_kw_kinder':       1.22,
+        'weight_kw_app':          1.20,
+        'weight_domain_anton.app':      1.32,
+        'weight_domain_schlaukopf.de':  1.28,
+      },
+      'bildung/kinder/kitaschule': {
+        'weight_kw_kita':         1.30,
+        'weight_kw_kitaplatz':    1.30,
+        'weight_kw_schulanmeldung':1.28,
+        'weight_kw_einschulung':  1.25,
+        'weight_domain_familienportal.de': 1.35,
+      },
+
+      // ── Sport (hochspezifische Items) ──
+      'sport/fitness/krafttraining': {
+        'weight_kw_krafttraining': 1.28,
+        'weight_kw_muskelaufbau':  1.25,
+        'weight_kw_trainingsplan': 1.25,
+        'weight_domain_muskelaufbau.com': 1.28,
+      },
+      'sport/fitness/yoga': {
+        'weight_kw_yoga':         1.28,
+        'weight_kw_asana':        1.22,
+        'weight_kw_meditation':   1.22,
+        'weight_domain_yogaeasy.de': 1.30,
+      },
+      'sport/fitness/altersgerecht': {
+        'weight_kw_seniorensport': 1.28,
+        'weight_kw_gelenkschonend':1.28,
+        'weight_kw_bewegung':      1.22,
+      },
+      'sport/fitness/reha': {
+        'weight_kw_physiotherapie':1.30,
+        'weight_kw_rehasport':     1.30,
+        'weight_kw_uebungen':      1.22,
+        'weight_domain_apotheken-umschau.de': 1.30,
+      },
+
+      // ── Kochen (hochspezifische Items) ──
+      'kochen/gesund/mealprep': {
+        'weight_kw_mealprep':     1.28,
+        'weight_kw_vorbereitung': 1.22,
+        'weight_kw_gesund':       1.22,
+        'weight_kw_rezept':       1.20,
+      },
+      'kochen/familie/guenstigkochen': {
+        'weight_kw_guenstig':     1.28,
+        'weight_kw_billig':       1.25,
+        'weight_kw_haushalt':     1.22,
+        'weight_kw_rezept':       1.20,
+      },
+      'kochen/seniorenkueche/herzgesund': {
+        'weight_kw_herzgesund':   1.28,
+        'weight_kw_ernaehrung':   1.25,
+        'weight_kw_cholesterin':  1.22,
+        'weight_domain_apotheken-umschau.de': 1.32,
+      },
+    };
+
+    // ── Gewichte setzen (nie absenken) ───────────────────────────────────
+    int updated = 0;
+    for (final path in paths) {
+      final weights = itemWeights[path];
+      if (weights == null) continue;
+      for (final entry in weights.entries) {
+        final current = prefs.getDouble(entry.key) ?? 0.0;
+        if (entry.value > current) {
+          await prefs.setDouble(entry.key, entry.value);
+          updated++;
+        }
+      }
+    }
+    if (kDebugMode) {
+      debugPrint(
+        'seedInterestItemWeights: ${paths.length} Paths → $updated Keys gesetzt.',
+      );
+    }
+  }
+
   Future<void> _extractAndWeightKeywords(String query, double delta,
       SharedPreferences prefs, String language) async {
     final clean = query
