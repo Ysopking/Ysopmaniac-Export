@@ -149,7 +149,24 @@ class LearningService {
   ///   1) Decay: alle weight_*-Werte sanft Richtung 1.0 ziehen (wöchentlich).
   ///   2) Safety-Net: verbleibende unangewendete Feedbacks nachholen,
   ///      die z.B. durch App-Absturz noch nicht verarbeitet wurden.
-  Future<void> checkAndAnalyze() async {
+  /// Setzt alle Lern-Gewichte (weight_*-Keys in SharedPreferences) zurueck.
+  ///
+  /// Stammdaten (Hive-Vault), Suchlogs und Token-Tracking bleiben vollstaendig
+  /// erhalten — nur die adaptiven Gewichte werden auf Basis-1.0 zurueckgesetzt.
+  /// Nuetzlich wenn der User einen "Neustart" ohne Datenverlust moechte.
+  Future<void> resetLearningWeights() async {
+    final prefs = await SharedPreferences.getInstance();
+    final toRemove =
+        prefs.getKeys().where((k) => k.startsWith('weight_')).toList();
+    for (final k in toRemove) {
+      await prefs.remove(k);
+    }
+    if (kDebugMode) {
+      debugPrint('resetLearningWeights: \${toRemove.length} Gewichts-Keys entfernt.');
+    }
+  }
+
+    Future<void> checkAndAnalyze() async {
     final prefs = await SharedPreferences.getInstance();
     final lastAnalysis = prefs.getInt('last_analysis') ?? 0;
     final now = DateTime.now().millisecondsSinceEpoch;

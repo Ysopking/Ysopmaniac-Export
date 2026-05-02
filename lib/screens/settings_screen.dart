@@ -10,6 +10,8 @@ import '../services/chrome_import_quick.dart';
 import '../services/haptic_helper.dart';
 import '../theme.dart';
 import '../data/locale_catalog.dart';
+import '../coach/precision_advisor.dart';
+import '../services/pin_rotation_checker.dart';
 
 /// Apple-UX-Settings (Stage G):
 ///
@@ -34,6 +36,9 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _showAdvancedAboutMe = false;
   bool _showAdvancedSearch = false;
+  // E1: Lernprofil-Panel — async geladen
+  PrecisionRecommendation? _profileAdvice;
+  bool _profileLoading = false;
 
   static const _employmentLabels = <String, String>{
     'student': 'Student / Schueler / Azubi',
@@ -48,6 +53,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     'familie': 'Familie / mit Kindern',
     'alleinerziehend': 'Alleinerziehend',
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    if (_profileLoading) return;
+    setState(() => _profileLoading = true);
+    final rec = await PrecisionAdvisor.analyze();
+    if (mounted) setState(() { _profileAdvice = rec; _profileLoading = false; });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -258,6 +276,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ]),
 
           // -------- Notbremse separiert --------
+          // -------- Block 4: Mein Suchprofil (E1) --------
+          _sectionLabel('Mein Suchprofil'),
+          _buildProfileCard(),
+
+          // -------- Block 5: Datensicherheit --------
+          _sectionLabel('Datensicherheit'),
+          _groupCard(children: [
+            // C1: TLS-Pin-Ablauf-Warnung (immer sichtbar wenn < 60 Tage)
+            if (PinRotationChecker.isPinExpiringSoon)
+              _infoRow(
+                icon: Icons.security_update_warning_rounded,
+                title: 'TLS-Update empfohlen',
+                subtitle:
+                    'Sicherheits-Pins laufen bald ab (vor ${PinRotationChecker.pinExpiration})',
+                color: Colors.orange,
+              ),
+            // E2: Nur Lernprofil zuruecksetzen
+            _row(
+              icon: Icons.restart_alt_rounded,
+              title: 'Nur Lernprofil zuruecksetzen',
+              value: 'Gewichte',
+              onTap: () => _confirmResetWeights(context, ref),
+            ),
+          ]),
+
           const SizedBox(height: 12),
           _groupCard(
             children: [
@@ -828,6 +871,220 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             },
             child:
                 const Text('Loeschen', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmResetWeights(BuildContext context, WidgetRef ref) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Lernprofil zuruecksetzen?'),
+        content: const Text(
+            'Alle adaptiven Gewichte (Suchstil, bevorzugte Quellen, '
+            'Coach-Chip-Praeferenzen) werden auf den Startzustand '
+            'zurueckgesetzt. Deine Stammdaten (PLZ, Beruf, Interessen) '
+            'bleiben erhalten.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Abbrechen')),
+          TextButton(
+            onPressed: () async {
+              await ref
+                  .read(learningServiceProvider)
+                  .resetLearningWeights();
+              if (context.mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Lernprofil wurde zurueckgesetzt.'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                // E1: Profil-Karte neu laden
+                _loadProfile();
+              }
+            },
+            child: const Text('Zuruecksetzen',
+                style: TextStyle(color: Colors.orange)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileCard() {
+    final adv = _profileAdvice;
+    if (_profileLoading) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Row(children: const [
+          SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(width: 12),
+          Text('Lade Profil…',
+              style: TextStyle(color: Colors.black54, fontSize: 14)),
+        ]),
+      );
+    }
+    if (adv == null || !adv.hasData) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: const Text(
+          'Noch keine Profil-Daten — starte deine ersten Suchen und '
+          'gib Bewertungen ab.',
+          style: TextStyle(fontSize: 13, color: Colors.black54, height: 1.4),
+        ),
+      );
+    }
+    final satPct = (adv.overallSatisfaction * 100).round();
+    final modeLabel = adv.preferredMode == 'precise'
+        ? 'Praezise'
+        : adv.preferredMode == 'discover'
+            ? 'Entdecken'
+            : adv.preferredMode == 'recent'
+                ? 'Aktuell'
+                : 'Standard';
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          _profileStat(
+            icon: Icons.tune_rounded,
+            label: 'Bevorzugter Modus',
+            value: modeLabel,
+          ),
+          const Padding(
+            padding: EdgeInsets.only(left: 56),
+            child:
+                Divider(height: 1, thickness: 0.5, color: Color(0xFFE5E5EA)),
+          ),
+          _profileStat(
+            icon: Icons.spellcheck_rounded,
+            label: 'Ø Wörter pro Suche',
+            value: '${adv.avgWordCountSuccess}',
+          ),
+          const Padding(
+            padding: EdgeInsets.only(left: 56),
+            child:
+                Divider(height: 1, thickness: 0.5, color: Color(0xFFE5E5EA)),
+          ),
+          _profileStat(
+            icon: Icons.thumb_up_alt_outlined,
+            label: 'Zufriedenheitsquote',
+            value: '$satPct % (${adv.totalRated} Bewertungen)',
+          ),
+          if (adv.filterHint.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.only(left: 56),
+              child: Divider(
+                  height: 1, thickness: 0.5, color: Color(0xFFE5E5EA)),
+            ),
+            _profileStat(
+              icon: Icons.library_books_outlined,
+              label: 'Lieblingsquellen',
+              value: adv.filterHint,
+            ),
+          ],
+          if (adv.topThemeLabel != null) ...[
+            const Padding(
+              padding: EdgeInsets.only(left: 56),
+              child: Divider(
+                  height: 1, thickness: 0.5, color: Color(0xFFE5E5EA)),
+            ),
+            _profileStat(
+              icon: Icons.lightbulb_outline_rounded,
+              label: 'Haeufigstes Thema',
+              value: adv.topThemeLabel!,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _profileStat(
+      {required IconData icon,
+      required String label,
+      required String value}) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 52),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          Icon(icon, color: FindUXProTheme.primaryPurple, size: 22),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                    letterSpacing: -0.2)),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(value,
+                textAlign: TextAlign.right,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.black54,
+                    fontWeight: FontWeight.w500)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    Color color = Colors.black54,
+  }) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 56),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(title,
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                        letterSpacing: -0.2)),
+                const SizedBox(height: 2),
+                Text(subtitle,
+                    style: const TextStyle(
+                        fontSize: 12.5, color: Colors.black54)),
+              ],
+            ),
           ),
         ],
       ),

@@ -139,6 +139,14 @@ class _ImportGuideSheetState extends State<_ImportGuideSheet> {
       final box = await ChromeImportService.openBox(key);
       await ChromeImportService.persistAndApply(summary.all, box);
 
+      // D1: Zweiter Lern-Pass — Top-Domains als URL-Pfad-Tokens bumpen.
+      // applyInterestBumps() tokenisiert die Domain-Strings (z.B. "apotheken-umschau.de"
+      // → ["apotheken", "umschau"]) und bumpt die entsprechenden weight_kw_*-Keys.
+      final topDomains = ChromeImportService.topImportedDomains(box, limit: 10);
+      if (topDomains.isNotEmpty) {
+        await ChromeImportService.applyInterestBumps(topDomains);
+      }
+
       if (!mounted) return;
       Haptics.done();
       messenger.showSnackBar(SnackBar(
