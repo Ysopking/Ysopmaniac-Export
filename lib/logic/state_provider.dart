@@ -203,10 +203,10 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
         await prefs.remove('plz');
         await prefs.remove('beruf');
         await prefs.remove('jahr');
-        debugPrint('PII migration to encrypted vault completed.');
+        if (kDebugMode) debugPrint('PII migration to encrypted vault completed.');
       }
     } catch (e) {
-      debugPrint('PII migration skipped: $e');
+      if (kDebugMode) debugPrint('PII migration skipped: $e');
     }
 
     String pPlz = '';
@@ -272,7 +272,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       await box.put('jahr', newState.jahr);
       await box.put('interests', newState.interests);
     } catch (e) {
-      debugPrint('Vault write failed: $e');
+      if (kDebugMode) debugPrint('Vault write failed: $e');
     }
 
     // Nicht-PII -> SharedPreferences (Klartext, da unkritisch)
@@ -302,7 +302,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
         // (finanzen/soziales/buergergeld → weight_kw_buergergeld = 1.35, etc.)
         await LearningService.seedInterestItemWeights(added);
       } catch (e) {
-        debugPrint('Interest bumps failed: $e');
+        if (kDebugMode) debugPrint('Interest bumps failed: $e');
       }
     }
   }
@@ -362,7 +362,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       final box = _security.vaultBox;
       await box.clear();
     } catch (e) {
-      debugPrint('Vault clear failed: $e');
+      if (kDebugMode) debugPrint('Vault clear failed: $e');
     }
     final prefs = await SharedPreferences.getInstance();
     for (final key in _allPrefsKeys) {

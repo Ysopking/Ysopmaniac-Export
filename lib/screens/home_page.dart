@@ -227,7 +227,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           (prefs.getStringList(_seenKwsKey) ?? const <String>[]).toSet();
       return tokens.difference(seen);
     } catch (e) {
-      debugPrint('detectNewTokens error: $e');
+      if (kDebugMode) debugPrint('detectNewTokens error: $e');
       return const <String>{};
     }
   }
@@ -245,7 +245,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       }
       await prefs.setStringList(_seenKwsKey, list);
     } catch (e) {
-      debugPrint('markTokensSeen error: $e');
+      if (kDebugMode) debugPrint('markTokensSeen error: $e');
     }
   }
 
@@ -356,7 +356,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           if (!launched && mounted) _showLaunchFailedSnack();
         }
       } catch (e) {
-        debugPrint('launchUrl error: $e');
+        if (kDebugMode) debugPrint('launchUrl error: $e');
         if (mounted) _showLaunchFailedSnack();
       }
     }

@@ -244,7 +244,7 @@ class LearningService {
         'Gewichte sofort angewendet ($processed Feedbacks).');
 
     if (kDebugMode) {
-      debugPrint('_applyPendingFeedbacks: $processed Feedbacks sofort verarbeitet');
+      if (kDebugMode) debugPrint('_applyPendingFeedbacks: $processed Feedbacks sofort verarbeitet');
     }
   }
 
@@ -264,7 +264,7 @@ class LearningService {
       updated++;
     }
     if (kDebugMode) {
-      debugPrint('Weight decay applied to $updated keys.');
+      if (kDebugMode) debugPrint('Weight decay applied to $updated keys.');
     }
   }
 
@@ -458,7 +458,7 @@ class LearningService {
     }
 
     if (kDebugMode) {
-      debugPrint(
+      if (kDebugMode) debugPrint(
         'seedStarterWeights: $employmentType — ${weights.length} Keys gesetzt.',
       );
     }
@@ -550,7 +550,7 @@ class LearningService {
     }
 
     if (kDebugMode) {
-      debugPrint(
+      if (kDebugMode) debugPrint(
         'seedStarterFamilyWeights: $familyStatus — ${weights.length} Keys gesetzt.',
       );
     }
@@ -596,7 +596,7 @@ class LearningService {
     }
 
     if (kDebugMode) {
-      debugPrint('applyInterestCategoryWeights: ' + categories.join(', ') + ' — ' + categories.length.toString() + ' Kategorie-Boosts gesetzt.');
+      if (kDebugMode) debugPrint('applyInterestCategoryWeights: ' + categories.join(', ') + ' — ' + categories.length.toString() + ' Kategorie-Boosts gesetzt.');
     }
   }
 
@@ -1068,7 +1068,7 @@ class LearningService {
       }
     }
     if (kDebugMode) {
-      debugPrint(
+      if (kDebugMode) debugPrint(
         'seedInterestItemWeights: ${paths.length} Paths → $updated Keys gesetzt.',
       );
     }
@@ -1097,7 +1097,7 @@ class LearningService {
           prefs, 'weight_kw_$word', delta, _kwMin, _kwMax);
     }
     if (kDebugMode) {
-      debugPrint('Updated keyword weights: ${words.length} terms');
+      if (kDebugMode) debugPrint('Updated keyword weights: ${words.length} terms');
     }
   }
 

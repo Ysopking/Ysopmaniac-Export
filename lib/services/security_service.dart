@@ -58,7 +58,7 @@ class SecurityService {
         available = await auth.getAvailableBiometrics();
       }
     } catch (e) {
-      debugPrint('SecurityService.getStatus error: $e');
+      if (kDebugMode) debugPrint('SecurityService.getStatus error: $e');
     }
     return BiometricStatus(
       deviceSupported: deviceSupported,
@@ -88,11 +88,11 @@ class SecurityService {
       );
     } on PlatformException catch (e) {
       _lastError = _mapAuthError(e);
-      debugPrint('SecurityService.authenticate PlatformException: ${e.code} ${e.message}');
+      if (kDebugMode) debugPrint('SecurityService.authenticate PlatformException: ${e.code} ${e.message}');
       return false;
     } catch (e) {
       _lastError = 'Unbekannter Fehler: $e';
-      debugPrint('SecurityService.authenticate error: $e');
+      if (kDebugMode) debugPrint('SecurityService.authenticate error: $e');
       return false;
     }
   }

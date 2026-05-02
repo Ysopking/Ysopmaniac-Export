@@ -24,14 +24,14 @@ Future<void> main() async {
   // Globaler Error-Handler: keine stillen Crashes mehr
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
-    debugPrint('FlutterError: ${details.exceptionAsString()}');
+    if (kDebugMode) debugPrint('FlutterError: ${details.exceptionAsString()}');
   };
 
   runZonedGuarded<Future<void>>(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
     PlatformDispatcher.instance.onError = (error, stack) {
-      debugPrint('PlatformDispatcher error: $error');
+      if (kDebugMode) debugPrint('PlatformDispatcher error: $error');
       return true;
     };
 
@@ -52,7 +52,7 @@ Future<void> main() async {
       await learningService.init(cipherKey);
       initOk = true;
     } catch (e, st) {
-      debugPrint('Initialisierungsfehler: $e\n$st');
+      if (kDebugMode) debugPrint('Initialisierungsfehler: $e\n$st');
     }
 
     // Provider-Overrides: dieselbe Service-Instanz wie in main()
@@ -108,7 +108,7 @@ class _MyAppState extends ConsumerState<MyApp> {
     if (!mounted) return;
     final auth = ref.read(authProvider);
     if (auth) {
-      debugPrint('AutoLock: Sitzung nach Inaktivitaet gesperrt.');
+      if (kDebugMode) debugPrint('AutoLock: Sitzung nach Inaktivitaet gesperrt.');
       ref.read(authProvider.notifier).state = false;
       // FIX Lücke 3: Encryption-Key sofort aus RAM loeschen wenn Sitzung endet.
       // Naechster getEncryptionKey()-Aufruf erfordert neue Biometrie-Auth.
@@ -123,7 +123,7 @@ class _MyAppState extends ConsumerState<MyApp> {
     if (!mounted) return;
     final isAuth = ref.read(authProvider);
     if (!isAuth) {
-      debugPrint('AutoLock: App resumed, Session gesperrt → sofortige Re-Auth.');
+      if (kDebugMode) debugPrint('AutoLock: App resumed, Session gesperrt → sofortige Re-Auth.');
       _authenticate();
     }
   }
@@ -138,7 +138,7 @@ class _MyAppState extends ConsumerState<MyApp> {
           prefs.getBool('first_launch') ?? true;
       await ref.read(settingsProvider.notifier).loadSettings();
     } catch (e) {
-      debugPrint('initApp error: $e');
+      if (kDebugMode) debugPrint('initApp error: $e');
     }
     if (mounted) _authenticate();
   }
@@ -153,7 +153,7 @@ class _MyAppState extends ConsumerState<MyApp> {
     } catch (e) {
       // KEIN automatisches Entsperren bei Auth-Fehler.
       // User muss explizit erneut auf "Entsperren" tippen.
-      debugPrint('Auth error: $e');
+      if (kDebugMode) debugPrint('Auth error: $e');
       if (mounted) {
         ref.read(authProvider.notifier).state = false;
         ref.read(authErrorProvider.notifier).state = e.toString();
