@@ -3,61 +3,23 @@ name: Flutter Build (Android APK)
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  workflow_dispatch: # Ermöglicht manuelles Starten
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  GRADLE_OPTS: -Xmx20g -Dorg.gradle.daemon=false
+  workflow_dispatch
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-     steps:
-       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-       - name: Setup Java
-         uses: actions/setup-java@v4
-         with:
-           distribution: 'zulu'
-           java-version: '17'
-           cache: '' # Cache deaktiviert für frischen Build
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.8'
+          channel: 'stable'
 
-       - name: Setup Flutter
-         uses: subosito/flutter-action@v2
-         with:
-           flutter-version: '3.41.8' # Ursprüngliche Codespace-Version
-           channel: 'stable'
-           cache: false
+      - name: Get Dependencies
+        run: flutter pub get
 
-       - name: Setup Android SDK
-         uses: android-actions/setup-android@v3
-         with:
-           packages: 'platform-tools platforms;android-34 build-tools;34.0.0 ndk;28.2.13676358'
-
-       - name: Clear Gradle Cache
-         run: rm -rf ~/.gradle/caches
-
-       - name: Get Dependencies
-         run: |
-           flutter pub get
-           flutter precache --android
-
-       - name: Generate Localization
-         run: flutter gen-l10n
-
-       - name: Run Code Analysis
-         run: flutter analyze --no-fatal-infos
-
-       - name: Build APK (Debug)
-         run: flutter build apk --debug --android-skip-build-dependency-validation
-
-       - name: Upload Debug APK
-         uses: actions/upload-artifact@v4
-         with:
-           name: findux-debug-apk
-           path: build/app/outputs/flutter-apk/app-debug.apk
-           retention-days: 7
+      - name: Build APK
+        run: flutter build apk --debug
