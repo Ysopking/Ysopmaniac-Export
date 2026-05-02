@@ -1,0 +1,129 @@
+name: Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release-Tag (z.B. v1.0)'
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    env:
+      GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4g -XX:+UseParallelGC"
+
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Flutter einrichten
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.8'
+          channel: 'stable'
+          cache: true
+
+      - name: Pub-Cache laden
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: pub-${{ hashFiles('pubspec.lock') }}
+          restore-keys: pub-
+
+      - name: Gradle-Cache laden
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            android/.gradle
+          key: gradle-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties') }}-${{ hashFiles('android/app/build.gradle') }}
+          restore-keys: gradle-
+
+      - name: Abhängigkeiten installieren
+        run: flutter pub get
+
+      - name: App analysieren
+        run: flutter analyze --no-fatal-infos
+
+      - name: APK-Version bestimmen
+        id: version
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [ -z "$TAG" ] || [ "$TAG" = "refs/heads/main" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          # Versionsnummer ohne 'v' (z.B. v1.2 → 1.2)
+          VERSION="${TAG#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Release-APK bauen (alle ABIs)
+        run: |
+          flutter build apk --release --split-per-abi \
+            --build-name="${{ steps.version.outputs.version }}" \
+            --build-number=${{ github.run_number }}
+
+      - name: APKs umbenennen
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          cd build/app/outputs/flutter-apk/
+          for f in app-*-release.apk; do
+            # app-arm64-v8a-release.apk → FindUX-v1.0-arm64.apk
+            ABI=$(echo "$f" | sed 's/app-//;s/-release.apk//')
+            mv "$f" "FindUX-v${VERSION}-${ABI}.apk"
+          done
+          ls -lh *.apk
+
+      - name: Changelog aus Git-Log generieren
+        id: changelog
+        run: |
+          # Commits seit letztem Tag
+          PREV_TAG=$(git tag --sort=-creatordate | sed -n '2p')
+          if [ -z "$PREV_TAG" ]; then
+            LOG=$(git log --pretty=format:"- %s" -20)
+          else
+            LOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s")
+          fi
+          # Multiline für GITHUB_OUTPUT
+          {
+            echo "log<<EOF"
+            echo "$LOG"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: GitHub Release erstellen & APKs hochladen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "FindUX ${{ steps.version.outputs.tag }}"
+          body: |
+            ## FindUX ${{ steps.version.outputs.tag }}
+
+            ### Änderungen
+            ${{ steps.changelog.outputs.log }}
+
+            ---
+
+            ### APK-Varianten
+            | Datei | Gerät |
+            |-------|-------|
+            | `FindUX-*-arm64-v8a.apk` | Alle modernen Android-Geräte (64-bit) ← empfohlen |
+            | `FindUX-*-armeabi-v7a.apk` | Ältere Geräte (32-bit) |
+            | `FindUX-*-x86_64.apk` | Emulatoren |
+
+            > **Installation:** Einstellungen → Apps → Unbekannte Quellen erlauben → APK tippen
+          files: build/app/outputs/flutter-apk/FindUX-*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
