@@ -13,7 +13,7 @@ import '../../theme.dart';
 class InlineCoachSection extends StatefulWidget {
   final String what;
   final String why;
-  final ValueChanged<CoachInjection> onChanged;
+  final void Function(CoachInjection injection, List<CoachChoice> choices) onChanged;
 
   const InlineCoachSection({
     super.key,
@@ -91,7 +91,7 @@ class _InlineCoachSectionState extends State<InlineCoachSection>
         ));
       }
     });
-    widget.onChanged(CoachInjection.fromChoices(_choices));
+    widget.onChanged(CoachInjection.fromChoices(_choices), List.unmodifiable(_choices));
   }
 
   bool _isSelected(String themeId, CoachDimension dim, CoachChip chip) =>
@@ -112,7 +112,7 @@ class _InlineCoachSectionState extends State<InlineCoachSection>
         setState(() {
           _choices.removeWhere((c) => c.themeId == oldTheme.id);
         });
-        widget.onChanged(CoachInjection.fromChoices(_choices));
+        widget.onChanged(CoachInjection.fromChoices(_choices), List.unmodifiable(_choices));
       }
     }
   }

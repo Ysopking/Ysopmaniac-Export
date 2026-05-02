@@ -77,6 +77,12 @@ class LearningService {
       'engine': (settings['searchengine'] as String?) ?? 'google',
       'employmentType':
           (settings['employmentType'] as String?) ?? 'student',
+      'familyStatus':
+          (settings['familyStatus'] as String?) ?? 'single',
+      if ((settings['interests'] as List?)?.isNotEmpty == true)
+        'interests': (settings['interests'] as List)
+            .whereType<String>()
+            .toList(),
       'language': (settings['language'] as String?) ?? 'de',
       'timestamp': DateTime.now().toIso8601String(),
       'sources': sources,
@@ -201,6 +207,13 @@ class LearningService {
           (search['employmentType'] as String?) ?? 'student';
       await _bumpAdditive(prefs, 'weight_employment_$empType', delta * 0.3,
           _modeMin, _modeMax);
+
+      final familyStatus =
+          (search['familyStatus'] as String?) ?? 'single';
+      if (familyStatus != 'single') {
+        await _bumpAdditive(prefs, 'weight_family_$familyStatus',
+            delta * 0.2, _modeMin, _modeMax);
+      }
 
       final query = (search['query'] as String?) ?? '';
       final language = (search['language'] as String?) ?? 'de';

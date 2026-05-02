@@ -43,6 +43,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   // sichtbar. Das ist der Apple-Trick fuer "ein Feld, optional mehr".
   bool _showWhyField = false;
   CoachInjection? _ambientCoachInjection;
+  List<CoachChoice> _ambientCoachChoices = const [];
   List<String> _suggestedGoals = [];
   Timer? _analysisTimer;
 
@@ -336,7 +337,10 @@ class _HomePageState extends ConsumerState<HomePage> {
       sources: settings.sources,
       files: settings.files,
       mode: effectiveMode,
-      coachChoices: coachChoices,
+      coachChoices: coachChoices ??
+          (_ambientCoachChoices.isNotEmpty
+              ? _ambientCoachChoices.map((c) => c.toJson()).toList()
+              : null),
     );
 
     final uri = Uri.tryParse(url);
@@ -688,9 +692,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                     InlineCoachSection(
                       what: _whatController.text,
                       why: _whyController.text,
-                      onChanged: (inj) => setState(
-                        () => _ambientCoachInjection = inj.isEmpty ? null : inj,
-                      ),
+                      onChanged: (inj, choices) => setState(() {
+                        _ambientCoachInjection = inj.isEmpty ? null : inj;
+                        _ambientCoachChoices = inj.isEmpty
+                            ? const []
+                            : List.unmodifiable(choices);
+                      }),
                     ),
                     const SizedBox(height: 20),
                     // Erweiterte Suche -> nur sichtbar nach erster Suche

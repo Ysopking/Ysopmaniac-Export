@@ -42,6 +42,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     'erwerbslos': 'Erwerbslos / Job-Suche',
   };
 
+  static const _familyStatusLabels = <String, String>{
+    'single': 'Ledig / Single',
+    'familie': 'Familie / mit Kindern',
+    'alleinerziehend': 'Alleinerziehend',
+  };
+
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
@@ -103,6 +109,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   onSave: (v) => notifier.updateField(beruf: v),
                 ),
               ),
+            _row(
+              icon: Icons.family_restroom_rounded,
+              title: 'Familienstatus',
+              value: _familyStatusLabels[settings.familyStatus] ??
+                  settings.familyStatus,
+              onTap: () => _showFamilyStatusPicker(
+                  context, ref, settings.familyStatus),
+            ),
             _row(
               icon: Icons.cake_outlined,
               title: 'Geburtsjahr',
@@ -532,6 +546,46 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ref
                           .read(settingsProvider.notifier)
                           .updateField(employmentType: v);
+                    }
+                    Navigator.pop(ctx);
+                  },
+                )),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showFamilyStatusPicker(
+      BuildContext context, WidgetRef ref, String current) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Text('Familienstatus',
+                  style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w800)),
+            ),
+            ..._familyStatusLabels.entries.map((e) => RadioListTile<String>(
+                  title: Text(e.value),
+                  value: e.key,
+                  groupValue: current,
+                  activeColor: FindUXProTheme.primaryPurple,
+                  onChanged: (v) {
+                    if (v != null) {
+                      Haptics.pick();
+                      ref
+                          .read(settingsProvider.notifier)
+                          .updateField(familyStatus: v);
                     }
                     Navigator.pop(ctx);
                   },

@@ -160,6 +160,15 @@ class _MyAppState extends ConsumerState<MyApp> {
       ref.read(firstLaunchProvider.notifier).state =
           prefs.getBool('first_launch') ?? true;
       await ref.read(settingsProvider.notifier).loadSettings();
+      // Woechentlicher Decay + Safety-Net fuer orphaned Feedbacks.
+      // checkAndAnalyze() laeuft nur wenn >7 Tage seit letztem Lauf vergangen.
+      // ignore: discarded_futures
+      ref.read(learningServiceProvider).checkAndAnalyze().then(
+        (_) {},
+        onError: (Object e) {
+          if (kDebugMode) debugPrint('checkAndAnalyze error: $e');
+        },
+      );
     } catch (e) {
       if (kDebugMode) debugPrint('initApp error: $e');
     }

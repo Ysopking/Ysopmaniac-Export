@@ -110,6 +110,8 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
         'plz': settings.plz,
         'beruf': settings.beruf,
         'employmentType': settings.employmentType,
+        'familyStatus': settings.familyStatus,
+        'interests': settings.interests,
         'searchengine': settings.searchEngine,
         'enableYouthProtection': settings.enableYouthProtection,
         'language': settings.language,
