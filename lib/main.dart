@@ -10,6 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import 'services/security_service.dart';
+import 'services/root_detector.dart';
+import 'services/pin_rotation_checker.dart';
 import 'services/learning_service.dart';
 import 'services/auto_lock_service.dart';
 import 'screens/onboarding_screen.dart';
@@ -51,6 +53,20 @@ Future<void> main() async {
       final cipherKey = await securityService.getEncryptionKey();
       await learningService.init(cipherKey);
       initOk = true;
+
+      // S-04/S-15: Root- und Emulator-Detection (non-blocking)
+      RootDetector.check().then((status) {
+        if (kDebugMode && status.requiresWarning) {
+          debugPrint('RootDetector: ${status.name} — ${status.userMessage}');
+        }
+      });
+
+      // S-03: Pin-Rotation-Check (nur Debug oder nach App-Update)
+      PinRotationChecker.run().then((results) {
+        if (kDebugMode && PinRotationChecker.isPinExpiringSoon) {
+          debugPrint('PinRotationChecker: ⚠️ Pins laufen bald ab! Bitte erneuern vor ${PinRotationChecker.pinExpiration}');
+        }
+      });
     } catch (e, st) {
       if (kDebugMode) debugPrint('Initialisierungsfehler: $e\n$st');
     }
@@ -110,9 +126,13 @@ class _MyAppState extends ConsumerState<MyApp> {
     if (auth) {
       if (kDebugMode) debugPrint('AutoLock: Sitzung nach Inaktivitaet gesperrt.');
       ref.read(authProvider.notifier).state = false;
-      // FIX Lücke 3: Encryption-Key sofort aus RAM loeschen wenn Sitzung endet.
-      // Naechster getEncryptionKey()-Aufruf erfordert neue Biometrie-Auth.
+      // S-03: Encryption-Key sofort aus RAM loeschen wenn Sitzung endet.
       ref.read(securityServiceProvider).clearCachedKey();
+      // S-11: Hive-Box schliessen wenn Session gesperrt — kein aktiver Box-Handle
+      // mehr im RAM. Naechstes initSecureBox() erfordert neue Biometrie-Auth.
+      ref.read(securityServiceProvider).closeBox().catchError((e) {
+        if (kDebugMode) debugPrint('Hive closeBox error: $e');
+      });
     }
   }
 
