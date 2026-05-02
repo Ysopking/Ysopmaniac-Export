@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../logic/state_provider.dart';
-import '../services/learning_service.dart';
 import '../screens/interests_screen.dart';
 import '../services/chrome_import_quick.dart';
 import '../services/haptic_helper.dart';
@@ -262,7 +261,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               title: 'Screenshots blockieren',
               subtitle: 'Immer aktiv — schuetzt vor Screenshots und Aufnahmen',
               value: true,
-              onChanged: null,
+              onChanged: (_) {},
+              enabled: false,
             ),
             _row(
               icon: Icons.history_rounded,
