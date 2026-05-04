@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:volume_controller/volume_controller.dart';
 
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../services/learning_service.dart';
@@ -78,7 +77,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   // innerhalb von 600ms loesen die Suche aus. Down-Drueke werden ignoriert.
   double? _lastVolume;
   DateTime? _lastUpAt;
-  bool _volumeListenerActive = false;
 
   // Quellen-Optionen (Label + interner Key)
   static const List<Map<String, String>> _sourceOptions = [
@@ -126,52 +124,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     _whatController.addListener(_onWhatTextChanged);
   }
 
-  Future<void> _maybeStartVolumeListener() async {
-    if (kIsWeb) return;
-    try {
-      // Aktuelle Lautstaerke einmal lesen, damit unser "rising"-Vergleich
-      // nicht beim ersten Event faelschlich auslost.
-      final v = await VolumeController().getVolume();
-      _lastVolume = v;
-    } catch (_) {}
-    if (!mounted) return;
-    VolumeController().listener((volume) {
-      // Setting darf live umgeschaltet werden
-      final enabled =
-          ref.read(settingsProvider).enableVolumeShortcut;
-      if (!enabled) {
-        _lastVolume = volume;
-        return;
-      }
-      // Nur reagieren wenn wir auf der Home-/Dashboard-Ansicht sind,
-      // NICHT in einem In-App-Browser oder modal Dialog.
-      if (_viewState == 'results') {
-        _lastVolume = volume;
-        return;
-      }
-      if (_lastVolume != null && volume > _lastVolume! + 0.001) {
-        final now = DateTime.now();
-        if (_lastUpAt != null &&
-            now.difference(_lastUpAt!).inMilliseconds < 600) {
-          _lastUpAt = null;
-          if (_whatController.text.trim().isNotEmpty) {
-            HapticFeedback.mediumImpact();
-            // ignore: discarded_futures
-            _performSearch();
-          }
-        } else {
-          _lastUpAt = now;
-        }
-      }
-      _lastVolume = volume;
-    });
-    _volumeListenerActive = true;
-  }
-
-  Future<void> _loadAdvice() async {
-    final r = await PrecisionAdvisor.analyze();
-    if (mounted) setState(() => _advice = r);
-  }
   // ---------- Intent-Popup (10s Single-Word-Trigger) ----------
 
   void _onWhatTextChanged() {
@@ -462,14 +414,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   void dispose() {
     _analysisTimer?.cancel();
     _intentTimer?.cancel();
-    if (_volumeListenerActive) {
-      try {
-        VolumeController().removeListener();
-      } catch (_) {}
-    }
-    _whatController.dispose();
-    _whyController.dispose();
-    _feedbackController.dispose();
     super.dispose();
   }
 
@@ -826,6 +770,10 @@ class _HomePageState extends ConsumerState<HomePage> {
       width: double.infinity,
       decoration: const BoxDecoration(gradient: FindUXProTheme.primaryGradient),
       child: SafeArea(
+        child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(
+          physics: const BouncingScrollPhysics(),// iOS bounce
+        ),
         child: SingleChildScrollView(
           physics: const ClampingScrollPhysics(),
           child: ConstrainedBox(
@@ -910,6 +858,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                     fontSize: 18,
                     fontWeight: FontWeight.w500),
               ),
+        ),
             ),
             Icon(icon, color: Colors.white, size: 22),
           ],

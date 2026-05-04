@@ -243,7 +243,7 @@ class _MyAppState extends ConsumerState<MyApp> {
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         final curved = CurvedAnimation(
           parent: animation,
-          curve: Curves.easeOutCubic,
+          curve: Platform.isIOS ? Curves.easeOutBack : Curves.easeOutCubic,
           reverseCurve: Curves.easeInCubic,
         );
         return FadeTransition(

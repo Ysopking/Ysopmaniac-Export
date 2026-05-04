@@ -237,14 +237,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             if (_showAdvancedSearch) ...[
               _toggleRow(
                 icon: Icons.volume_up_outlined,
-                title: 'Doppel-Lauter startet Suche',
-                subtitle: '2x Lauter-Taste innerhalb 600 ms',
-                value: settings.enableVolumeShortcut,
-                onChanged: (v) =>
-                    notifier.updateField(enableVolumeShortcut: v),
-              ),
-            ],
-          ]),
 
           // -------- Block 3: Datenschutz --------
           // Stage 14: Feedback-Export entfernt — Bewertungen sind jetzt

@@ -167,12 +167,12 @@ class FindUXQueryBuilder {
     final stopwords = stopwordsForLanguage(language);
 
     final employmentType = (settings['employmentType'] as String?) ?? 'student';
-    final employmentWeight = weights['weight_employment_$employmentType'] ?? 1.0;
+    final employmentWeight = (weights["weight_employment_$employmentType"] ?? 1.0).clamp(0.5, 3.0);
     // Familienstatus-Lerngewicht: analog zu employmentWeight.
     // Startet bei 1.1 nach Onboarding (seedStarterFamilyWeights).
     // Wird durch trackFeedback verfeinert.
     final familyStatus = (settings['familyStatus'] as String?) ?? 'single';
-    final familyWeight = weights['weight_family_$familyStatus'] ?? 1.0;
+    final familyWeight = (weights["weight_family_$familyStatus"] ?? 1.0).clamp(0.5, 3.0);
 
     // Interests aus settings extrahieren (List<String> oder leer)
     final interests = (settings['interests'] as List?)
@@ -193,8 +193,17 @@ class FindUXQueryBuilder {
 
     // 1. WAS: Mode-abhaengige Formatierung + Auto-Quote-Phrase
     final cleanWhatRaw = _normalizeQuotes(what).trim();
-    // Auto-Quote nur wenn nicht discover und User hat noch keine Quotes
-    final cleanWhat = (mode != 'discover' && !cleanWhatRaw.contains('"'))
+    // Auto-Quote nur wenn nicht discover, User hat keine Quotes,
+    // und die Phrase ist lang genug (>=3 Woerter >2 Zeichen)
+    // um eine spezifische Entitaet zu sein. Kurze Phrasen lassen wir
+    // Google lieber natuerlich interpretieren (bessere Synonyme).
+    final wordCount = cleanWhatRaw
+        .split(RegExp(r'\s+'))
+        .where((w) => w.length > 2)
+        .length;
+    final shouldAutoQuote =
+        mode != 'discover' && !cleanWhatRaw.contains('"') && wordCount >= 3;
+    final cleanWhat = shouldAutoQuote
         ? PhraseDetector.autoQuote(cleanWhatRaw)
         : cleanWhatRaw;
     if (cleanWhat.isNotEmpty) {
@@ -481,7 +490,12 @@ class FindUXQueryBuilder {
         params.write('&tbs=li:1');
     }
 
-    if (query.length > 1800) query = query.substring(0, 1790).trim();
+    final encodedLen = Uri.encodeComponent(query).length;
+    if (encodedLen > 1600) {
+      while (query.length > 100 && Uri.encodeComponent(query).length > 1600) {
+        query = query.substring(0, query.length - 10).trim();
+      }
+    }
     return base + Uri.encodeComponent(query) + params.toString();
   }
 

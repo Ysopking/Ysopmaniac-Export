@@ -101,8 +101,8 @@ class ChromeImportService {
   static const double _domainMin = 0.1;
   static const double _domainMax = 5.0;
   // Import = manuelles, soft-positives Signal -> sehr kleine Bumps
-  static const double _kwBump = 0.05;
-  static const double _domainBump = 0.10;
+  static const double _kwBump = 0.015;
+  static const double _domainBump = 0.03;
 
   /// Map<host, queryParam> — bekannte SERP-Engines
   static const Map<String, String> _serpEngines = {
@@ -564,9 +564,11 @@ class ChromeImportService {
       final scale = (e.value / 3.0).clamp(1.0, 3.0);
       final k = 'weight_domain_${e.key}';
       final cur = prefs.getDouble(k) ?? 1.0;
-      final next = (cur + _domainBump * scale).clamp(_domainMin, _domainMax);
+      final rawNext = (cur + _domainBump * scale).clamp(_domainMin, _domainMax);
+      // Domain-Gewichte duerfen durch Chronik-Import 2.0 nicht ueberschreiten,
+      // sonst dominiert die Historie die bewusste Nutzer-Feedback-Lernung.
+      final next = rawNext > 2.0 ? cur : rawNext;
       await prefs.setDouble(k, next);
-    }
   }
 
   /// Stage G: Bump-Helper fuer das Interessen-Feature  /// Stage G: Bump-Helper fuer das Interessen-Feature. Jedes Token

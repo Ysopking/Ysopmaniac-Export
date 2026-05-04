@@ -501,6 +501,10 @@ class LearningService {
   Future<void> seedStarterFamilyWeights(String familyStatus) async {
     final prefs = await SharedPreferences.getInstance();
 
+    // Nur einmal ausfuehren, damit Chronik-Import die Starter-Werte
+    // spaeter nicht ueberschreibt.
+    if (prefs.getBool("hasSeededFamilyWeights") == true) return;
+    await prefs.setBool("hasSeededFamilyWeights", true);
     // Spec-konforme Familie-Profile (Werte bewusst gering 1.05–1.12,
     // Interessen + Chronik haben immer Vorrang).
     const familyWeights = <String, Map<String, double>>{
