@@ -338,6 +338,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     bool? enableVolumeShortcut,
     List<String>? interests,
     bool? disableScreenshots,
+    int? autoSearchDelay,
   }) {
     // Stage 14: Wenn das (neue oder bestehende) Geburtsjahr Alter < 18
     // ergibt, wird Jugendschutz hart erzwungen — der Toggle kann ihn
@@ -367,10 +368,11 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       mode: mode,
       openInApp: openInApp,
       enableVolumeShortcut: enableVolumeShortcut,
-      interests: interests,
-      disableScreenshots: disableScreenshots,
-    );
-    return updateSettings(newState);
+       interests: interests,
+       disableScreenshots: disableScreenshots,
+       autoSearchDelay: autoSearchDelay,
+     );
+     return updateSettings(newState);
   }
 
   /// Komplettes Loeschen ALLER persistenten Settings (Privacy-"Notbremse").
