@@ -228,12 +228,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onChanged: (v) =>
                   notifier.updateField(enableYouthProtection: v),
             ),
-            _expandRow(
-              expanded: _showAdvancedSearch,
-              onToggle: () => setState(
-                  () => _showAdvancedSearch = !_showAdvancedSearch),
-              hiddenCount: 1,
-            ),
+             _expandRow(
+               expanded: _showAdvancedSearch,
+               onToggle: () => setState(
+                   () => _showAdvancedSearch = !_showAdvancedSearch),
+               hiddenCount: 2,
+             ),
+             _row(
+               icon: Icons.timer_outlined,
+               title: 'Auto-Suche-Verzögerung',
+               value: '${settings.autoSearchDelay} ms',
+               onTap: () {
+                 Haptics.tap();
+                 _showAutoSearchDelaySheet(context, notifier, settings.autoSearchDelay);
+               },
+             ),
+             _row(
+               icon: Icons.history_rounded,
+               title: 'Chrome-Verlauf importieren',
+               value: 'Ein Tap',
+               onTap: () {
+                 Haptics.tap();
+                 quickImportChrome(context);
+               },
+             ),
             // (kein Toggle moeglich). SecureFlag hebt es nur kurzzeitig
             // fuer den eingebauten In-App-Browser auf (max 3 Screenshots
             // / 30 s). Der Toggle ist deshalb als Read-Only dargestellt.
@@ -1232,6 +1250,86 @@ class _SettingsCountryPickerSheetState
           ],
         ),
       ),
+    );
+  }
+
+  void _showAutoSearchDelaySheet(
+      BuildContext ctx, SettingsNotifier notifier, int currentMs) {
+    showModalBottomSheet(
+      context: ctx,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            int val = currentMs;
+            return Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Auto-Suche-Verzögerung',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Wartezeit nach einem Vorschlag, bevor die Suche startet.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.black54,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      const Text('100 ms', style: TextStyle(fontSize: 12)),
+                      Expanded(
+                        child: Slider(
+                          value: val.toDouble(),
+                          min: 100,
+                          max: 2000,
+                          divisions: 19,
+                          label: '${val} ms',
+                          onChanged: (v) => setLocal(() => val = v.round()),
+                        ),
+                      ),
+                      Text('2000 ms', style: TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Aktuell: $val ms',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: const Text('Abbrechen'),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        onPressed: () {
+                          notifier.updateField(autoSearchDelay: val);
+                          Navigator.of(ctx).pop();
+                        },
+                        child: const Text('OK'),
+                      ),
+                    ],
+                  )
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

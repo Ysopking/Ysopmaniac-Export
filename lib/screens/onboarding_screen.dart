@@ -102,25 +102,26 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     // wenn der User in Schritt 5 schon InterestsScreen besucht hat,
     // sind die im Provider und sollen erhalten bleiben.
     final currentInterests = ref.read(settingsProvider).interests;
-    await notifier.updateSettings(SettingsState(
-      plz: _plzController.text.trim(),
-      employmentType: _jobLocal,
-      familyStatus: _familyStatus,
-      beruf: '',
-      searchEngine: 'google',
-      language: _languageLocal,
-      country: _countryLocal,
-      allowFeedback: false,
-      enableYouthProtection: true,
-      jahr: _yearLocal,
-      sources: const ['alle'],
-      files: const ['alle'],
-      mode: 'standard',
-      openInApp: true,
-      enableVolumeShortcut: false,
-      interests: currentInterests,
-      disableScreenshots: true,
-    ));
+     await notifier.updateSettings(SettingsState(
+       plz: _plzController.text.trim(),
+       employmentType: _jobLocal,
+       familyStatus: _familyStatus,
+       beruf: '',
+       searchEngine: 'google',
+       language: 'de',
+       country: 'de',
+       allowFeedback: true,
+       enableYouthProtection: true,
+       jahr: _birthYear,
+       sources: const ['alle'],
+       files: const ['alle'],
+       mode: 'standard',
+       openInApp: true,
+       enableVolumeShortcut: false,
+       interests: _interestsSelected.isEmpty ? const [] : _interestsSelected.toList(growable: false),
+       autoSearchDelay: 300,
+       disableScreenshots: true,
+     ));
   }
 
   Future<void> _onNext() async {

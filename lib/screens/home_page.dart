@@ -969,13 +969,6 @@ class _HomePageState extends ConsumerState<HomePage> {
       _newTokensThisSearch = const <String>{};
       _lastSearchId = null;
     });
-
-  }
-
-      _mandatoryRating = false;
-      _newTokensThisSearch = const <String>{};
-      _lastSearchId = null;
-    });
   }
 
   // ---------- Home (Premium-Look) ----------
