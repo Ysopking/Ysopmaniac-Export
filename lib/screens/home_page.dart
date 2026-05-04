@@ -52,6 +52,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   String _lastIntentWord = '';
 
   String? _selectedRating;
+  Timer? _vaguenessTimer;
   final TextEditingController _feedbackController = TextEditingController();
 
   // Stage 14: Pflicht-Bewertung bei NEUEN Suchrichtungen.
@@ -126,9 +127,9 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   void _onWhatTextChanged() {
     final text = _whatController.text.trim();
-    final words =
-        text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    final words = text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
 
+    // Intent-Popup (10s Single-Word-Trigger)
     if (words.length == 1 &&
         !_showWhyField &&
         _whyController.text.trim().isEmpty &&
@@ -139,15 +140,23 @@ class _HomePageState extends ConsumerState<HomePage> {
         _intentTimer?.cancel();
         _intentTimer = Timer(const Duration(seconds: 10), () {
           if (mounted && _viewState == 'dashboard') {
-            // ignore: discarded_futures
-            _showIntentPopup(word);
+            _showIntentChips(word);
           }
         });
       }
     } else {
       _intentTimer?.cancel();
-      if (text.isEmpty) _lastIntentWord = '';
     }
+
+    // Vagueness-Check nach 15s Inaktivität
+    _vaguenessTimer?.cancel();
+    _vaguenessTimer = Timer(const Duration(seconds: 15), () {
+      if (!mounted) return;
+      if (_viewState != 'dashboard') return;
+      final currentText = _whatController.text.trim();
+      if (currentText.isEmpty) return;
+      _checkVaguenessAndOfferSuggestions(currentText);
+    });
   }
 
   // ---------- Intent-Lernlogik: SharedPreferences ----------
@@ -413,6 +422,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     _analysisTimer?.cancel();
     _intentTimer?.cancel();
     super.dispose();
+    _vaguenessTimer?.cancel();
   }
 
   Future<void> _purgeAllSessionData() async {
@@ -772,6 +782,126 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   // ---------- Home (Premium-Look) ----------
+
+
+  /// Prüft nach 15s Inaktivität, ob die Query zu vage ist und bietet
+  /// konkretere Suchvorschläge an.
+  Future<void> _checkVaguenessAndOfferSuggestions(String text) async {
+    final isVague = await VaguenessDetector.isVague(what: text, why: "");
+    if (!isVague) return;
+    final suggestions = _generateSuggestions(text);
+    if (suggestions.isNotEmpty && mounted) {
+      _showSuggestionsDialog(text, suggestions);
+    }
+  }
+
+  /// Generiert präzisere Suchvorschläge basierend auf der vagen Query.
+  List<String> _generateSuggestions(String text) {
+    final lower = text.toLowerCase().trim();
+    // Basis-Vorschläge
+    final base = [
+      '${text} tutorial',
+      '${text} erklärung',
+      'wie funktioniert ${text}',
+      '${text} beispiele',
+    ];
+    // Intent-spezifische Vorschläge
+    if (lower.contains('python')) {
+      return [
+        'python listen sortieren',
+        'python dict auslistung',
+        'python tutorial',
+        'python installieren',
+      ];
+    }
+    if (lower.contains('react')) {
+      return [
+        'react native tutorial',
+        'react komponenten',
+        'react hooks erklärung',
+      ];
+    }
+    if (lower.contains('javascript') || lower.contains('js')) {
+      return [
+        'javascript array methoden',
+        'javascript async await',
+        'javascript tutorial',
+      ];
+    }
+    if (lower.contains('finanzen') || lower.contains('geld')) {
+      return [
+        'finanzen budget planer',
+        'sparen tipps',
+        'finanzielle beratung',
+      ];
+    }
+    if (lower.contains('gesundheit') || lower.contains('krank')) {
+      return [
+        'gesundheit ratgeber',
+        'symptome check',
+        'arzt finden',
+      ];
+    }
+    // Fallback: Basis-Vorschläge
+    return base;
+  }
+
+  /// Zeigt einen Dialog mit Suchvorschlägen.
+  void _showSuggestionsDialog(String original, List<String> suggestions) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Möchtest du genauer suchen?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Deine Query ist etwas vage. Hier sind präzisere Vorschläge:'),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: suggestions
+                  .map((s) => ChoiceChip(
+                        label: Text(s),
+                        selected: false,
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          _replaceWhatWith(s);
+                        },
+                      ))
+                  .toList(),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Später'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              if (suggestions.isNotEmpty) {
+                _replaceWhatWith(suggestions.first);
+              }
+            },
+            child: const Text('Ersten Vorschlag nutzen'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Ersetzt den "Was?"-Text und startet ggf. Suche.
+  void _replaceWhatWith(String text) {
+    setState(() {
+      _whatController.text = text;
+    });
+    // Optional: Automatisch suchen? Erstmal nur ausfüllen.
+    // Der Nutzer kann dann manuell starten.
+  }
 
   Widget _buildHomeScreen({Key? key}) {
     final l10n = AppLocalizations.of(context)!;
