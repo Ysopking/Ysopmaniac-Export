@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../logic/state_provider.dart';
 import '../screens/interests_screen.dart';
@@ -160,7 +159,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     // Provider muss initialisiert sein, bevor InterestsScreen schreibt.
     await _persistAll();
     if (!mounted) return;
-    await Navigator.of(context).push(
+    await Navigator.of(context).push(const 
       MaterialPageRoute(builder: (_) => const InterestsScreen()),
     );
     if (!mounted) return;
@@ -194,7 +193,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _ProgressBar(step: _step + 1, total: _kTotalSteps),
+            _ProgressBar(step: _step + 1, total: _kTotalSteps),const 
             Expanded(child: _buildStep(_step)),
             _BottomBar(
               showBack: _step > 0,
@@ -238,13 +237,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
       child: Column(
         children: [
-          const SizedBox(height: 16),
+          const SizedBox(height: 16),const 
           Container(
             width: 120,
             height: 120,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              boxShadow: [
+              boxShadow: [const 
                 BoxShadow(
                   color: FindUXProTheme.primaryPurple
                       .withValues(alpha: 0.22),
@@ -278,7 +277,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               color: Colors.black,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 12),const 
           Text(
             'In wenigen Schritten richten wir die App so ein, dass '
             'deine Suchen besser werden — komplett ohne Konto, '
@@ -315,7 +314,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           'sicheres Suchen automatisch erzwungen.',
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        children: [
+        children: [const 
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -348,7 +347,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 14),const 
           Text(
             _yearPicked
                 ? 'Ausgewaehlt: $_yearLocal'
@@ -503,21 +502,21 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   child: Row(
-                    children: [
+                    children: [const 
                       Text(lang.flag, style: const TextStyle(fontSize: 18)),
-                      const SizedBox(width: 7),
+                      const SizedBox(width: 7),const 
                       Expanded(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                          children: [const 
                             Text(lang.nativeLabel,
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
                                   color: sel ? Colors.white : Colors.black87,
                                 ),
-                                overflow: TextOverflow.ellipsis),
+                                overflow: TextOverflow.ellipsis),const 
                             Text(lang.germanLabel,
                                 style: TextStyle(
                                   fontSize: 10,
@@ -541,7 +540,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   color: Colors.black54,
                   letterSpacing: 0.5)),
           const SizedBox(height: 8),
-          // Land-Picker-Button: öffnet Suchbare Bottom-Sheet
+          // Land-Picker-Button: öffnet Suchbare Bottom-Sheetconst 
           GestureDetector(
             onTap: () => _pickCountry(),
             child: Container(
@@ -553,7 +552,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 border: Border.all(color: Colors.black12),
               ),
               child: Row(
-                children: [
+                children: [const 
                   Text(
                     kCountries.firstWhere(
                       (c) => c.code == _countryLocal,
@@ -561,7 +560,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     ).flag,
                     style: const TextStyle(fontSize: 20),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 10),const 
                   Expanded(
                     child: Text(
                       kCountries.firstWhere(
@@ -631,7 +630,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             onTap: _runImport,
           ),
           const SizedBox(height: 16),
-          if (!_stepValid)
+          if (!_stepValid)const 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
@@ -653,9 +652,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Widget _trustRow(IconData icon, String text) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+      children: [const 
         Icon(icon, size: 18, color: FindUXProTheme.primaryPurple),
-        const SizedBox(width: 12),
+        const SizedBox(width: 12),const 
         Expanded(
           child: Text(text,
               style: const TextStyle(
@@ -686,14 +685,14 @@ class _StepLayout extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+        children: [const 
           Text(title,
               style: const TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w900,
                   letterSpacing: -0.8,
                   color: Colors.black)),
-          const SizedBox(height: 10),
+          const SizedBox(height: 10),const 
           Text(subtitle,
               style: TextStyle(
                   fontSize: 14.5,
@@ -717,13 +716,13 @@ class _ProgressBar extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
       child: Row(
-        children: [
+        children: [const 
           Text('Schritt $step von $total',
               style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: Colors.black54)),
-          const SizedBox(width: 12),
+          const SizedBox(width: 12),const 
           Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(4),
@@ -764,7 +763,7 @@ class _BottomBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
       child: Row(
         children: [
-          if (showBack)
+          if (showBack)const 
             TextButton(
               onPressed: busy ? null : onBack,
               style: TextButton.styleFrom(
@@ -776,7 +775,7 @@ class _BottomBar extends StatelessWidget {
                   style: TextStyle(
                       fontSize: 15, fontWeight: FontWeight.w700)),
             ),
-          const Spacer(),
+          const Spacer(),const 
           AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             curve: Curves.easeOut,
@@ -786,7 +785,7 @@ class _BottomBar extends StatelessWidget {
                   : Colors.black.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(16),
               boxShadow: enabled
-                  ? [
+                  ? [const 
                       BoxShadow(
                         color: FindUXProTheme.primaryPurple
                             .withValues(alpha: 0.32),
@@ -821,7 +820,7 @@ class _BottomBar extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 10),
-                      ],
+                      ],const 
                       Text(isLast ? 'Fertig' : 'Weiter',
                           style: const TextStyle(
                               color: Colors.white,
@@ -829,7 +828,7 @@ class _BottomBar extends StatelessWidget {
                               fontWeight: FontWeight.w800,
                               letterSpacing: -0.2)),
                       if (!busy) ...[
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 8),const 
                         Icon(
                             isLast
                                 ? Icons.check_rounded
@@ -882,7 +881,7 @@ class _RadioRow extends StatelessWidget {
               ),
             ),
             child: Row(
-              children: [
+              children: [const 
                 Expanded(
                   child: Text(
                     label,
@@ -900,7 +899,7 @@ class _RadioRow extends StatelessWidget {
                 if (selected)
                   const Icon(Icons.check_circle_rounded,
                       color: FindUXProTheme.primaryPurple, size: 22)
-                else
+                elseconst 
                   Icon(Icons.radio_button_unchecked_rounded,
                       color: Colors.black.withValues(alpha: 0.25),
                       size: 22),
@@ -994,7 +993,7 @@ class _ActionCard extends StatelessWidget {
             ),
           ),
           child: Row(
-            children: [
+            children: [const 
               Container(
                 width: 44,
                 height: 44,
@@ -1006,18 +1005,18 @@ class _ActionCard extends StatelessWidget {
                 child: Icon(icon,
                     color: FindUXProTheme.primaryPurple, size: 22),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 14),const 
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                  children: [const 
                     Text(title,
                         style: const TextStyle(
                             fontSize: 15.5,
                             fontWeight: FontWeight.w800,
                             color: Colors.black87,
                             letterSpacing: -0.3)),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 4),const 
                     Text(subtitle,
                         style: TextStyle(
                           fontSize: 13,
@@ -1093,7 +1092,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
         ),
         child: Column(
           children: [
-            const SizedBox(height: 12),
+            const SizedBox(height: 12),const 
             Container(
               width: 36,
               height: 4,
@@ -1102,7 +1101,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 14),const 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: TextField(
@@ -1121,7 +1120,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 8),const 
             Expanded(
               child: ListView.builder(
                 controller: scrollCtrl,
@@ -1142,9 +1141,9 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                         ),
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         child: Row(
-                          children: [
+                          children: [const 
                             Text(c.flag, style: const TextStyle(fontSize: 22)),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 12),const 
                             Expanded(
                               child: Text(
                                 c.label,
@@ -1154,7 +1153,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                                   color: sel ? const Color(0xFF6C4AB6) : Colors.black87,
                                 ),
                               ),
-                            ),
+                            ),const 
                             Text(c.code.toUpperCase(),
                                 style: const TextStyle(fontSize: 12, color: Colors.black38)),
                             if (sel)
