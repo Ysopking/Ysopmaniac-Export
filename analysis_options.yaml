@@ -8,6 +8,8 @@ analyzer:
   errors:
     library_private_types_in_public_api: warning
 
+    info: false
+    warning: false
 linter:
   rules:
     avoid_print: true
