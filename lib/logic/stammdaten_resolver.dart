@@ -242,6 +242,7 @@ class StammdatenResolver {
     required String why,
     required Map<String, dynamic> settings,
     double employmentWeight = 1.0,
+    double familyWeight = 1.0,
     List<String> interests = const [],
   }) {
     final softTerms = <String>[];

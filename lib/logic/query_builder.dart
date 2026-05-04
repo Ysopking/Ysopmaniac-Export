@@ -20,7 +20,6 @@ class QueryDebugInfo {
   final bool preferIntitle;
   final bool boostRecent;
   final List<String> interests;
-  final double familyWeight;
   final List<String> boostKws;
   final List<String> demoteKws;
   final List<String> learnedTrustDomains;
@@ -37,7 +36,6 @@ class QueryDebugInfo {
     required this.preferIntitle,
     required this.boostRecent,
     required this.interests,
-    required this.familyWeight,
     required this.boostKws,
     required this.demoteKws,
     required this.learnedTrustDomains,
@@ -172,6 +170,7 @@ class FindUXQueryBuilder {
     // Startet bei 1.1 nach Onboarding (seedStarterFamilyWeights).
     // Wird durch trackFeedback verfeinert.
     final familyStatus = (settings['familyStatus'] as String?) ?? 'single';
+    final familyWeight = (weights["weight_family_$familyStatus"] ?? 1.0).clamp(0.1, 5.0);
 
     // Interests aus settings extrahieren (List<String> oder leer)
     final interests = (settings['interests'] as List?)
@@ -183,6 +182,7 @@ class FindUXQueryBuilder {
       why: why,
       settings: settings,
       employmentWeight: employmentWeight,
+      familyWeight: familyWeight,
       interests: interests,
     );
 
@@ -380,20 +380,23 @@ class FindUXQueryBuilder {
       parts.add('-site:$d');
     }
 
-    // 11. Datum: Coach-after > recent-Mode > Stammdaten-boostRecent > Smart-Date-Heuristik
-    if (coachAfter != null && coachAfter.isNotEmpty) {
-      parts.add('after:$coachAfter');
-    } else if (stamm.dateAfter != null && stamm.dateAfter!.isNotEmpty) {
-      // Beschaeftigungstyp-spezifisch (z.B. Vollzeit: after:2024-01-01)
-      parts.add('after:${stamm.dateAfter}');
-    } else if (mode == 'recent' ||
-        (stamm.boostRecent && mode == 'standard')) {
-      final cutoff = DateTime.now().subtract(const Duration(days: 365));
-      parts.add('after:${_isoDate(cutoff)}');
-    } else if (mode != 'precise') {
-      final smartAfter = SmartDate.formatAfterOperator(what, why);
-      if (smartAfter != null) parts.add(smartAfter);
-    }
+     // 11. Datum: Coach-after > recent-Mode > Smart-Date > Stammdaten dateAfter
+     // Smart-Date hat Priorität vor dem statischen employmentType-DateAfter,
+     // weil die Heuristik den Kontext (was+why) besser versteht als einen
+     // reinen Profil-Wert.
+     if (coachAfter != null && coachAfter.isNotEmpty) {
+       parts.add('after:$coachAfter');
+     } else if (mode == 'recent' ||
+         (stamm.boostRecent && mode == 'standard')) {
+       final cutoff = DateTime.now().subtract(const Duration(days: 365));
+       parts.add('after:${_isoDate(cutoff)}');
+     } else if (mode != 'precise') {
+       final smartAfter = SmartDate.formatAfterOperator(what, why);
+       if (smartAfter != null) parts.add(smartAfter);
+     } else if (stamm.dateAfter != null && stamm.dateAfter!.isNotEmpty) {
+       // Fallback: nur im precise-Mode oder wenn Smart-Date nicht anwendbar
+       parts.add('after:${stamm.dateAfter}');
+     }
 
     // 12. Standard-Filter
     parts.addAll(noiseExclusions);

@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../services/learning_service.dart';
+import '../services/chrome_import_service.dart';
 import '../services/haptic_helper.dart';
 import '../logic/query_builder.dart';
 import '../logic/state_provider.dart';
@@ -52,6 +53,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   String _lastIntentWord = '';
 
   String? _selectedRating;
+  Timer? _vaguenessTimer;
   final TextEditingController _feedbackController = TextEditingController();
 
   // Stage 14: Pflicht-Bewertung bei NEUEN Suchrichtungen.
@@ -63,7 +65,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   // SharedPreferences, kein Versand, kein Cloud-State.
   bool _mandatoryRating = false;
   Set<String> _newTokensThisSearch = const <String>{};
-      _lastSearchId = null;
   static const String _seenKwsKey = 'seen_query_kws';
   static const int _seenKwsCap = 5000;
   static const String _intentFreqPrefix = 'intent_freq_';
@@ -137,6 +138,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       if (word != _lastIntentWord) {
         _lastIntentWord = word;
         _intentTimer?.cancel();
+    _vaguenessTimer?.cancel();
         _intentTimer = Timer(const Duration(seconds: 10), () {
           if (mounted && _viewState == 'dashboard') {
             // ignore: discarded_futures
@@ -144,11 +146,22 @@ class _HomePageState extends ConsumerState<HomePage> {
           }
         });
       }
-    } else {
-      _intentTimer?.cancel();
-      if (text.isEmpty) _lastIntentWord = '';
-    }
-  }
+     } else {
+       _intentTimer?.cancel();
+       _vaguenessTimer?.cancel();
+       if (text.isEmpty) _lastIntentWord = '';
+     }
+
+     // Vagueness-Check nach 15s Inaktivität
+     _vaguenessTimer?.cancel();
+     _vaguenessTimer = Timer(const Duration(seconds: 15), () {
+       if (!mounted) return;
+       if (_viewState != 'dashboard') return;
+       final currentText = _whatController.text.trim();
+       if (currentText.isEmpty) return;
+       _checkVaguenessAndOfferSuggestions(currentText);
+     });
+   }
 
   // ---------- Intent-Lernlogik: SharedPreferences ----------
 
@@ -412,6 +425,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   void dispose() {
     _analysisTimer?.cancel();
     _intentTimer?.cancel();
+    _vaguenessTimer?.cancel();
     super.dispose();
   }
 
@@ -420,6 +434,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     setState(() {
       _suggestedGoals = const [];
       _selectedRating = null;
+    _vaguenessTimer?.cancel();
       _feedbackController.clear();
       _showDeepAnalysisOverlay = false;
       _showFeedbackOverlay = false;
@@ -480,7 +495,183 @@ class _HomePageState extends ConsumerState<HomePage> {
       }
       await prefs.setStringList(_seenKwsKey, list);
     } catch (e) {
-      if (kDebugMode) debugPrint('markTokensSeen error: $e');
+       if (kDebugMode) debugPrint('markTokensSeen error: $e');
+     }
+   }
+
+  // ---------- Vagueness Detection ----------
+  Future<void> _checkVaguenessAndOfferSuggestions(String text) async {
+    final isVague = VaguenessDetector.isVague(what: text, why: '');
+    if (!isVague) return;
+    final suggestions = await _generateSuggestions(text);
+    if (suggestions.isNotEmpty && mounted) {
+      _showSuggestionsDialog(text, suggestions);
+    }
+  }
+
+  Future<List<String>> _generateSuggestions(String text) async {
+    final lower = text.toLowerCase().trim();
+    final settings = ref.read(settingsProvider);
+    final interests = settings.interests;
+
+    // 1. Vorschläge aus Interessen (falls vorhanden)
+    if (interests.isNotEmpty) {
+      final interestSuggestions = <String>[];
+      for (final interest in interests) {
+        final parts = interest.split('/');
+        if (parts.length >= 2) {
+          final top = parts[0];
+          final sub = parts[1];
+          interestSuggestions.add('$sub $top');
+          interestSuggestions.add('$sub $top tutorials');
+          interestSuggestions.add('$top $sub');
+        } else if (parts.length == 1) {
+          interestSuggestions.add('$interest tutorial');
+          interestSuggestions.add('$interest erklärung');
+        }
+      }
+      final mixed = [...interestSuggestions, '${text} tutorial', '${text} beispiele']
+          .take(6)
+          .toList();
+      return mixed;
+    }
+
+    // 2. Vorschläge aus Chrome-Chronik (häufige Suchbegriffe)
+    try {
+      final security = ref.read(securityServiceProvider);
+      final box = await ChromeImportService.openBox(await security.getEncryptionKey());
+      if (box.isOpen) {
+        final all = box.values.toList();
+        final queryCount = <String, int>{};
+        for (final v in all) {
+          if (v is Map) {
+            final q = (v['q'] ?? '').toString().toLowerCase().trim();
+            if (q.isNotEmpty && q != text.toLowerCase()) {
+              queryCount[q] = (queryCount[q] ?? 0) + 1;
+            }
+          }
+        }
+        final sorted = queryCount.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
+        final historyBased = <String>[];
+        for (final e in sorted) {
+          if (historyBased.length >= 3) break;
+          if (e.key.startsWith(lower) || e.key.contains(lower)) {
+            historyBased.add(e.key);
+          }
+        }
+        if (historyBased.isNotEmpty) {
+          return historyBased;
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('Chronik-Vorschläge fehlgeschlagen: $e');
+    }
+
+    // 3. Fallback: Basis-Vorschläge + Intent-Erkennung
+    if (lower.contains('python')) {
+      return ['python listen sortieren', 'python dict auslistung', 'python tutorial'];
+    }
+    if (lower.contains('react')) {
+      return ['react native tutorial', 'react komponenten', 'react hooks erklärung'];
+    }
+    if (lower.contains('javascript') || lower.contains('js')) {
+      return ['javascript array methoden', 'javascript async await', 'javascript tutorial'];
+    }
+    if (lower.contains('finanzen') || lower.contains('geld')) {
+      return ['finanzen budget planer', 'sparen tipps', 'finanzielle beratung'];
+    }
+    if (lower.contains('gesundheit') || lower.contains('krank')) {
+      return ['gesundheit ratgeber', 'symptome check', 'arzt finden'];
+    }
+    return ['${text} tutorial', '${text} erklärung', 'wie funktioniert ${text}', '${text} beispiele'];
+  }
+
+  void _showSuggestionsDialog(String original, List<String> suggestions) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => WillPopScope(
+        onWillPop: () async {
+          _recordVaguenessNegativeFeedback(original);
+          return true;
+        },
+        child: AlertDialog(
+          title: const Text('Möchtest du genauer suchen?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Deine Query ist etwas vage. Hier sind präzisere Vorschläge:'),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: suggestions
+                    .map((s) => ChoiceChip(
+                          label: Text(s),
+                          selected: false,
+                          onSelected: (bool? selected) {
+                            HapticFeedback.selectionClick();
+                            Navigator.of(ctx).pop();
+                            _replaceWhatWith(s);
+                          },
+                        ))
+                    .toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _recordVaguenessNegativeFeedback(original);
+              },
+              child: const Text('Später'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                if (suggestions.isNotEmpty) {
+                  _replaceWhatWith(suggestions.first);
+                }
+              },
+              child: const Text('Ersten Vorschlag nutzen'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _replaceWhatWith(String text) {
+    setState(() {
+      _whatController.text = text;
+    });
+    // Automatisch suchen nach Vorschlags-Auswahl
+    // Kurz verzögert, damit UI-Update sichtbar ist
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted && _viewState == 'dashboard') {
+        _performSearch();
+      }
+    });
+  }
+
+  Future<void> _recordVaguenessNegativeFeedback(String vagueTerm) async {
+    final term = vagueTerm.toLowerCase().trim();
+    if (term.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'weight_kw_$term';
+      final cur = prefs.getDouble(key) ?? 1.0;
+      final next = (cur - 0.1).clamp(0.4, 5.0);
+      await prefs.setDouble(key, next);
+      if (kDebugMode) {
+        debugPrint('Vagueness negative feedback: $term weight set to $next');
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('Vagueness feedback failed: $e');
     }
   }
 
@@ -492,6 +683,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }) async {
     if (_whatController.text.trim().isEmpty) return;
     _intentTimer?.cancel();
+    _vaguenessTimer?.cancel();
 
     // A1: Bekannte Mehr-Wort-Phrasen automatisch in Anführungszeichen setzen
     // (PhraseDetector.autoQuote) — nur wenn der User noch keine Quotes gesetzt hat.
@@ -949,6 +1141,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         onTap: () {
                           Haptics.tap();
                           _intentTimer?.cancel();
+    _vaguenessTimer?.cancel();
                           setState(() => _showWhyField = true);
                         },
                       ),
