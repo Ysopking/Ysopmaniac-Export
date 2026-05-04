@@ -63,6 +63,9 @@ class SettingsState {
   /// Stage G: hierarchische Interessen-Auswahl als Pfade
   /// im Format `top/sub/item` (z.B. `musik/rap/sido`).
   final List<String> interests;
+  /// Stage V: Auto-Search-Verzögerung nach Vorschlags-Auswahl (ms).
+  /// Default 300. Erlaubt dem Nutzer, den Vorschlag zu sehen bevor Search startet.
+  final int autoSearchDelay;
   /// Stage 14: Screenshot- + Recents-Sperre (Android FLAG_SECURE).
   /// Default true (privacy-by-default). Wird nativ in MainActivity.kt
   /// beim onCreate aus SharedPreferences gelesen — der Toggle hier
@@ -87,6 +90,7 @@ class SettingsState {
     required this.openInApp,
     required this.enableVolumeShortcut,
     required this.interests,
+    required this.autoSearchDelay,
     required this.disableScreenshots,
   });
 
@@ -97,47 +101,49 @@ class SettingsState {
   bool get isMinor => (DateTime.now().year - jahr) < 18;
   bool get effectiveYouthProtection => enableYouthProtection || isMinor;
 
-  SettingsState copyWith({
-    String? plz,
-    String? employmentType,
-    String? familyStatus,
-    String? beruf,
-    String? searchEngine,
-    String? language,
-    String? country,
-    bool? allowFeedback,
-    bool? enableYouthProtection,
-    int? jahr,
-    List<String>? sources,
-    List<String>? files,
-    String? mode,
-    bool? openInApp,
-    bool? enableVolumeShortcut,
-    List<String>? interests,
-    bool? disableScreenshots,
-  }) {
-    return SettingsState(
-      plz: plz ?? this.plz,
-      employmentType: employmentType ?? this.employmentType,
-      familyStatus: familyStatus ?? this.familyStatus,
-      beruf: beruf ?? this.beruf,
-      searchEngine: searchEngine ?? this.searchEngine,
-      language: language ?? this.language,
-      country: country ?? this.country,
-      allowFeedback: allowFeedback ?? this.allowFeedback,
-      enableYouthProtection:
-          enableYouthProtection ?? this.enableYouthProtection,
-      jahr: jahr ?? this.jahr,
-      sources: sources ?? this.sources,
-      files: files ?? this.files,
-      mode: mode ?? this.mode,
-      openInApp: openInApp ?? this.openInApp,
-      enableVolumeShortcut:
-          enableVolumeShortcut ?? this.enableVolumeShortcut,
-      interests: interests ?? this.interests,
-      disableScreenshots: disableScreenshots ?? this.disableScreenshots,
-    );
-  }
+   SettingsState copyWith({
+     String? plz,
+     String? employmentType,
+     String? familyStatus,
+     String? beruf,
+     String? searchEngine,
+     String? language,
+     String? country,
+     bool? allowFeedback,
+     bool? enableYouthProtection,
+     int? jahr,
+     List<String>? sources,
+     List<String>? files,
+     String? mode,
+     bool? openInApp,
+     bool? enableVolumeShortcut,
+     List<String>? interests,
+     int? autoSearchDelay,
+     bool? disableScreenshots,
+   }) {
+     return SettingsState(
+       plz: plz ?? this.plz,
+       employmentType: employmentType ?? this.employmentType,
+       familyStatus: familyStatus ?? this.familyStatus,
+       beruf: beruf ?? this.beruf,
+       searchEngine: searchEngine ?? this.searchEngine,
+       language: language ?? this.language,
+       country: country ?? this.country,
+       allowFeedback: allowFeedback ?? this.allowFeedback,
+       enableYouthProtection:
+           enableYouthProtection ?? this.enableYouthProtection,
+       jahr: jahr ?? this.jahr,
+       sources: sources ?? this.sources,
+       files: files ?? this.files,
+       mode: mode ?? this.mode,
+       openInApp: openInApp ?? this.openInApp,
+       enableVolumeShortcut:
+           enableVolumeShortcut ?? this.enableVolumeShortcut,
+       interests: interests ?? this.interests,
+       autoSearchDelay: autoSearchDelay ?? this.autoSearchDelay,
+       disableScreenshots: disableScreenshots ?? this.disableScreenshots,
+     );
+   }
 }
 
 const SettingsState _defaultSettings = SettingsState(
@@ -157,6 +163,7 @@ const SettingsState _defaultSettings = SettingsState(
   openInApp: true,
   enableVolumeShortcut: false,
   interests: <String>[],
+  autoSearchDelay: 300,
   disableScreenshots: true,
 );
 
@@ -183,6 +190,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     'openInApp',
     'enableVolumeShortcut',
     'interests',
+    'autoSearchDelay',
     'disableScreenshots',
   ];
 
@@ -248,14 +256,15 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       files: prefs.getStringList('files') ?? const ['alle'],
       mode: prefs.getString('mode') ?? 'standard',
       openInApp: prefs.getBool('openInApp') ?? true,
-      enableVolumeShortcut:
-          prefs.getBool('enableVolumeShortcut') ?? false,
-      interests: pInterests,
-      // Stage 14: Default ON (privacy-by-default). Der gleiche Default
-      // ist auch in MainActivity.kt verankert, sodass der allererste
-      // Frame schon geschuetzt ist.
-      disableScreenshots: prefs.getBool('disableScreenshots') ?? true,
-    );
+       enableVolumeShortcut:
+           prefs.getBool('enableVolumeShortcut') ?? false,
+       interests: pInterests,
+       autoSearchDelay: prefs.getInt('autoSearchDelay') ?? 300,
+       // Stage 14: Default ON (privacy-by-default). Der gleiche Default
+       // ist auch in MainActivity.kt verankert, sodass der allererste
+       // Frame schon geschuetzt ist.
+       disableScreenshots: prefs.getBool('disableScreenshots') ?? true,
+     );
   }
 
   Future<void> updateSettings(SettingsState newState) async {
@@ -286,9 +295,10 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     await prefs.setStringList('files', newState.files);
     await prefs.setString('mode', newState.mode);
     await prefs.setBool('openInApp', newState.openInApp);
-    await prefs.setBool(
-        'enableVolumeShortcut', newState.enableVolumeShortcut);
-    await prefs.setBool('disableScreenshots', newState.disableScreenshots);
+     await prefs.setBool(
+         'enableVolumeShortcut', newState.enableVolumeShortcut);
+     await prefs.setInt('autoSearchDelay', newState.autoSearchDelay);
+     await prefs.setBool('disableScreenshots', newState.disableScreenshots);
 
     // Stage G: nur die NEU hinzugekommenen Interessen lernen, sonst
     // wuerden wir bei jeder Settings-Aenderung doppelt bumpen.

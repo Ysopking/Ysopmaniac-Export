@@ -568,24 +568,39 @@ class _HomePageState extends ConsumerState<HomePage> {
       if (kDebugMode) debugPrint('Chronik-Vorschläge fehlgeschlagen: $e');
     }
 
-    // 3. Fallback: Basis-Vorschläge + Intent-Erkennung
-    if (lower.contains('python')) {
-      return ['python listen sortieren', 'python dict auslistung', 'python tutorial'];
-    }
-    if (lower.contains('react')) {
-      return ['react native tutorial', 'react komponenten', 'react hooks erklärung'];
-    }
-    if (lower.contains('javascript') || lower.contains('js')) {
-      return ['javascript array methoden', 'javascript async await', 'javascript tutorial'];
-    }
-    if (lower.contains('finanzen') || lower.contains('geld')) {
-      return ['finanzen budget planer', 'sparen tipps', 'finanzielle beratung'];
-    }
-    if (lower.contains('gesundheit') || lower.contains('krank')) {
-      return ['gesundheit ratgeber', 'symptome check', 'arzt finden'];
-    }
-    return ['${text} tutorial', '${text} erklärung', 'wie funktioniert ${text}', '${text} beispiele'];
-  }
+     // 3. Fallback: Basis-Vorschläge + Intent-Erkennung
+     if (lower.contains('python')) {
+       return ['python listen sortieren', 'python dict auslistung', 'python tutorial'];
+     }
+     if (lower.contains('react')) {
+       return ['react native tutorial', 'react komponenten', 'react hooks erklärung'];
+     }
+     if (lower.contains('javascript') || lower.contains('js')) {
+       return ['javascript array methoden', 'javascript async await', 'javascript tutorial'];
+     }
+     if (lower.contains('finanzen') || lower.contains('geld') || lower.contains('sparen') || lower.contains('budget')) {
+       return ['finanzen budget planer', 'sparen tipps', 'finanzielle beratung', 'investitionen anfangen'];
+     }
+     if (lower.contains('gesundheit') || lower.contains('krank') || lower.contains('symptom') || lower.contains('arzt')) {
+       return ['gesundheit ratgeber', 'symptome check', 'arzt finden', 'gesunde ernährung'];
+     }
+     if (lower.contains('auto') || lower.contains('fahrzeug') || lower.contains('autokauf') || lower.contains('autoreparatur')) {
+       return ['autokauf tipps', 'autoreparatur selbst machen', 'fahrzeug pflege'];
+     }
+     if (lower.contains('reisen') || lower.contains('urlaub') || lower.contains('hotel') || lower.contains('flug')) {
+       return ['reisen günstig buchen', 'urlaub planen', 'reiseversicherung vergleich'];
+     }
+     if (lower.contains('kochen') || lower.contains('rezept') || lower.contains('backen') || lower.contains('essen')) {
+       return ['rezepte einfach', 'kochen für anfänger', 'backen grundrezepte'];
+     }
+     if (lower.contains('sport') || lower.contains('fitness') || lower.contains('training') || lower.contains('laufen')) {
+       return ['training für anfänger', 'fitness zu hause', 'sportarten vergleich'];
+     }
+     if (lower.contains('tech') || lower.contains('software') || lower.contains('app') || lower.contains('entwicklung')) {
+       return ['software entwicklung tutorial', 'app erstellen', 'tech news'];
+     }
+     return ['${text} tutorial', '${text} erklärung', 'wie funktioniert ${text}', '${text} beispiele'];
+   }
 
   void _showSuggestionsDialog(String original, List<String> suggestions) {
     if (!mounted) return;

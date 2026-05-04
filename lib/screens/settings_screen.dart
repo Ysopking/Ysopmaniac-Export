@@ -245,16 +245,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onChanged: (_) {},
               enabled: false,
             ),
-            _row(
-              icon: Icons.history_rounded,
-              title: 'Chrome-Verlauf importieren',
-              value: 'Ein Tap',
-              onTap: () {
-                Haptics.tap();
-                quickImportChrome(context);
-              },
-            ),
-          ]),
+             _row(
+               icon: Icons.history_rounded,
+               title: 'Chrome-Verlauf importieren',
+               value: 'Ein Tap',
+               onTap: () {
+                 Haptics.tap();
+                 quickImportChrome(context);
+               },
+             ),
+             _row(
+               icon: Icons.timer_outlined,
+               title: 'Auto-Suche-Verzögerung',
+               value: '${settings.autoSearchDelay} ms',
+               onTap: () {
+                 Haptics.tap();
+                 _showAutoSearchDelaySheet(context, notifier, settings.autoSearchDelay);
+               },
+             ),
+           ]),
 
           // -------- Notbremse separiert --------
           // -------- Block 4: Mein Suchprofil (E1) --------
