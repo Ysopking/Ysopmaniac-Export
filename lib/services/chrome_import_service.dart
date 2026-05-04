@@ -571,10 +571,7 @@ class ChromeImportService {
       await prefs.setDouble(k, next);
   }
 
-  // Stage G: Bump-Helper fuer das Interessen-Feature. Jedes Token Stage G: Bump-Helper fuer das Interessen-Feature. Jedes Token
-  /// (top-cat, sub-cat, item) wird einzeln als weight_kw_<token>
-  // gebumpt. Bewusst auch fuer kurze Tokens (>=3 Zeichen), weil
-  /// "Rap" oder "EDM" kuerzer sind als das normale Verlaufs-Filter.
+  }
   static Future<void> applyInterestBumps(List<String> paths) async {
     if (paths.isEmpty) return;
     final prefs = await SharedPreferences.getInstance();

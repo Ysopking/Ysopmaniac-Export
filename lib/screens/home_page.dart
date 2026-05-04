@@ -761,68 +761,68 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Widget _buildHomeScreen({Key? key}) {
     final l10n = AppLocalizations.of(context)!;
-    return Container(
-      key: key,
-      width: double.infinity,
-      decoration: const BoxDecoration(gradient: FindUXProTheme.primaryGradient),
-      child: SafeArea(
-        child: ScrollConfiguration(
-        behavior: ScrollConfiguration.of(context).copyWith(
-          physics: const BouncingScrollPhysics(),// iOS bounce
-        ),
-        child: SingleChildScrollView(
-          physics: const ClampingScrollPhysics(),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: MediaQuery.of(context).size.height -
-                  MediaQuery.of(context).padding.vertical,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                const SizedBox(height: 40),
-                Image.asset(
-                  'assets/logo.png',
-                  width: 220,
-                  height: 220,
-                  errorBuilder: (_, __, ___) => const Icon(
-                    Icons.search,
-                    size: 160,
-                    color: Colors.white70,
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(
+        physics: const BouncingScrollPhysics(),
+      ),
+      child: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: MediaQuery.of(context).size.height -
+                MediaQuery.of(context).padding.vertical,
+          ),
+          child: Container(
+            width: double.infinity,
+            decoration: const BoxDecoration(gradient: FindUXProTheme.primaryGradient),
+            child: SafeArea(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  const SizedBox(height: 40),
+                  Image.asset(
+                    'assets/logo.png',
+                    width: 220,
+                    height: 220,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.search,
+                      size: 160,
+                      color: Colors.white70,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'FindYouX',
-                  style: FindUXProTheme.headlineStyle.copyWith(
-                    fontSize: 42,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -1,
+                  const SizedBox(height: 10),
+                  Text(
+                    'FindYouX',
+                    style: FindUXProTheme.headlineStyle.copyWith(
+                      fontSize: 42,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -1,
+                    ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 40),
-                  child: Column(
-                    children: [
-                      _buildMenuButton(
-                        title: l10n.startSearch,
-                        icon: Icons.search_rounded,
-                        onTap: () =>
-                            setState(() { _previousViewState = _viewState; _viewState = 'dashboard'; }),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildMenuButton(
-                        title: l10n.settingsTitle,
-                        icon: Icons.settings_rounded,
-                        onTap: () =>
-                            Navigator.pushNamed(context, '/settings'),
-                      ),
-                    ],
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 40),
+                    child: Column(
+                      children: [
+                        _buildMenuButton(
+                          title: l10n.startSearch,
+                          icon: Icons.search_rounded,
+                          onTap: () => setState(() {
+                            _previousViewState = _viewState;
+                            _viewState = 'dashboard';
+                          }),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildMenuButton(
+                          title: l10n.settingsTitle,
+                          icon: Icons.settings_rounded,
+                          onTap: () => Navigator.pushNamed(context, '/settings'),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 60),
-              ],
+                  const SizedBox(height: 60),
+                ],
+              ),
             ),
           ),
         ),
