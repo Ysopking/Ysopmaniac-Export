@@ -75,8 +75,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   // Volume-Tasten auf Android nicht zuverlaessig durchreicht. Wir hoeren
   // also auf Volume-AENDERUNGEN: zwei aufeinanderfolgende Volume-up-Pulse
   // innerhalb von 600ms loesen die Suche aus. Down-Drueke werden ignoriert.
-  double? _lastVolume;
-  DateTime? _lastUpAt;
 
   // Quellen-Optionen (Label + interner Key)
   static const List<Map<String, String>> _sourceOptions = [

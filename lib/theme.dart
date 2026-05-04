@@ -10,6 +10,9 @@ class FindUXProTheme {
   static const Color lightGray = Color(0xFFE5E5EA);
   static const Color glassWhite = Color(0x33FFFFFF);
 
+  // Dark background constant
+  static const Color darkBackground = Color(0xFF0F0820);
+
   // Material 3 ColorScheme (auto Light/Dark)
   static ColorScheme get lightColorScheme {
     return ColorScheme.fromSeed(
@@ -19,36 +22,31 @@ class FindUXProTheme {
   }
 
   static ColorScheme get darkColorScheme {
-  static const Color darkBackground = Color(0xFF0F0820);
     return ColorScheme.fromSeed(
       seedColor: primaryPurple,
       brightness: Brightness.dark,
     );
   }
 
-  // Apple-like Gradients (softer, translucency hint)
+  // Legacy Gradients (kept const for compatibility)
   static const LinearGradient primaryGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [
-      primaryPurple,
-      primaryPurple.withValues(alpha: 0.7),
-    ],
+    colors: [primaryPurple, Color(0xFF120C21)],
   );
-  }
 
   // Shapes
   static const BorderRadius squircleRadius = BorderRadius.all(Radius.circular(20));
   static const BorderRadius largeSquircleRadius = BorderRadius.all(Radius.circular(24));
 
-  // Shadows (iOS style)
+  // Shadows
   static const BoxShadow subtleShadow = BoxShadow(
     color: Color(0x0A000000),
     blurRadius: 12,
     offset: Offset(0, 4),
   );
 
-  // Typography - SF Pro (iOS) / Roboto (Android)
+  // Typography
   static TextStyle get headlineStyle => Platform.isIOS
       ? const TextStyle(
           fontFamily: '.SF Pro Display',
@@ -97,7 +95,8 @@ class FindUXProTheme {
         borderRadius: squircleRadius,
         boxShadow: const [subtleShadow],
       );
-  // Compatibility getters (used in main.dart)
+
+  // ======== COMPATIBILITY GETTERS (Required by main.dart & screens) ========
   static ThemeData get materialTheme => ThemeData.from(colorScheme: lightColorScheme).copyWith(
         scaffoldBackgroundColor: backgroundWhite,
         useMaterial3: true,
@@ -112,5 +111,4 @@ class FindUXProTheme {
         primaryColor: primaryPurple,
         scaffoldBackgroundColor: backgroundWhite,
       );
-
 }
