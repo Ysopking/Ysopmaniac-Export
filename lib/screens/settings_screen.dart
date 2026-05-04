@@ -234,17 +234,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   () => _showAdvancedSearch = !_showAdvancedSearch),
               hiddenCount: 1,
             ),
-            if (_showAdvancedSearch) ...[
-              _toggleRow(
-                icon: Icons.volume_up_outlined,
-
-          // -------- Block 3: Datenschutz --------
-          // Stage 14: Feedback-Export entfernt — Bewertungen sind jetzt
-          // verpflichtend pro neuer Suchrichtung und werden ausschliesslich
-          // lokal in der Lern-Engine verwendet (kein Export, kein Versand).
-          _sectionLabel('Datenschutz'),
-          _groupCard(children: [
-            // FLAG_SECURE ist in MainActivity.kt IMMER hart gesetzt
             // (kein Toggle moeglich). SecureFlag hebt es nur kurzzeitig
             // fuer den eingebauten In-App-Browser auf (max 3 Screenshots
             // / 30 s). Der Toggle ist deshalb als Read-Only dargestellt.

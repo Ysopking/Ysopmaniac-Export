@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'dart:io';
 
 // FindUX Pro Corporate Design Theme (Material 3 + Apple Polished)
@@ -20,6 +19,7 @@ class FindUXProTheme {
   }
 
   static ColorScheme get darkColorScheme {
+  static const Color darkBackground = Color(0xFF0F0820);
     return ColorScheme.fromSeed(
       seedColor: primaryPurple,
       brightness: Brightness.dark,
@@ -27,15 +27,14 @@ class FindUXProTheme {
   }
 
   // Apple-like Gradients (softer, translucency hint)
-  static LinearGradient get primaryGradient {
-    return LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        primaryPurple,
-        primaryPurple.withValues(alpha: 0.7),
-      ],
-    );
+  static const LinearGradient primaryGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [
+      primaryPurple,
+      primaryPurple.withValues(alpha: 0.7),
+    ],
+  );
   }
 
   // Shapes
@@ -98,4 +97,20 @@ class FindUXProTheme {
         borderRadius: squircleRadius,
         boxShadow: const [subtleShadow],
       );
+  // Compatibility getters (used in main.dart)
+  static ThemeData get materialTheme => ThemeData.from(colorScheme: lightColorScheme).copyWith(
+        scaffoldBackgroundColor: backgroundWhite,
+        useMaterial3: true,
+      );
+
+  static ThemeData get materialDarkTheme => ThemeData.from(colorScheme: darkColorScheme).copyWith(
+        scaffoldBackgroundColor: darkBackground,
+        useMaterial3: true,
+      );
+
+  static CupertinoThemeData get cupertinoTheme => CupertinoThemeData(
+        primaryColor: primaryPurple,
+        scaffoldBackgroundColor: backgroundWhite,
+      );
+
 }

@@ -119,8 +119,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   void initState() {
     super.initState();
-    _loadAdvice();
-    _maybeStartVolumeListener();
     _whatController.addListener(_onWhatTextChanged);
   }
 
@@ -834,6 +832,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
+
   Widget _buildMenuButton(
       {required String title,
       required IconData icon,
@@ -854,19 +853,19 @@ class _HomePageState extends ConsumerState<HomePage> {
                 title,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500),
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-        ),
             ),
+            const SizedBox(width: 12),
             Icon(icon, color: Colors.white, size: 22),
           ],
         ),
       ),
     );
   }
-
   // ---------- Search Dashboard (Stage G — Apple-UX) ----------
   // Frueher: 2 gleichberechtigte TextFields, Mid-Card-Button.
   // Jetzt: EIN grosses Hero-Feld mit Auto-Fokus, optionaler "Kontext"-
