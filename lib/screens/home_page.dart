@@ -798,9 +798,79 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// Generiert präzisere Suchvorschläge basierend auf der vagen Query.
   List<String> _generateSuggestions(String text) {
     final lower = text.toLowerCase().trim();
-    // Basis-Vorschläge
-    final base = [
+    final settings = ref.watch(settingsProvider);
+    final interests = settings.interests;
+
+    // Wenn Interessen gesetzt sind, priorisiere diese
+    if (interests.isNotEmpty) {
+      final interestSuggestions = <String>[];
+      for (final interest in interests) {
+        // Konvertiere Pfad "musik/rap/sido" zu konkreten Suchvorschlägen
+        final parts = interest.split('/');
+        if (parts.length >= 2) {
+          final top = parts[0];
+          final sub = parts[1];
+          // Beispiel: "musik/rap" → "rap musik", "rap songs"
+          interestSuggestions.add('$sub $top');
+          interestSuggestions.add('$sub $top tutorials');
+          interestSuggestions.add('$top $sub');
+        } else if (parts.length == 1) {
+          interestSuggestions.add('$interest tutorial');
+          interestSuggestions.add('$interest erklärung');
+        }
+      }
+      // Mische mit Basis-Vorschlägen und begrenze auf 6
+      final mixed = [...interestSuggestions, '${text} tutorial', '${text} beispiele']
+          .take(6)
+          .toList();
+      return mixed;
+    }
+
+    // Fallback: Basis-Vorschläge + Intent-Erkennung
+    if (lower.contains('python')) {
+      return [
+        'python listen sortieren',
+        'python dict auslistung',
+        'python tutorial',
+        'python installieren',
+      ];
+    }
+    if (lower.contains('react')) {
+      return [
+        'react native tutorial',
+        'react komponenten',
+        'react hooks erklärung',
+      ];
+    }
+    if (lower.contains('javascript') || lower.contains('js')) {
+      return [
+        'javascript array methoden',
+        'javascript async await',
+        'javascript tutorial',
+      ];
+    }
+    if (lower.contains('finanzen') || lower.contains('geld')) {
+      return [
+        'finanzen budget planer',
+        'sparen tipps',
+        'finanzielle beratung',
+      ];
+    }
+    if (lower.contains('gesundheit') || lower.contains('krank')) {
+      return [
+        'gesundheit ratgeber',
+        'symptome check',
+        'arzt finden',
+      ];
+    }
+    // Basis
+    return [
       '${text} tutorial',
+      '${text} erklärung',
+      'wie funktioniert ${text}',
+      '${text} beispiele',
+    ];
+  } tutorial',
       '${text} erklärung',
       'wie funktioniert ${text}',
       '${text} beispiele',
@@ -867,6 +937,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         label: Text(s),
                         selected: false,
                         onPressed: () {
+                          HapticFeedback.selectionClick();
                           Navigator.of(ctx).pop();
                           _replaceWhatWith(s);
                         },
