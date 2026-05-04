@@ -58,6 +58,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   String _languageLocal = 'de';
   String _countryLocal = 'de';
 
+  // Vom Wizard gesammelte Werte (nur hier verwendet, bis persistAll())
+  int? _birthYear;
+  List<String>? _interestsSelected;
+
   bool _busy = false;
 
   static const _employmentLabels = <String, String>{

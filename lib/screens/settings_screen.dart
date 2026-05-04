@@ -1099,6 +1099,62 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 }
 
 
+  void _showAutoSearchDelaySheet(
+      BuildContext ctx, SettingsNotifier notifier, int currentMs) {
+    showModalBottomSheet(
+      context: ctx,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (sheetCtx, setLocal) {
+            int val = currentMs;
+            return Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Automatische Suche nach Vorschlag',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Wartezeit nach Vorschlags-Auswahl: ${val}ms'),
+                  Slider(
+                    value: val.toDouble(),
+                    min: 0,
+                    max: 2000,
+                    divisions: 40,
+                    label: '${val}ms',
+                    onChanged: (double v) {
+                      setLocal(() { val = v.toInt(); });
+                    },
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Abbrechen'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          notifier.updateSettings(
+                            notifier.state.copyWith(autoSearchDelay: val),
+                          );
+                          Navigator.pop(ctx);
+                        },
+                        child: const Text('OK'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
 class _SettingsCountryPickerSheet extends StatefulWidget {
   final String selected;
   const _SettingsCountryPickerSheet({required this.selected});
