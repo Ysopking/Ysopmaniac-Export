@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../logic/state_provider.dart';
@@ -149,7 +150,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onTap: () {
                 Haptics.tap();
                 Navigator.push(
-                  context,const 
+                  context,
                   MaterialPageRoute(
                       builder: (_) => const InterestsScreen()),
                 );
@@ -311,7 +312,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16),const 
+          const SizedBox(height: 16),
           Center(
             child: Text(
               'Alle Eingaben bleiben verschluesselt auf diesem Geraet.',
@@ -388,9 +389,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         padding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
-          children: [const 
+          children: [
             Icon(icon, color: color, size: 22),
-            const SizedBox(width: 18),const 
+            const SizedBox(width: 18),
             Expanded(
               child: Text(
                 title,
@@ -403,7 +404,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 8),const 
+            const SizedBox(width: 8),
             Flexible(
               child: Text(
                 value,
@@ -445,14 +446,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       constraints: const BoxConstraints(minHeight: 56),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
-        children: [const 
+        children: [
           Icon(icon, color: iconColor, size: 22),
-          const SizedBox(width: 18),const 
+          const SizedBox(width: 18),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
-              children: [const 
+              children: [
                 Text(
                   title,
                   style: TextStyle(
@@ -462,7 +463,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     letterSpacing: -0.2,
                   ),
                 ),
-                const SizedBox(height: 2),const 
+                const SizedBox(height: 2),
                 Text(
                   subtitle,
                   style: const TextStyle(
@@ -508,7 +509,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(
           children: [
-            const SizedBox(width: 40),const 
+            const SizedBox(width: 40),
             Expanded(
               child: Text(
                 expanded ? 'Weniger anzeigen' : 'Mehr anzeigen',
@@ -519,7 +520,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
             ),
-            if (!expanded)const 
+            if (!expanded)
               Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 8, vertical: 2),
@@ -537,7 +538,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
               ),
-            const SizedBox(width: 6),const 
+            const SizedBox(width: 6),
             Icon(
               expanded
                   ? Icons.expand_less_rounded
@@ -668,7 +669,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           top: false,
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: [const 
+            children: [
               SizedBox(
                 height: 220,
                 child: CupertinoPicker(
@@ -684,7 +685,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   children:
                       years.map((y) => Center(child: Text('$y'))).toList(),
                 ),
-              ),const 
+              ),
               CupertinoButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('OK'),
@@ -719,10 +720,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           smartQuotesType: SmartQuotesType.disabled,
           decoration: InputDecoration(hintText: hint),
         ),
-        actions: [const 
+        actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Abbrechen')),const 
+              child: const Text('Abbrechen')),
           TextButton(
             onPressed: () {
               Haptics.done();
@@ -751,7 +752,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const SizedBox(height: 12),const 
+              const SizedBox(height: 12),
               Container(
                 width: 36, height: 4,
                 decoration: BoxDecoration(
@@ -759,7 +760,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const SizedBox(height: 16),const 
+              const SizedBox(height: 16),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Text('Suchsprache',
@@ -787,13 +788,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
-                        children: [const 
+                        children: [
                           Text(lang.flag, style: const TextStyle(fontSize: 22)),
-                          const SizedBox(width: 12),const 
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [const 
+                              children: [
                                 Text(lang.nativeLabel,
                                     style: TextStyle(
                                       fontSize: 15,
@@ -801,14 +802,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       color: sel
                                           ? FindUXProTheme.primaryPurple
                                           : Colors.black87,
-                                    )),const 
+                                    )),
                                 Text(lang.germanLabel,
                                     style: const TextStyle(
                                         fontSize: 12, color: Colors.black45)),
                               ],
                             ),
                           ),
-                          if (sel)const 
+                          if (sel)
                             Icon(Icons.check_rounded,
                                 color: FindUXProTheme.primaryPurple, size: 20),
                         ],
@@ -847,10 +848,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         content: const Text(
             'Alle persoenlichen Daten (Beschaeftigung, PLZ, Jahrgang, '
             'Lern-Modell) werden unwiderruflich entfernt.'),
-        actions: [const 
+        actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Abbrechen')),const 
+              child: const Text('Abbrechen')),
           TextButton(
             onPressed: () async {
               Haptics.warn();
@@ -885,10 +886,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             'Coach-Chip-Praeferenzen) werden auf den Startzustand '
             'zurueckgesetzt. Deine Stammdaten (PLZ, Beruf, Interessen) '
             'bleiben erhalten.'),
-        actions: [const 
+        actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Abbrechen')),const 
+              child: const Text('Abbrechen')),
           TextButton(
             onPressed: () async {
               await ref
@@ -923,12 +924,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           borderRadius: BorderRadius.circular(16),
         ),
         padding: const EdgeInsets.all(20),
-        child: Row(children: const [const 
+        child: Row(children: const [
           SizedBox(
               width: 18,
               height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2)),const 
-          SizedBox(width: 12),const 
+              child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(width: 12),
           Text('Lade Profil…',
               style: TextStyle(color: Colors.black54, fontSize: 14)),
         ]),
@@ -971,7 +972,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const Padding(
             padding: EdgeInsets.only(left: 56),
-            child:const 
+            child:
                 Divider(height: 1, thickness: 0.5, color: Color(0xFFE5E5EA)),
           ),
           _profileStat(
@@ -981,7 +982,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const Padding(
             padding: EdgeInsets.only(left: 56),
-            child:const 
+            child:
                 Divider(height: 1, thickness: 0.5, color: Color(0xFFE5E5EA)),
           ),
           _profileStat(
@@ -1026,9 +1027,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       constraints: const BoxConstraints(minHeight: 52),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
-        children: [const 
+        children: [
           Icon(icon, color: FindUXProTheme.primaryPurple, size: 22),
-          const SizedBox(width: 18),const 
+          const SizedBox(width: 18),
           Expanded(
             child: Text(label,
                 style: const TextStyle(
@@ -1037,7 +1038,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     color: Colors.black87,
                     letterSpacing: -0.2)),
           ),
-          const SizedBox(width: 8),const 
+          const SizedBox(width: 8),
           Flexible(
             child: Text(value,
                 textAlign: TextAlign.right,
@@ -1063,21 +1064,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [const 
+        children: [
           Icon(icon, color: color, size: 22),
-          const SizedBox(width: 18),const 
+          const SizedBox(width: 18),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
-              children: [const 
+              children: [
                 Text(title,
                     style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: color,
                         letterSpacing: -0.2)),
-                const SizedBox(height: 2),const 
+                const SizedBox(height: 2),
                 Text(subtitle,
                     style: const TextStyle(
                         fontSize: 12.5, color: Colors.black54)),
@@ -1113,8 +1114,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     'Automatische Suche nach Vorschlag',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
-                  const SizedBox(height: 8),const 
-                  Text('Wartezeit nach Vorschlags-Auswahl: ${val}ms'),const 
+                  const SizedBox(height: 8),
+                  Text('Wartezeit nach Vorschlags-Auswahl: ${val}ms'),
                   Slider(
                     value: val.toDouble(),
                     min: 0,
@@ -1124,14 +1125,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     onChanged: (double v) {
                       setLocal(() { val = v.toInt(); });
                     },
-                  ),const 
+                  ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
-                    children: [const 
+                    children: [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx),
                         child: const Text('Abbrechen'),
-                      ),const 
+                      ),
                       ElevatedButton(
                         onPressed: () {
                           notifier.updateSettings(
@@ -1201,7 +1202,7 @@ class _SettingsCountryPickerSheetState
         ),
         child: Column(
           children: [
-            const SizedBox(height: 12),const 
+            const SizedBox(height: 12),
             Container(
               width: 36,
               height: 4,
@@ -1210,7 +1211,7 @@ class _SettingsCountryPickerSheetState
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 14),const 
+            const SizedBox(height: 14),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: TextField(
@@ -1229,7 +1230,7 @@ class _SettingsCountryPickerSheetState
                 ),
               ),
             ),
-            const SizedBox(height: 8),const 
+            const SizedBox(height: 8),
             Expanded(
               child: ListView.builder(
                 controller: scrollCtrl,
@@ -1255,10 +1256,10 @@ class _SettingsCountryPickerSheetState
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 10),
                         child: Row(
-                          children: [const 
+                          children: [
                             Text(c.flag,
                                 style: const TextStyle(fontSize: 22)),
-                            const SizedBox(width: 12),const 
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Text(
                                 c.label,
@@ -1272,11 +1273,11 @@ class _SettingsCountryPickerSheetState
                                       : Colors.black87,
                                 ),
                               ),
-                            ),const 
+                            ),
                             Text(c.code.toUpperCase(),
                                 style: const TextStyle(
                                     fontSize: 12, color: Colors.black38)),
-                            if (sel)const 
+                            if (sel)
                               Padding(
                                 padding: const EdgeInsets.only(left: 8),
                                 child: Icon(Icons.check_rounded,
@@ -1297,3 +1298,83 @@ class _SettingsCountryPickerSheetState
     );
   }
 
+  void _showAutoSearchDelaySheet(
+      BuildContext ctx, SettingsNotifier notifier, int currentMs) {
+    showModalBottomSheet(
+      context: ctx,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            int val = currentMs;
+            return Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Auto-Suche-Verzögerung',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Wartezeit nach einem Vorschlag, bevor die Suche startet.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.black54,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      const Text('100 ms', style: TextStyle(fontSize: 12)),
+                      Expanded(
+                        child: Slider(
+                          value: val.toDouble(),
+                          min: 100,
+                          max: 2000,
+                          divisions: 19,
+                          label: '${val} ms',
+                          onChanged: (v) => setLocal(() => val = v.round()),
+                        ),
+                      ),
+                      Text('2000 ms', style: TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Aktuell: $val ms',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: const Text('Abbrechen'),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        onPressed: () {
+                          notifier.updateField(autoSearchDelay: val);
+                          Navigator.of(ctx).pop();
+                        },
+                        child: const Text('OK'),
+                      ),
+                    ],
+                  )
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}

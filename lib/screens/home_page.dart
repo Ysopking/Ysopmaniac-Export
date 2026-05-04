@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -240,7 +241,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Drag-Handleconst 
+                // Drag-Handle
                 Center(
                   child: Container(
                     width: 40,
@@ -253,10 +254,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
                 const SizedBox(height: 18),
                 // Titel
-                Text.rich(const 
+                Text.rich(
                   TextSpan(
                     children: [
-                      const TextSpan(text: 'Du suchst nach '),const 
+                      const TextSpan(text: 'Du suchst nach '),
                       TextSpan(
                         text: '"$word"',
                         style: const TextStyle(
@@ -328,10 +329,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 13),
                             child: Row(
-                              children: [const 
+                              children: [
                                 Text(intent['icon']!,
                                     style: const TextStyle(fontSize: 22)),
-                                const SizedBox(width: 14),const 
+                                const SizedBox(width: 14),
                                 Expanded(
                                   child: Text(
                                     intent['label']!,
@@ -343,7 +344,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                   ),
                                 ),
                                 // Nutzungs-Badge (ab 2 Mal)
-                                if (count >= 2)const 
+                                if (count >= 2)
                                   Container(
                                     margin: const EdgeInsets.only(right: 6),
                                     padding: const EdgeInsets.symmetric(
@@ -374,7 +375,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                     ),
                   );
                 }),
-                // "Selbst beschreiben" Optionconst 
+                // "Selbst beschreiben" Option
                 Material(
                   color: Colors.transparent,
                   child: InkWell(
@@ -394,9 +395,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                         padding: EdgeInsets.symmetric(
                             horizontal: 16, vertical: 14),
                         child: Row(
-                          children: [const 
-                            Text('✍️', style: TextStyle(fontSize: 22)),const 
-                            SizedBox(width: 14),const 
+                          children: [
+                            Text('✍️', style: TextStyle(fontSize: 22)),
+                            SizedBox(width: 14),
                             Text(
                               'Selbst beschreiben...',
                               style: TextStyle(
@@ -454,7 +455,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// bedeuten wie "neue Tokens" im LearningService._extractAndWeightKeywords.
   Set<String> _collectQueryTokens(String text, String language) {
     final clean = text
-        .replaceAll(const 
+        .replaceAll(
             RegExp(
                 r'\b(site|inurl|intitle|intext|filetype|ext|before|after|allintitle|allintext|allinurl):\S+'),
             ' ')
@@ -606,7 +607,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     showDialog(
       context: context,
       barrierDismissible: true,
-      builder: (ctx) => PopScope(
+      builder: (ctx) => WillPopScope(
         onWillPop: () async {
           _recordVaguenessNegativeFeedback(original);
           return true;
@@ -618,7 +619,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('Deine Query ist etwas vage. Hier sind präzisere Vorschläge:'),
-              const SizedBox(height: 12),const 
+              const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -636,14 +637,14 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
             ],
           ),
-          actions: [const 
+          actions: [
             TextButton(
               onPressed: () {
                 Navigator.of(ctx).pop();
                 _recordVaguenessNegativeFeedback(original);
               },
               child: const Text('Später'),
-            ),const 
+            ),
             ElevatedButton(
               onPressed: () {
                 Navigator.of(ctx).pop();
@@ -819,7 +820,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           if (mounted) {
             launched = true;
             await Navigator.push<void>(
-              context,const 
+              context,
               MaterialPageRoute(
                 builder: (_) => IncognitoBrowserScreen(url: url),
               ),
@@ -870,7 +871,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
       body: Stack(
-        children: [const 
+        children: [
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
             switchInCurve: Curves.easeOutCubic,
@@ -1002,7 +1003,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       color: Colors.white70,
                     ),
                   ),
-                  const SizedBox(height: 10),const 
+                  const SizedBox(height: 10),
                   Text(
                     'FindYouX',
                     style: FindUXProTheme.headlineStyle.copyWith(
@@ -1011,7 +1012,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       fontWeight: FontWeight.w900,
                       letterSpacing: -1,
                     ),
-                  ),const 
+                  ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 40),
                     child: Column(
@@ -1058,7 +1059,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           border: Border.all(color: Colors.white10),
         ),
         child: Row(
-          children: [const 
+          children: [
             Expanded(
               child: Text(
                 title,
@@ -1070,7 +1071,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
               ),
             ),
-            const SizedBox(width: 12),const 
+            const SizedBox(width: 12),
             Icon(icon, color: Colors.white, size: 22),
           ],
         ),
@@ -1091,11 +1092,11 @@ class _HomePageState extends ConsumerState<HomePage> {
       child: SafeArea(
         child: Column(
           children: [
-            // Header — bewusst leise, kein Titel-Wettbewerb mit Hero-Feldconst 
+            // Header — bewusst leise, kein Titel-Wettbewerb mit Hero-Feld
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
               child: Row(
-                children: [const 
+                children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back_ios_new_rounded,
                         color: Colors.black87, size: 20),
@@ -1104,7 +1105,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       setState(() { _previousViewState = _viewState; _viewState = 'home'; });
                     },
                   ),
-                  const Spacer(),const 
+                  const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.settings_outlined,
                         color: Colors.black54),
@@ -1115,7 +1116,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ),
                 ],
               ),
-            ),const 
+            ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
@@ -1165,7 +1166,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       ),
                     ],
                     const SizedBox(height: 12),
-                    // Stage 18: Ambient Coach (immer sichtbar, nie aufdringlich)const 
+                    // Stage 18: Ambient Coach (immer sichtbar, nie aufdringlich)
                     InlineCoachSection(
                       what: _whatController.text,
                       why: _whyController.text,
@@ -1184,7 +1185,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
               ),
             ),
-            // Sticky Search-CTA — unten, Daumen-Reichweiteconst 
+            // Sticky Search-CTA — unten, Daumen-Reichweite
             Container(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
               decoration: BoxDecoration(
@@ -1202,7 +1203,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 decoration: BoxDecoration(
                   color: FindUXProTheme.primaryPurple,
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: [const 
+                  boxShadow: [
                     BoxShadow(
                       color: FindUXProTheme.primaryPurple
                           .withValues(alpha: 0.30),
@@ -1226,7 +1227,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         children: [
                           const Icon(Icons.bolt_rounded,
                               color: Colors.white, size: 22),
-                          const SizedBox(width: 10),const 
+                          const SizedBox(width: 10),
                           Text(
                             l10n.startAnalysis,
                             style: const TextStyle(
@@ -1270,15 +1271,15 @@ class _HomePageState extends ConsumerState<HomePage> {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
           ),
-          child: Row(children: const [const 
-            Icon(Icons.info_outline, size: 18, color: Colors.amber),const 
-            SizedBox(width: 8),const 
+          child: Row(children: const [
+            Icon(Icons.info_outline, size: 18, color: Colors.amber),
+            SizedBox(width: 8),
             Expanded(
               child: Text(
                 'Stammdaten ergaenzen: PLZ, Beruf oder Familienstatus',
                 style: TextStyle(fontSize: 12, color: Colors.black87),
               ),
-            ),const 
+            ),
             Icon(Icons.arrow_forward_ios, size: 12, color: Colors.black54),
           ]),
         ),
@@ -1302,7 +1303,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         child: Row(children: [
           const Icon(Icons.verified_user_outlined,
               size: 16, color: FindUXProTheme.primaryPurple),
-          const SizedBox(width: 8),const 
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               parts.join('  ·  '),
@@ -1339,11 +1340,11 @@ class _HomePageState extends ConsumerState<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Zeile 1: Modus · Woerter · Zufriedenheit (immer sichtbar)const 
+          // Zeile 1: Modus · Woerter · Zufriedenheit (immer sichtbar)
           Row(children: [
             const Icon(Icons.psychology_alt_outlined,
                 size: 16, color: Colors.green),
-            const SizedBox(width: 8),const 
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 adv.summary,
@@ -1353,11 +1354,11 @@ class _HomePageState extends ConsumerState<HomePage> {
           ]),
           // Zeile 2: Top-Quellen (nur wenn weight_filter_* > 1.1 vorhanden)
           if (hasFilter) ...[
-            const SizedBox(height: 5),const 
+            const SizedBox(height: 5),
             Row(children: [
               const Icon(Icons.library_books_outlined,
                   size: 14, color: Colors.green),
-              const SizedBox(width: 8),const 
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Top-Quellen: ${adv.filterHint}',
@@ -1369,11 +1370,11 @@ class _HomePageState extends ConsumerState<HomePage> {
           ],
           // Zeile 3: Bevorzugtes Coach-Theme (nur wenn Theme-Feedback vorliegt)
           if (hasTheme) ...[
-            const SizedBox(height: 5),const 
+            const SizedBox(height: 5),
             Row(children: [
               const Icon(Icons.lightbulb_outline,
                   size: 14, color: Colors.green),
-              const SizedBox(width: 8),const 
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Haeufiges Thema: ${adv.topThemeLabel}',
@@ -1397,7 +1398,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [const 
+        boxShadow: [
           BoxShadow(
               color: Colors.black.withValues(alpha: 0.06),
               blurRadius: 14,
@@ -1410,7 +1411,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         children: [
           const Icon(Icons.search_rounded,
               color: FindUXProTheme.primaryPurple, size: 24),
-          const SizedBox(width: 14),const 
+          const SizedBox(width: 14),
           Expanded(
             child: TextField(
               controller: controller,
@@ -1481,10 +1482,10 @@ class _HomePageState extends ConsumerState<HomePage> {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: const [const 
+          children: const [
             Icon(Icons.add_rounded,
-                size: 16, color: FindUXProTheme.primaryPurple),const 
-            SizedBox(width: 6),const 
+                size: 16, color: FindUXProTheme.primaryPurple),
+            SizedBox(width: 6),
             Text(
               'Kontext hinzufuegen',
               style: TextStyle(
@@ -1510,7 +1511,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [const 
+        boxShadow: [
           BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8,
@@ -1519,10 +1520,10 @@ class _HomePageState extends ConsumerState<HomePage> {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
       child: Row(
-        children: [const 
+        children: [
           Icon(icon,
               color: FindUXProTheme.primaryPurple, size: 20),
-          const SizedBox(width: 10),const 
+          const SizedBox(width: 10),
           Expanded(
             child: TextField(
               controller: controller,
@@ -1546,7 +1547,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                     const EdgeInsets.symmetric(vertical: 14),
               ),
             ),
-          ),const 
+          ),
           IconButton(
             icon: const Icon(Icons.close_rounded,
                 size: 18, color: Colors.black38),
@@ -1562,7 +1563,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [const 
+        boxShadow: [
           BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8,
@@ -1665,13 +1666,13 @@ class _HomePageState extends ConsumerState<HomePage> {
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [const 
+      children: [
         Text(title,
             style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
                 color: Colors.black54)),
-        const SizedBox(height: 8),const 
+        const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -1715,14 +1716,14 @@ class _HomePageState extends ConsumerState<HomePage> {
       key: key,
       color: const Color(0xFFF5F5F7),
       child: Column(
-        children: [const 
+        children: [
           Container(
             padding: EdgeInsets.only(
                 top: MediaQuery.of(context).padding.top, bottom: 8),
             decoration:
                 const BoxDecoration(color: FindUXProTheme.primaryPurple),
             child: Row(
-              children: [const 
+              children: [
                 IconButton(
                   icon: Icon(Icons.close,
                       color: _mandatoryRating
@@ -1741,7 +1742,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           if (!mounted) return;
                           setState(() { _previousViewState = _viewState; _viewState = 'dashboard'; });
                         },
-                ),const 
+                ),
                 Expanded(
                   child: Text(
                     'Suche: ${_whatController.text}',
@@ -1751,7 +1752,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         fontSize: 14),
                     overflow: TextOverflow.ellipsis,
                   ),
-                ),const 
+                ),
                 IconButton(
                   icon: const Icon(Icons.refresh,
                       color: Colors.white, size: 22),
@@ -1760,10 +1761,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
               ],
             ),
-          ),const 
+          ),
           Expanded(
             child: Stack(
-              children: [const 
+              children: [
                 Container(
                   color: Colors.white,
                   child: Center(
@@ -1788,7 +1789,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 color: Colors.grey, fontSize: 14),
                             textAlign: TextAlign.center,
                           ),
-                          const SizedBox(height: 24),const 
+                          const SizedBox(height: 24),
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
@@ -1801,7 +1802,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 const Text('Deine Suchanfrage:',
                                     style: TextStyle(
                                         fontWeight: FontWeight.bold)),
-                                const SizedBox(height: 8),const 
+                                const SizedBox(height: 8),
                                 Text('"${_whatController.text}"',
                                     style: const TextStyle(
                                         fontSize: 16,
@@ -1831,7 +1832,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       ),
                     ),
                   ),
-                ),const 
+                ),
                 Positioned(
                   bottom: 30,
                   left: 20,
@@ -1839,7 +1840,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   child: SafeArea(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [const 
+                      children: [
                         Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
@@ -1853,7 +1854,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             onPressed: () => setState(
                                 () { setState(() { _previousViewState = _viewState; _viewState = 'dashboard'; }); }),
                           ),
-                        ),const 
+                        ),
                         GestureDetector(
                           onTap: () => setState(() =>
                               _showFeedbackOverlay = !_showFeedbackOverlay),
@@ -1863,7 +1864,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             decoration: BoxDecoration(
                               color: FindUXProTheme.primaryPurple,
                               borderRadius: BorderRadius.circular(30),
-                              boxShadow: [const 
+                              boxShadow: [
                                 BoxShadow(
                                     color: Colors.black
                                         .withValues(alpha: 0.3),
@@ -1875,7 +1876,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                               children: [
                                 const Icon(Icons.psychology,
                                     color: Colors.white, size: 20),
-                                const SizedBox(width: 8),const 
+                                const SizedBox(width: 8),
                                 Text(
                                     AppLocalizations.of(context)!
                                         .learningMode,
@@ -1931,7 +1932,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.black54, fontSize: 14),
                   ),
-                  const SizedBox(height: 24),const 
+                  const SizedBox(height: 24),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -1957,7 +1958,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             ))
                         .toList(),
                   ),
-                  const SizedBox(height: 24),const 
+                  const SizedBox(height: 24),
                   TextButton(
                     onPressed: () => setState(
                         () => _showDeepAnalysisOverlay = false),
@@ -2010,7 +2011,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (mandatory) ...[const 
+                    if (mandatory) ...[
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
@@ -2022,10 +2023,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           mainAxisAlignment: MainAxisAlignment.center,
-                          children: [const 
+                          children: [
                             Icon(Icons.priority_high_rounded,
-                                color: Color(0xFFE53935), size: 16),const 
-                            SizedBox(width: 4),const 
+                                color: Color(0xFFE53935), size: 16),
+                            SizedBox(width: 4),
                             Text('Bewertung erforderlich',
                                 style: TextStyle(
                                     color: Color(0xFFE53935),
@@ -2049,13 +2050,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                             color: Colors.black54, fontSize: 13, height: 1.4),
                       ),
                       if (tokenPreview.isNotEmpty) ...[
-                        const SizedBox(height: 14),const 
+                        const SizedBox(height: 14),
                         Wrap(
                           spacing: 6,
                           runSpacing: 6,
                           alignment: WrapAlignment.center,
                           children: [
-                            for (final t in tokenPreview)const 
+                            for (final t in tokenPreview)
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 10, vertical: 4),
@@ -2070,7 +2071,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600)),
                               ),
-                            if (extraCount > 0)const 
+                            if (extraCount > 0)
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 10, vertical: 4),
@@ -2100,7 +2101,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           style: TextStyle(
                               color: Colors.black54, fontSize: 14)),
                     ],
-                    const SizedBox(height: 24),const 
+                    const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
@@ -2110,7 +2111,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             Icons.thumb_up_alt_outlined, 'up', Colors.green),
                       ],
                     ),
-                    const SizedBox(height: 24),const 
+                    const SizedBox(height: 24),
                     CupertinoTextField(
                       controller: _feedbackController,
                       placeholder: 'Details zur Sitzung (optional)...',
@@ -2128,7 +2129,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    const SizedBox(height: 24),const 
+                    const SizedBox(height: 24),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
