@@ -1096,8 +1096,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // Versand). Die zugehoerigen l10n-Strings (feedbackTitle, feedbackDesc,
   // noFeedback, deleteFeedback, sendFeedbackSafe, reviewFeedback) bleiben
   // als orphans im generierten l10n-File — sie schaden nicht.
-}
-
 
   void _showAutoSearchDelaySheet(
       BuildContext ctx, SettingsNotifier notifier, int currentMs) {
