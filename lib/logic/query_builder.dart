@@ -167,12 +167,12 @@ class FindUXQueryBuilder {
     final stopwords = stopwordsForLanguage(language);
 
     final employmentType = (settings['employmentType'] as String?) ?? 'student';
-    final employmentWeight = (weights["weight_employment_$employmentType"] ?? 1.0).clamp(0.5, 3.0);
+    final employmentWeight = (weights["weight_employment_$employmentType"] ?? 1.0).clamp(0.1, 5.0);
     // Familienstatus-Lerngewicht: analog zu employmentWeight.
     // Startet bei 1.1 nach Onboarding (seedStarterFamilyWeights).
     // Wird durch trackFeedback verfeinert.
     final familyStatus = (settings['familyStatus'] as String?) ?? 'single';
-    final familyWeight = (weights["weight_family_$familyStatus"] ?? 1.0).clamp(0.5, 3.0);
+    final familyWeight = (weights["weight_family_$familyStatus"] ?? 1.0).clamp(0.1, 5.0);
 
     // Interests aus settings extrahieren (List<String> oder leer)
     final interests = (settings['interests'] as List?)

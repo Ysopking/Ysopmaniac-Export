@@ -567,13 +567,13 @@ class ChromeImportService {
       final rawNext = (cur + _domainBump * scale).clamp(_domainMin, _domainMax);
       // Domain-Gewichte duerfen durch Chronik-Import 2.0 nicht ueberschreiten,
       // sonst dominiert die Historie die bewusste Nutzer-Feedback-Lernung.
-      final next = rawNext > 2.0 ? cur : rawNext;
+      final next = rawNext.clamp(_domainMin, 2.0);
       await prefs.setDouble(k, next);
   }
 
-  /// Stage G: Bump-Helper fuer das Interessen-Feature  /// Stage G: Bump-Helper fuer das Interessen-Feature. Jedes Token
+  // Stage G: Bump-Helper fuer das Interessen-Feature. Jedes Token Stage G: Bump-Helper fuer das Interessen-Feature. Jedes Token
   /// (top-cat, sub-cat, item) wird einzeln als weight_kw_<token>
-  /// gebumpt. Bewusst auch fuer kurze Tokens (>=3 Zeichen), weil
+  // gebumpt. Bewusst auch fuer kurze Tokens (>=3 Zeichen), weil
   /// "Rap" oder "EDM" kuerzer sind als das normale Verlaufs-Filter.
   static Future<void> applyInterestBumps(List<String> paths) async {
     if (paths.isEmpty) return;
