@@ -9,6 +9,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:findux_mobile/l10n/app_localizations.dart';
 import '../services/learning_service.dart';
+import ../services/chrome_import_service.dart;
+import ../services/chrome_import_service.dart;
 import '../services/haptic_helper.dart';
 import '../logic/query_builder.dart';
 import '../logic/state_provider.dart';
@@ -52,6 +54,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   String _lastIntentWord = '';
 
   String? _selectedRating;
+  Timer? _vaguenessTimer;
+  Timer? _vaguenessTimer;
   final TextEditingController _feedbackController = TextEditingController();
 
   // Stage 14: Pflicht-Bewertung bei NEUEN Suchrichtungen.
@@ -137,6 +141,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       if (word != _lastIntentWord) {
         _lastIntentWord = word;
         _intentTimer?.cancel();
+    _vaguenessTimer?.cancel();
         _intentTimer = Timer(const Duration(seconds: 10), () {
           if (mounted && _viewState == 'dashboard') {
             // ignore: discarded_futures
@@ -146,6 +151,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       }
     } else {
       _intentTimer?.cancel();
+    _vaguenessTimer?.cancel();
       if (text.isEmpty) _lastIntentWord = '';
     }
   }
@@ -412,6 +418,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   void dispose() {
     _analysisTimer?.cancel();
     _intentTimer?.cancel();
+    _vaguenessTimer?.cancel();
     super.dispose();
   }
 
@@ -420,6 +427,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     setState(() {
       _suggestedGoals = const [];
       _selectedRating = null;
+    _vaguenessTimer?.cancel();
       _feedbackController.clear();
       _showDeepAnalysisOverlay = false;
       _showFeedbackOverlay = false;
@@ -492,6 +500,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }) async {
     if (_whatController.text.trim().isEmpty) return;
     _intentTimer?.cancel();
+    _vaguenessTimer?.cancel();
 
     // A1: Bekannte Mehr-Wort-Phrasen automatisch in Anführungszeichen setzen
     // (PhraseDetector.autoQuote) — nur wenn der User noch keine Quotes gesetzt hat.
@@ -949,6 +958,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         onTap: () {
                           Haptics.tap();
                           _intentTimer?.cancel();
+    _vaguenessTimer?.cancel();
                           setState(() => _showWhyField = true);
                         },
                       ),
