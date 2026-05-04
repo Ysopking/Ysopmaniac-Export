@@ -787,34 +787,95 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// Prüft nach 15s Inaktivität, ob die Query zu vage ist und bietet
   /// konkretere Suchvorschläge an.
   Future<void> _checkVaguenessAndOfferSuggestions(String text) async {
-    final isVague = await VaguenessDetector.isVague(what: text, why: "");
+    final isVague = await VaguenessDetector.isVague(what: text, why: '');
     if (!isVague) return;
-    final suggestions = _generateSuggestions(text);
+    final suggestions = await _generateSuggestions(text);
     if (suggestions.isNotEmpty && mounted) {
       _showSuggestionsDialog(text, suggestions);
     }
   }
+  }
 
   /// Generiert präzisere Suchvorschläge basierend auf der vagen Query.
-  List<String> _generateSuggestions(String text) {
+  Future<List<String>> _generateSuggestions(String text) async {
     final lower = text.toLowerCase().trim();
     final settings = ref.watch(settingsProvider);
     final interests = settings.interests;
 
-    // Wenn Interessen gesetzt sind, priorisiere diese
+    // 1. Vorschläge aus Interessen (falls vorhanden)
     if (interests.isNotEmpty) {
       final interestSuggestions = <String>[];
       for (final interest in interests) {
-        // Konvertiere Pfad "musik/rap/sido" zu konkreten Suchvorschlägen
         final parts = interest.split('/');
         if (parts.length >= 2) {
           final top = parts[0];
           final sub = parts[1];
-          // Beispiel: "musik/rap" → "rap musik", "rap songs"
           interestSuggestions.add('$sub $top');
           interestSuggestions.add('$sub $top tutorials');
           interestSuggestions.add('$top $sub');
         } else if (parts.length == 1) {
+          interestSuggestions.add('$interest tutorial');
+          interestSuggestions.add('$interest erklärung');
+        }
+      }
+      final mixed = [...interestSuggestions, '${text} tutorial', '${text} beispiele']
+          .take(6)
+          .toList();
+      return mixed;
+    }
+
+    // 2. Vorschläge aus Chrome-Chronik (häufige Suchbegriffe)
+    try {
+      final security = ref.read(securityServiceProvider);
+      final box = await ChromeImportService.openBox(await security.getEncryptionKey());
+      if (box.isOpen) {
+        final all = box.values.toList();
+        // Extract queries from HistoryTriple (query field)
+        final queryCount = <String, int>{};
+        for (final v in all) {
+          if (v is Map) {
+            final q = (v['query'] ?? '').toString().toLowerCase().trim();
+            if (q.isNotEmpty && q != text.toLowerCase()) {
+              queryCount[q] = (queryCount[q] ?? 0) + 1;
+            }
+          }
+        }
+        // Top 3 häufigste Begriffe, die mit text anfangen oder ähnlich sind
+        final sorted = queryCount.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
+        final historyBased = <String>[];
+        for (final e in sorted) {
+          if (historyBased.length >= 3) break;
+          if (e.key.startsWith(lower) || e.key.contains(lower)) {
+            historyBased.add(e.key);
+          }
+        }
+        if (historyBased.isNotEmpty) {
+          return historyBased;
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('Chronik-Vorschläge fehlgeschlagen: \$e');
+    }
+
+    // 3. Fallback: Basis-Vorschläge + Intent-Erkennung
+    if (lower.contains('python')) {
+      return ['python listen sortieren', 'python dict auslistung', 'python tutorial'];
+    }
+    if (lower.contains('react')) {
+      return ['react native tutorial', 'react komponenten', 'react hooks erklärung'];
+    }
+    if (lower.contains('javascript') || lower.contains('js')) {
+      return ['javascript array methoden', 'javascript async await', 'javascript tutorial'];
+    }
+    if (lower.contains('finanzen') || lower.contains('geld')) {
+      return ['finanzen budget planer', 'sparen tipps', 'finanzielle beratung'];
+    }
+    if (lower.contains('gesundheit') || lower.contains('krank')) {
+      return ['gesundheit ratgeber', 'symptome check', 'arzt finden'];
+    }
+    return ['${text} tutorial', '${text} erklärung', 'wie funktioniert ${text}'];
+  } else if (parts.length == 1) {
           interestSuggestions.add('$interest tutorial');
           interestSuggestions.add('$interest erklärung');
         }
@@ -921,46 +982,56 @@ class _HomePageState extends ConsumerState<HomePage> {
     if (!mounted) return;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Möchtest du genauer suchen?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Deine Query ist etwas vage. Hier sind präzisere Vorschläge:'),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: suggestions
-                  .map((s) => ChoiceChip(
-                        label: Text(s),
-                        selected: false,
-                        onPressed: () {
-                          HapticFeedback.selectionClick();
-                          Navigator.of(ctx).pop();
-                          _replaceWhatWith(s);
-                        },
-                      ))
-                  .toList(),
+      barrierDismissible: true,
+      builder: (ctx) => WillPopScope(
+        onWillPop: () async {
+          _recordVaguenessNegativeFeedback(original);
+          return true;
+        },
+        child: AlertDialog(
+          title: const Text('Möchtest du genauer suchen?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Deine Query ist etwas vage. Hier sind präzisere Vorschläge:'),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: suggestions
+                    .map((s) => ChoiceChip(
+                          label: Text(s),
+                          selected: false,
+                          onPressed: () {
+                            HapticFeedback.selectionClick();
+                            Navigator.of(ctx).pop();
+                            _replaceWhatWith(s);
+                          },
+                        ))
+                    .toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _recordVaguenessNegativeFeedback(original);
+              },
+              child: const Text('Später'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                if (suggestions.isNotEmpty) {
+                  _replaceWhatWith(suggestions.first);
+                }
+              },
+              child: const Text('Ersten Vorschlag nutzen'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Später'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              if (suggestions.isNotEmpty) {
-                _replaceWhatWith(suggestions.first);
-              }
-            },
-            child: const Text('Ersten Vorschlag nutzen'),
-          ),
-        ],
       ),
     );
   }
@@ -970,8 +1041,36 @@ class _HomePageState extends ConsumerState<HomePage> {
     setState(() {
       _whatController.text = text;
     });
+    // Automatisch suchen nach Vorschlags-Auswahl
+    // Kurz verzögert, damit UI-Update sichtbar ist
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted && _viewState == 'dashboard') {
+        _performSearch();
+      }
+    });
+  });
     // Optional: Automatisch suchen? Erstmal nur ausfüllen.
     // Der Nutzer kann dann manuell starten.
+  }
+
+
+  /// Nutzer hat vage Query nicht präzisiert → als leicht negatives Signal werten.
+  Future<void> _recordVaguenessNegativeFeedback(String vagueTerm) async {
+    final term = vagueTerm.toLowerCase().trim();
+    if (term.isEmpty) return;
+    // Leichte Dämpfung des Keywords (0.1 abziehen, mindestens 0.4)
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'weight_kw_\$term';
+      final cur = prefs.getDouble(key) ?? 1.0;
+      final next = (cur - 0.1).clamp(0.4, 5.0);
+      await prefs.setDouble(key, next);
+      if (kDebugMode) {
+        debugPrint('Vagueness negative feedback: \$term weight set to \$next');
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('Vagueness feedback failed: \$e');
+    }
   }
 
   Widget _buildHomeScreen({Key? key}) {
