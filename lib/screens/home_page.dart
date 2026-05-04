@@ -48,6 +48,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   List<String> _suggestedGoals = [];
   Timer? _analysisTimer;
   Timer? _intentTimer;
+  String? _lastSearchId;
   String _lastIntentWord = '';
 
   String? _selectedRating;
@@ -62,6 +63,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   // SharedPreferences, kein Versand, kein Cloud-State.
   bool _mandatoryRating = false;
   Set<String> _newTokensThisSearch = const <String>{};
+      _lastSearchId = null;
   static const String _seenKwsKey = 'seen_query_kws';
   static const int _seenKwsCap = 5000;
   static const String _intentFreqPrefix = 'intent_freq_';
@@ -586,7 +588,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     // search_id findet (letzter Eintrag im Hive-Box). Reihenfolge ist
     // wichtig fuer Stage 14, da der Bewertungs-Overlay direkt nach
     // Browser-Rueckkehr aufpoppt und sofort committen koennen muss.
-    await widget.learningService.trackSearch(
+    _lastSearchId = await widget.learningService.trackSearch(
       query: fullQuery,
       url: url,
       settings: settingsMap,
@@ -635,7 +637,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     // bewertet"). Das ist die Apple-konforme Variante: kein endloser
     // Loop, aber ein einmaliger Pflicht-Touchpoint pro Suchrichtung.
     if (mounted && launched && newTokens.isNotEmpty) {
-      await _markTokensSeen(newTokens);
       if (mounted) {
         setState(() {
           _newTokensThisSearch = newTokens;
@@ -741,19 +742,32 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
-  void _submitFeedback() {
+  Future<void> _submitFeedback() async {
     if (_selectedRating == null) return;
     HapticFeedback.mediumImpact();
-    widget.learningService.trackFeedback(
+    await widget.learningService.trackFeedback(
       _selectedRating!,
       comment: _feedbackController.text.trim(),
+      searchId: _lastSearchId,
     );
+    // Tokens erst nach Bewertung als gesehen markieren
+    if (_newTokensThisSearch.isNotEmpty) {
+      await _markTokensSeen(_newTokensThisSearch);
+    }
     setState(() {
       _showFeedbackOverlay = false;
       _selectedRating = null;
       _feedbackController.clear();
       _mandatoryRating = false;
       _newTokensThisSearch = const <String>{};
+      _lastSearchId = null;
+    });
+
+  }
+
+      _mandatoryRating = false;
+      _newTokensThisSearch = const <String>{};
+      _lastSearchId = null;
     });
   }
 

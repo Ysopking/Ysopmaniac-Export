@@ -59,7 +59,7 @@ class LearningService {
     _initialized = true;
   }
 
-  Future<void> trackSearch({
+  Future<String> trackSearch({
     required String query,
     required String url,
     required Map<String, dynamic> settings,
@@ -68,21 +68,17 @@ class LearningService {
     required String mode,
     List<Map<String, dynamic>>? coachChoices,
   }) async {
-    if (!Hive.isBoxOpen(_boxName)) return;
+    if (!Hive.isBoxOpen(_boxName)) return '';
     final box = Hive.box<dynamic>(_boxName);
     final key = DateTime.now().millisecondsSinceEpoch.toString();
     await box.put(key, <String, dynamic>{
       'query': query,
       'url': url,
       'engine': (settings['searchengine'] as String?) ?? 'google',
-      'employmentType':
-          (settings['employmentType'] as String?) ?? 'student',
-      'familyStatus':
-          (settings['familyStatus'] as String?) ?? 'single',
+      'employmentType': (settings['employmentType'] as String?) ?? 'student',
+      'familyStatus': (settings['familyStatus'] as String?) ?? 'single',
       if ((settings['interests'] as List?)?.isNotEmpty == true)
-        'interests': (settings['interests'] as List)
-            .whereType<String>()
-            .toList(),
+        'interests': (settings['interests'] as List).whereType<String>().toList(),
       'language': (settings['language'] as String?) ?? 'de',
       'timestamp': DateTime.now().toIso8601String(),
       'sources': sources,
@@ -92,30 +88,29 @@ class LearningService {
         'coach_choices': coachChoices,
     });
     await _rotateLog(box);
+    return key;
   }
 
-  Future<void> trackFeedback(String rating, {String? comment}) async {
-    if (!Hive.isBoxOpen(_feedbackBoxName) ||
-        !Hive.isBoxOpen(_boxName)) return;
+  Future<void> trackFeedback(String rating, {String? comment, String? searchId}) async {
+    if (!Hive.isBoxOpen(_feedbackBoxName) || !Hive.isBoxOpen(_boxName)) return;
     final box = Hive.box<dynamic>(_feedbackBoxName);
     final searchBox = Hive.box<dynamic>(_boxName);
-
     if (searchBox.isEmpty) return;
-    final lastSearchId = searchBox.keys.last.toString();
+    final targetId = searchId ?? searchBox.keys.last.toString();
 
     final existing = box.values.cast<dynamic>().firstWhere(
-          (e) {
-            if (e is! Map) return false;
-            return e['search_id']?.toString() == lastSearchId;
-          },
-          orElse: () => null,
-        );
+      (e) {
+        if (e is! Map) return false;
+        return e['search_id']?.toString() == targetId;
+      },
+      orElse: () => null,
+    );
     if (existing != null) {
       final m = Map<String, dynamic>.from(existing as Map);
       m['comment'] = comment ?? m['comment'] ?? '';
       for (final k in box.keys) {
         final v = box.get(k);
-        if (v is Map && v['search_id']?.toString() == lastSearchId) {
+        if (v is Map && v['search_id']?.toString() == targetId) {
           await box.put(k, m);
           break;
         }
@@ -125,15 +120,13 @@ class LearningService {
 
     final key = DateTime.now().millisecondsSinceEpoch.toString();
     await box.put(key, <String, dynamic>{
-      'search_id': lastSearchId,
+      'search_id': targetId,
       'rating': rating,
       'comment': comment ?? '',
       'timestamp': DateTime.now().toIso8601String(),
       'applied': false,
     });
 
-    // Sofortige Verarbeitung — kein 7-Tage-Warten.
-    // SharedPreferences laden und Gewichte direkt aktualisieren.
     try {
       final prefs = await SharedPreferences.getInstance();
       await _applyPendingFeedbacks(prefs);

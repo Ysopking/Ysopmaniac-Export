@@ -242,12 +242,6 @@ class StammdatenResolver {
     required String why,
     required Map<String, dynamic> settings,
     double employmentWeight = 1.0,
-    /// Skalierung des Familienstatus-Overlays durch das Lernmodell.
-    ///   < 0.7  → Overlay gedaempft (neg. Feedback dominiert)
-    ///   0.7–1.1 → Standard
-    ///   >= 1.2  → Erweitertes Overlay (mehr Trust-Domains)
-    ///   >= 1.4  → Starkes Signal → zusaetzliche SoftTerms
-    double familyWeight = 1.0,
     List<String> interests = const [],
   }) {
     final softTerms = <String>[];

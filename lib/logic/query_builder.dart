@@ -172,7 +172,6 @@ class FindUXQueryBuilder {
     // Startet bei 1.1 nach Onboarding (seedStarterFamilyWeights).
     // Wird durch trackFeedback verfeinert.
     final familyStatus = (settings['familyStatus'] as String?) ?? 'single';
-    final familyWeight = (weights["weight_family_$familyStatus"] ?? 1.0).clamp(0.1, 5.0);
 
     // Interests aus settings extrahieren (List<String> oder leer)
     final interests = (settings['interests'] as List?)
@@ -184,7 +183,6 @@ class FindUXQueryBuilder {
       why: why,
       settings: settings,
       employmentWeight: employmentWeight,
-      familyWeight: familyWeight,
       interests: interests,
     );
 
@@ -422,7 +420,6 @@ class FindUXQueryBuilder {
         preferIntitle: stamm.preferIntitle,
         boostRecent: stamm.boostRecent,
         interests: interests,
-        familyWeight: familyWeight,
         boostKws: boostKws,
         demoteKws: demoteKws,
         learnedTrustDomains: learnedTrustDomains.toList(),

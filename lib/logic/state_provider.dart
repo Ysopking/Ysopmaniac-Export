@@ -297,15 +297,13 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
         .toList(growable: false);
     if (added.isNotEmpty) {
       try {
-        // 1) Token-Level: weight_kw_* fuer jeden Interesse-Pfad-Token
-        await ChromeImportService.applyInterestBumps(added);
-        // 2) Kategorie-Level: weight_filter_* + weight_mode_* pro Top-Kategorie
-        //    (z.B. wissenschaft→academic+precise, tech→docs+precise, reisen→discover)
-        //    Ergaenzt den Token-Boost um semantische Filter/Modus-Vorgewichtung.
-        await LearningService.applyInterestCategoryWeights(added);
-        // 3) Item-Level: hochspezifische weight_kw_* + weight_domain_* pro Item-Pfad
-        //    (finanzen/soziales/buergergeld → weight_kw_buergergeld = 1.35, etc.)
+        // Reihenfolge: stark → mittel → schwach (verhindert Überschreiben)
+        // 1) Item-Level: hochspezifische weight_kw_* + weight_domain_* (hart setzen)
         await LearningService.seedInterestItemWeights(added);
+        // 2) Kategorie-Level: weight_filter_* + weight_mode_* (mittel)
+        await LearningService.applyInterestCategoryWeights(added);
+        // 3) Token-Level: weight_kw_* fuer Pfad-Tokens (schwach, additiv)
+        await ChromeImportService.applyInterestBumps(added);
       } catch (e) {
         if (kDebugMode) debugPrint('Interest bumps failed: $e');
       }
