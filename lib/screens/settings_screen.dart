@@ -235,15 +235,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                hiddenCount: 2,
              ),
              _row(
-               icon: Icons.timer_outlined,
-               title: 'Auto-Suche-Verzögerung',
-               value: '${settings.autoSearchDelay} ms',
-               onTap: () {
-                 Haptics.tap();
-                 _showAutoSearchDelaySheet(context, notifier, settings.autoSearchDelay);
-               },
-             ),
-             _row(
                icon: Icons.history_rounded,
                title: 'Chrome-Verlauf importieren',
                value: 'Ein Tap',
@@ -252,9 +243,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                  quickImportChrome(context);
                },
              ),
-            // (kein Toggle moeglich). SecureFlag hebt es nur kurzzeitig
-            // fuer den eingebauten In-App-Browser auf (max 3 Screenshots
-            // / 30 s). Der Toggle ist deshalb als Read-Only dargestellt.
+             // (kein Toggle moeglich). SecureFlag hebt es nur kurzzeitig
+             // fuer den eingebauten In-App-Browser auf (max 3 Screenshots
+             // / 30 s). Der Toggle ist deshalb als Read-Only dargestellt.
             _toggleRow(
               icon: Icons.no_photography_outlined,
               title: 'Screenshots blockieren',
