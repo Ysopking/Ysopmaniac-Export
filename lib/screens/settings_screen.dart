@@ -246,32 +246,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
              // (kein Toggle moeglich). SecureFlag hebt es nur kurzzeitig
              // fuer den eingebauten In-App-Browser auf (max 3 Screenshots
              // / 30 s). Der Toggle ist deshalb als Read-Only dargestellt.
-            _toggleRow(
-              icon: Icons.no_photography_outlined,
-              title: 'Screenshots blockieren',
-              subtitle: 'Immer aktiv — schuetzt vor Screenshots und Aufnahmen',
-              value: true,
-              onChanged: (_) {},
-              enabled: false,
-            ),
-             _row(
-               icon: Icons.history_rounded,
-               title: 'Chrome-Verlauf importieren',
-               value: 'Ein Tap',
-               onTap: () {
-                 Haptics.tap();
-                 quickImportChrome(context);
-               },
-             ),
-             _row(
-               icon: Icons.timer_outlined,
-               title: 'Auto-Suche-Verzögerung',
-               value: '${settings.autoSearchDelay} ms',
-               onTap: () {
-                 Haptics.tap();
-                 _showAutoSearchDelaySheet(context, notifier, settings.autoSearchDelay);
-               },
-             ),
+              _toggleRow(
+                icon: Icons.no_photography_outlined,
+                title: 'Screenshots blockieren',
+                subtitle: 'Immer aktiv — schuetzt vor Screenshots und Aufnahmen',
+                value: true,
+                onChanged: (_) {},
+                enabled: false,
+              ),
+              _row(
+                icon: Icons.timer_outlined,
+                title: 'Auto-Suche-Verzögerung',
+                value: '${settings.autoSearchDelay} ms',
+                onTap: () {
+                  Haptics.tap();
+                  _showAutoSearchDelaySheet(context, notifier, settings.autoSearchDelay);
+                },
+              ),
            ]),
 
           // -------- Notbremse separiert --------
@@ -1090,68 +1081,92 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // Stage 14: _showFeedbackExportDialog entfernt — Bewertungen werden
-  // jetzt verpflichtend pro neuer Suchrichtung aufgenommen und
-  // ausschliesslich lokal im Lern-Modell verwendet (kein Export, kein
-  // Versand). Die zugehoerigen l10n-Strings (feedbackTitle, feedbackDesc,
-  // noFeedback, deleteFeedback, sendFeedbackSafe, reviewFeedback) bleiben
-  // als orphans im generierten l10n-File — sie schaden nicht.
+   // Stage 14: _showFeedbackExportDialog entfernt — Bewertungen werden
+   // jetzt verpflichtend pro neuer Suchrichtung aufgenommen und
+   // ausschliesslich lokal im Lern-Modell verwendet (kein Export, kein
+   // Versand). Die zugehoerigen l10n-Strings (feedbackTitle, feedbackDesc,
+   // noFeedback, deleteFeedback, sendFeedbackSafe, reviewFeedback) bleiben
+   // als orphans im generierten l10n-File — sie schaden nicht.
 
-  void _showAutoSearchDelaySheet(
-      BuildContext ctx, SettingsNotifier notifier, int currentMs) {
-    showModalBottomSheet(
-      context: ctx,
-      builder: (sheetCtx) {
-        return StatefulBuilder(
-          builder: (sheetCtx, setLocal) {
-            int val = currentMs;
-            return Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Automatische Suche nach Vorschlag',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                  const SizedBox(height: 8),
-                  Text('Wartezeit nach Vorschlags-Auswahl: ${val}ms'),
-                  Slider(
-                    value: val.toDouble(),
-                    min: 0,
-                    max: 2000,
-                    divisions: 40,
-                    label: '${val}ms',
-                    onChanged: (double v) {
-                      setLocal(() { val = v.toInt(); });
-                    },
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Abbrechen'),
-                      ),
-                      ElevatedButton(
-                        onPressed: () {
-                          notifier.updateSettings(
-                            notifier.state.copyWith(autoSearchDelay: val),
-                          );
-                          Navigator.pop(ctx);
-                        },
-                        child: const Text('OK'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
+   void _showAutoSearchDelaySheet(
+       BuildContext ctx, SettingsNotifier notifier, int currentMs) {
+     showModalBottomSheet(
+       context: ctx,
+       builder: (sheetCtx) {
+         return StatefulBuilder(
+           builder: (ctx, setLocal) {
+             int val = currentMs;
+             return Padding(
+               padding: const EdgeInsets.all(24),
+               child: Column(
+                 mainAxisSize: MainAxisSize.min,
+                 children: [
+                   const Text(
+                     'Auto-Suche-Verzögerung',
+                     style: TextStyle(
+                       fontSize: 18,
+                       fontWeight: FontWeight.w800,
+                     ),
+                   ),
+                   const SizedBox(height: 8),
+                   Text(
+                     'Wartezeit nach einem Vorschlag, bevor die Suche startet.',
+                     style: TextStyle(
+                       fontSize: 13,
+                       color: Colors.black54,
+                     ),
+                   ),
+                   const SizedBox(height: 24),
+                   Row(
+                     children: [
+                       const Text('100 ms', style: TextStyle(fontSize: 12)),
+                       Expanded(
+                         child: Slider(
+                           value: val.toDouble(),
+                           min: 100,
+                           max: 2000,
+                           divisions: 19,
+                           label: '${val} ms',
+                           onChanged: (v) => setLocal(() => val = v.round()),
+                         ),
+                       ),
+                       Text('2000 ms', style: TextStyle(fontSize: 12)),
+                     ],
+                   ),
+                   const SizedBox(height: 8),
+                   Text(
+                     'Aktuell: $val ms',
+                     style: const TextStyle(
+                       fontSize: 16,
+                       fontWeight: FontWeight.w600,
+                     ),
+                   ),
+                   const SizedBox(height: 24),
+                   Row(
+                     mainAxisAlignment: MainAxisAlignment.end,
+                     children: [
+                       TextButton(
+                         onPressed: () => Navigator.of(ctx).pop(),
+                         child: const Text('Abbrechen'),
+                       ),
+                       const SizedBox(width: 12),
+                       ElevatedButton(
+                         onPressed: () {
+                           notifier.updateField(autoSearchDelay: val);
+                           Navigator.of(ctx).pop();
+                         },
+                         child: const Text('OK'),
+                       ),
+                     ],
+                   )
+                 ],
+               ),
+             );
+           },
+         );
+       },
+     );
+   }
 }
 class _SettingsCountryPickerSheet extends StatefulWidget {
   final String selected;

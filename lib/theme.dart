@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'dart:io';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 
 // FindUX Pro Corporate Design Theme (Material 3 + Apple Polished)
 class FindUXProTheme {
@@ -48,7 +48,7 @@ class FindUXProTheme {
   );
 
   // Typography
-  static TextStyle get headlineStyle => Platform.isIOS
+  static TextStyle get headlineStyle => defaultTargetPlatform == TargetPlatform.iOS
       ? const TextStyle(
           fontFamily: '.SF Pro Display',
           fontSize: 34,
@@ -60,7 +60,7 @@ class FindUXProTheme {
           fontWeight: FontWeight.w700,
         );
 
-  static TextStyle get titleStyle => Platform.isIOS
+  static TextStyle get titleStyle => defaultTargetPlatform == TargetPlatform.iOS
       ? const TextStyle(
           fontFamily: '.SF Pro Display',
           fontSize: 28,
@@ -68,11 +68,11 @@ class FindUXProTheme {
         )
       : const TextStyle(fontSize: 28, fontWeight: FontWeight.w600);
 
-  static TextStyle get bodyStyle => Platform.isIOS
+  static TextStyle get bodyStyle => defaultTargetPlatform == TargetPlatform.iOS
       ? const TextStyle(fontFamily: '.SF Pro Text', fontSize: 17)
       : const TextStyle(fontSize: 17);
 
-  static TextStyle get captionStyle => Platform.isIOS
+  static TextStyle get captionStyle => defaultTargetPlatform == TargetPlatform.iOS
       ? const TextStyle(fontFamily: '.SF Pro Text', fontSize: 13, color: Color(0xFF8E8E93))
       : const TextStyle(fontSize: 13, color: Color(0xFF8E8E93));
 

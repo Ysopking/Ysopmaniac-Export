@@ -123,22 +123,27 @@ class _HomePageState extends ConsumerState<HomePage> {
     _whatController.addListener(_onWhatTextChanged);
   }
 
-  // ---------- Intent-Popup (10s Single-Word-Trigger) ----------
+   // ---------- Intent-Popup (10s nach Inaktivität) ----------
+   //
+   // Auslöser: User hat ein Suchebegriff eingegeben (ein oder mehrere Wörter),
+   //            10s keine Änderung, und Warum-Feld ist leer.
+   // Popup: 4 vordefinierte Intentionen + manuelle "Grund"-Eingabe.
+   // Die Auswahl wird dem Warum-Feld zugeordnet und kann später als
+   // Kontext für den Query-Builder dienen.
 
   void _onWhatTextChanged() {
     final text = _whatController.text.trim();
-    final words =
-        text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    final words = text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
 
-    if (words.length == 1 &&
+    if (words.isNotEmpty &&
         !_showWhyField &&
         _whyController.text.trim().isEmpty &&
         _viewState == 'dashboard') {
-      final word = words.first;
+      final word = words.first; // Für Personalisierung der Intent-Häufigkeiten
       if (word != _lastIntentWord) {
         _lastIntentWord = word;
         _intentTimer?.cancel();
-    _vaguenessTimer?.cancel();
+        _vaguenessTimer?.cancel();
         _intentTimer = Timer(const Duration(seconds: 10), () {
           if (mounted && _viewState == 'dashboard') {
             // ignore: discarded_futures
@@ -146,11 +151,11 @@ class _HomePageState extends ConsumerState<HomePage> {
           }
         });
       }
-     } else {
-       _intentTimer?.cancel();
-       _vaguenessTimer?.cancel();
-       if (text.isEmpty) _lastIntentWord = '';
-     }
+    } else {
+      _intentTimer?.cancel();
+      _vaguenessTimer?.cancel();
+      if (text.isEmpty) _lastIntentWord = '';
+    }
 
      // Vagueness-Check nach 15s Inaktivität
      _vaguenessTimer?.cancel();
@@ -206,14 +211,12 @@ class _HomePageState extends ConsumerState<HomePage> {
     final freqs = await _loadIntentFreqs(word);
     if (!mounted) return;
 
-    // Definition: key, icon, label, why
+    // Definition: key, icon, label, why — reduziert auf 4 Hauptintentionen
     final baseIntents = [
-      {'key': 'find',   'icon': '📍', 'label': 'Wo kann ich das finden?',        'why': 'finden wo standort'},
-      {'key': 'info',   'icon': 'ℹ️',  'label': 'Informationen / Was ist das?',   'why': 'informationen erklärung hintergrund'},
-      {'key': 'buy',    'icon': '💰', 'label': 'Kaufen / Preise vergleichen',     'why': 'kaufen preis vergleich günstig'},
-      {'key': 'guide',  'icon': '📖', 'label': 'Anleitung / Wie geht das?',      'why': 'anleitung wie tipps schritt für schritt'},
-      {'key': 'review', 'icon': '⭐', 'label': 'Erfahrungen & Bewertungen',       'why': 'erfahrungen bewertungen meinungen empfehlungen'},
-      {'key': 'nearby', 'icon': '🗺️', 'label': 'In meiner Nähe',                 'why': 'in meiner nähe regional lokal'},
+      {'key': 'find',   'icon': '📍', 'label': 'Wo finde ich das?',        'why': 'finden wo standort'},
+      {'key': 'buy',    'icon': '💰', 'label': 'Kaufen / Preise',         'why': 'kaufen preis vergleich günstig'},
+      {'key': 'guide',  'icon': '📖', 'label': 'Anleitung / Wie geht das?','why': 'anleitung wie tipps schritt für schritt'},
+      {'key': 'review', 'icon': '⭐', 'label': 'Erfahrungen & Bewertungen', 'why': 'erfahrungen bewertungen meinungen empfehlungen'},
     ];
 
     // Stabile Sortierung: höchster count zuerst, Gleichstand → Originalreihenfolge.

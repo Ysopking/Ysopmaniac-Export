@@ -346,122 +346,78 @@ class LearningService {
 
     const starterWeights = <String, Map<String, double>>{
       'student': {
-        'weight_kw_studie':           1.5,
-        'weight_kw_studien':          1.5,
-        'weight_kw_paper':            1.5,
-        'weight_kw_forschung':        1.4,
-        'weight_kw_wissenschaft':     1.4,
-        'weight_kw_journal':          1.4,
-        'weight_kw_thesis':           1.3,
-        'weight_kw_literatur':        1.3,
-        'weight_kw_erklaerung':       1.3,
-        'weight_kw_loesung':          1.2,
-        'weight_filter_academic':     1.6,
-        'weight_filter_wikipedia':    1.4,
-        'weight_filter_docs':         1.3,
-        'weight_mode_precise':        1.4,
-        'weight_mode_standard':       1.2,
+        'weight_kw_studie':           1.1,
+        'weight_kw_studien':          1.1,
+        'weight_kw_paper':            1.1,
+        'weight_kw_forschung':        1.0,
+        'weight_kw_wissenschaft':     1.0,
+        'weight_kw_journal':          1.0,
+        'weight_kw_thesis':           0.9,
+        'weight_kw_literatur':        0.9,
+        'weight_kw_erklaerung':       0.9,
+        'weight_kw_loesung':          0.8,
+        'weight_filter_academic':     1.2,
+        'weight_filter_wikipedia':    1.1,
+        'weight_filter_docs':         1.0,
+        'weight_mode_precise':        1.1,
+        'weight_mode_standard':       0.9,
       },
       'vollzeit': {
-        // Spec: Effizienz-Jaeger — kein langes Lesen, aktuelle Infos, B2B
-        'weight_kw_anleitung':        1.4,
-        'weight_kw_howto':            1.4,
-        'weight_kw_tool':             1.4,
-        'weight_kw_software':         1.4,
-        'weight_kw_workflow':         1.3,
-        'weight_kw_produktiv':        1.3,
-        'weight_kw_effizienz':        1.3,
-        'weight_kw_vorlage':          1.2,
-        'weight_kw_aktuell':          1.3, // intitle: + after: Aktualitaet
-        'weight_filter_docs':         1.6,
-        'weight_filter_foren':        1.4,
-        'weight_filter_blogs':        1.3,
-        // Gutefrage und Hobbyisten-Foren massiv abstrafen (Spec: Lärm)
-        'weight_domain_gutefrage.net':     0.3,
-        'weight_domain_wer-weiss-was.de':  0.3,
-        'weight_domain_pinterest.com':     0.2,
-        'weight_mode_precise':        1.5,
-        'weight_mode_standard':       1.2,
+        'weight_kw_anleitung':        1.0,
+        'weight_kw_howto':            1.0,
+        'weight_kw_tool':             1.0,
+        'weight_kw_software':         1.0,
+        'weight_kw_workflow':         0.9,
+        'weight_kw_produktiv':        0.9,
+        'weight_kw_effizienz':        0.9,
+        'weight_kw_vorlage':          0.8,
+        'weight_kw_aktuell':          0.9,
+        'weight_filter_docs':         1.2,
+        'weight_filter_foren':        1.0,
+        'weight_filter_blogs':        0.9,
+        'weight_domain_gutefrage.net':     0.5,
+        'weight_domain_wer-weiss-was.de':  0.5,
+        'weight_domain_pinterest.com':     0.4,
+        'weight_mode_precise':        1.2,
+        'weight_mode_standard':       0.9,
       },
       'teilzeit': {
-        // Spec: Balancierer / Familien-Manager — lokal + preisbewusst + echte Erfahrungen
-        'weight_kw_tipps':            1.4,
-        'weight_kw_ratgeber':         1.4,
-        'weight_kw_erfahrungen':      1.5,
-        'weight_kw_erfahrungsbericht':1.4,
-        'weight_kw_bewertung':        1.4,
-        'weight_kw_aktuell':          1.3,
-        'weight_kw_vergleich':        1.3,
-        'weight_kw_preis':            1.2,
-        'weight_kw_guenstig':         1.2,
-        'weight_filter_reddit':       1.6, // Community-Foren: echte Menschen
-        'weight_filter_foren':        1.5,
-        'weight_filter_news':         1.4,
-        'weight_filter_offiziell':    1.3,
-        // Content-Farmen abstrafen
-        'weight_domain_gofeminin.de': 0.4,
-        'weight_domain_desired.de':   0.4,
-        'weight_domain_pinterest.com':0.3,
-        'weight_mode_standard':       1.4,
-        'weight_mode_discover':       1.3,
+        'weight_kw_tipps':            1.0,
+        'weight_kw_ratgeber':         1.0,
+        'weight_kw_erfahrungen':      1.1,
+        'weight_kw_erfahrungsbericht':1.0,
+        'weight_kw_bewertung':        1.0,
+        'weight_kw_aktuell':          0.9,
+        'weight_kw_vergleich':        0.9,
+        'weight_kw_preis':            0.8,
+        'weight_kw_guenstig':         0.8,
+        'weight_filter_reddit':       1.2,
+        'weight_filter_foren':        1.1,
+        'weight_filter_news':         1.0,
+        'weight_filter_offiziell':    0.9,
+        'weight_domain_gofeminin.de': 0.6,
+        'weight_domain_desired.de':   0.6,
+        'weight_domain_pinterest.com':0.5,
+        'weight_mode_standard':       1.1,
+        'weight_mode_discover':       1.0,
       },
       'rentner': {
-        // Spec: Schutzwall gegen Scam, Trust-Domains fuer Medizin/Finanzen
-        'weight_kw_einfach':          1.6,
-        'weight_kw_erklaerung':       1.6,
-        'weight_kw_schritt':          1.5,
-        'weight_kw_anleitung':        1.5,
-        'weight_kw_gesundheit':       1.5,
-        'weight_kw_medikament':       1.4,
-        'weight_kw_symptom':          1.4,
-        'weight_kw_rente':            1.4,
-        'weight_kw_pension':          1.3,
-        // Trust-Domains (Medizin + Finanzen) stark aufwerten
-        'weight_domain_stiftung-warentest.de': 1.8,
-        'weight_domain_apotheken-umschau.de':  1.7,
-        'weight_domain_bund.de':               1.7,
-        'weight_domain_rki.de':                1.6,
-        'weight_domain_bzga.de':               1.6,
-        'weight_domain_verbraucherzentrale.de':1.6,
-        // Scam-Domains und Social-Media-Lärm massiv abstrafen
-        'weight_domain_pinterest.com':  0.2,
-        'weight_domain_pinterest.de':   0.2,
-        'weight_domain_tiktok.com':     0.2,
-        'weight_domain_instagram.com':  0.3,
-        'weight_filter_wikipedia':      1.7,
-        'weight_filter_news':           1.5,
-        'weight_filter_offiziell':      1.6,
-        'weight_mode_standard':         1.5,
-        'weight_mode_discover':         1.2,
-      },
-      'erwerbslos': {
-        // Job-Suche (sanfte Vorgewichtung 1.08–1.12)
-        'weight_kw_job':              1.12,
-        'weight_kw_bewerbung':        1.12,
-        'weight_kw_lebenslauf':       1.10,
-        'weight_kw_vorlage':          1.10,
-        'weight_kw_karriere':         1.08,
-        // Antraege + staatliche Hilfen (Spec: offizielle Antraege + gute Foren)
-        'weight_kw_foerderung':       1.10,
-        'weight_kw_antrag':           1.10,
-        'weight_kw_buergergeld':      1.10,
-        'weight_kw_hartz':            1.08,
-        'weight_kw_sozialleistung':   1.08,
-        'weight_kw_wohngeld':         1.08,
-        'weight_kw_hilfe':            1.08,
-        // Behoerden aufwerten
-        'weight_domain_arbeitsagentur.de':      1.12,
-        'weight_domain_bmfsfj.de':              1.10,
-        'weight_domain_gesetze-im-internet.de': 1.08,
-        // Stellenboersen
-        'weight_filter_stellenboersen': 1.12,
-        'weight_filter_offiziell':    1.10,
-        // Echte Hilfe-Foren
-        'weight_filter_reddit':       1.08,
-        'weight_filter_foren':        1.08,
-        // Coaching-Scams abstrafen
-        'weight_domain_geld-verdienen-sofort.de': 0.88,
-        'weight_mode_standard':       1.06,
+        'weight_kw_einfach':          1.2,
+        'weight_kw_erklaerung':       1.2,
+        'weight_kw_schritt':          1.1,
+        'weight_kw_anleitung':        1.1,
+        'weight_kw_gesundheit':       1.1,
+        'weight_kw_medikament':       1.0,
+        'weight_kw_symptom':          1.0,
+        'weight_kw_rente':            1.0,
+        'weight_kw_pension':          0.9,
+        'weight_domain_stiftung-warentest.de': 1.4,
+        'weight_domain_apotheken-umschau.de':  1.3,
+        'weight_domain_bund.de':               1.3,
+        'weight_domain_rki.de':                1.2,
+        'weight_domain_bzga.de':               1.2,
+        'weight_mode_precise':        1.3,
+        'weight_mode_standard':       1.0,
       },
     };
 
@@ -473,11 +429,11 @@ class LearningService {
       }
     }
 
-    // Leichte Vorgewichtung (1.1) — echtes Lernen passiert durch Chronik + Interessen
+    // Sehr leichte Vorgewichtung (0.9) — echtes Lernen passiert durch Chronik + Interessen
     final empKey = 'weight_employment_$employmentType';
     final currentEmp = prefs.getDouble(empKey) ?? 0.0;
-    if (1.1 > currentEmp) {
-      await prefs.setDouble(empKey, 1.1);
+    if (0.9 > currentEmp) {
+      await prefs.setDouble(empKey, 0.9);
     }
 
     if (kDebugMode) {
@@ -498,73 +454,73 @@ class LearningService {
     // spaeter nicht ueberschreibt.
     if (prefs.getBool("hasSeededFamilyWeights") == true) return;
     await prefs.setBool("hasSeededFamilyWeights", true);
-    // Spec-konforme Familie-Profile (Werte bewusst gering 1.05–1.12,
+    // Spec-konforme Familie-Profile (Werte bewusst leicht 0.7–0.9 —
     // Interessen + Chronik haben immer Vorrang).
     const familyWeights = <String, Map<String, double>>{
       // Baseline: nur berufliche Filter greifen, kein family overlay
       'single': {
-        'weight_kw_freizeit':         1.06,
-        'weight_kw_reise':            1.05,
-        'weight_filter_blogs':        1.06,
-        'weight_mode_discover':       1.06,
+        'weight_kw_freizeit':         0.75,
+        'weight_kw_reise':            0.70,
+        'weight_filter_blogs':        0.75,
+        'weight_mode_discover':       0.75,
       },
 
       // Familie (mit Kindern): Schutz vor Pinterest + Mommy-Blog-Spam,
       // Trust-Domains fuer Gesundheit/Erziehung aufwerten
       'familie': {
         // Kinder-/Familien-Keywords
-        'weight_kw_kinder':           1.10,
-        'weight_kw_kindheit':         1.08,
-        'weight_kw_schule':           1.08,
-        'weight_kw_kita':             1.08,
-        'weight_kw_erziehung':        1.10,
-        'weight_kw_impfung':          1.08,
-        'weight_kw_kinderarzt':       1.08,
-        'weight_kw_kindergarten':     1.08,
+        'weight_kw_kinder':           0.85,
+        'weight_kw_kindheit':         0.80,
+        'weight_kw_schule':           0.80,
+        'weight_kw_kita':             0.80,
+        'weight_kw_erziehung':        0.85,
+        'weight_kw_impfung':          0.80,
+        'weight_kw_kinderarzt':       0.80,
+        'weight_kw_kindergarten':     0.80,
         // Trust-Domains (medizinisch + erzieherisch)
-        'weight_domain_kindergesundheit-info.de': 1.12,
-        'weight_domain_familienportal.de':        1.12,
-        'weight_domain_stiftung-warentest.de':    1.10,
-        'weight_domain_bzga.de':                  1.10,
-        'weight_domain_bund.de':                  1.08,
+        'weight_domain_kindergesundheit-info.de': 0.90,
+        'weight_domain_familienportal.de':        0.90,
+        'weight_domain_stiftung-warentest.de':    0.85,
+        'weight_domain_bzga.de':                  0.85,
+        'weight_domain_bund.de':                  0.80,
         // Mommy-Blog-SEO-Spam + Pinterest abstrafen
         'weight_domain_pinterest.com':  0.88,
         'weight_domain_pinterest.de':   0.88,
         'weight_domain_desired.de':     0.88,
         'weight_domain_gofeminin.de':   0.88,
         'weight_domain_mamaclub.de':    0.88,
-        'weight_filter_offiziell':      1.10,
-        'weight_mode_standard':         1.06,
+        'weight_filter_offiziell':      0.90,
+        'weight_mode_standard':         0.75,
       },
 
       // Alleinerziehend: Effizienz + staatliche Hilfen + echte Foren,
       // Scam-Anwalts-Portale und toxische Foren raus
       'alleinerziehend': {
         // Hilfe + Recht + Foerderung stark vorgewichten
-        'weight_kw_foerderung':       1.12,
-        'weight_kw_unterstuetzung':   1.12,
-        'weight_kw_recht':            1.10,
-        'weight_kw_unterhalt':        1.10,
-        'weight_kw_sorgerecht':       1.10,
-        'weight_kw_antrag':           1.10,
-        'weight_kw_beratung':         1.08,
-        'weight_kw_kostenlos':        1.10,
-        'weight_kw_kinder':           1.08,
+        'weight_kw_foerderung':       0.90,
+        'weight_kw_unterstuetzung':   0.90,
+        'weight_kw_recht':            0.85,
+        'weight_kw_unterhalt':        0.85,
+        'weight_kw_sorgerecht':       0.85,
+        'weight_kw_antrag':           0.85,
+        'weight_kw_beratung':         0.80,
+        'weight_kw_kostenlos':        0.85,
+        'weight_kw_kinder':           0.80,
         // Staatliche Seiten stark aufwerten (Spec: maximale Effizienz)
-        'weight_domain_bmfsfj.de':           1.15,
-        'weight_domain_arbeitsagentur.de':   1.12,
-        'weight_domain_bundesregierung.de':  1.10,
-        'weight_domain_bund.de':             1.10,
-        'weight_domain_vamv.de':             1.10, // Verband alleinerziehender Muetter
+        'weight_domain_bmfsfj.de':           0.90,
+        'weight_domain_arbeitsagentur.de':   0.85,
+        'weight_domain_bundesregierung.de':  0.80,
+        'weight_domain_bund.de':             0.80,
+        'weight_domain_vamv.de':             0.80, // Verband alleinerziehender Muetter
         // Echte Foren/Reddit-Communities aufwerten
-        'weight_filter_reddit':       1.12,
-        'weight_filter_foren':        1.08,
+        'weight_filter_reddit':       0.88,
+        'weight_filter_foren':        0.80,
         // Scam-Anwalts-Portale abstrafen (Spec)
         'weight_domain_anwalt.de':    0.88,
         'weight_domain_anwalt24.de':  0.85,
         'weight_domain_pinterest.com':0.88,
-        'weight_filter_offiziell':    1.12,
-        'weight_mode_standard':       1.06,
+        'weight_filter_offiziell':    0.88,
+        'weight_mode_standard':       0.75,
       },
     };
 
@@ -576,16 +532,11 @@ class LearningService {
       }
     }
 
-    // Initial family-status weight — analog zu employment weight (1.1 Startwert).
-    // Wird durch trackFeedback / _applyPendingFeedbacks kontinuierlich verfeinert.
-    //   < 0.7  : neg. Feedback dominiert → Overlay wird gedaempft
-    //   0.7–1.1: neutral / Standard-Overlay
-    //   >= 1.2 : positives Signal → erweitertes Overlay (mehr Trust-Domains)
-    //   >= 1.4 : starkes Signal  → zusaetzliche SoftTerms injiziert
+    // Sehr leichte Vorgewichtung (0.9) — echtes Lernen passiert durch Chronik + Interessen
     final famKey = 'weight_family_' + familyStatus;
     final currentFam = prefs.getDouble(famKey) ?? 0.0;
-    if (1.1 > currentFam) {
-      await prefs.setDouble(famKey, 1.1);
+    if (0.9 > currentFam) {
+      await prefs.setDouble(famKey, 0.9);
     }
 
     if (kDebugMode) {

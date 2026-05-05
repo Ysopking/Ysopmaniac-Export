@@ -30,7 +30,7 @@ class _ChromeImportScreenState extends ConsumerState<ChromeImportScreen> {
 
   Future<Box<dynamic>?> _box() async {
     try {
-      final sec = SecurityService();
+      final sec = ref.read(securityServiceProvider);
       final key = await sec.getEncryptionKey();
       return await ChromeImportService.openBox(key);
     } catch (e) {

@@ -127,14 +127,26 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                 }
 
-                // ── Diagnose: ist FLAG_SECURE aktuell gesetzt? ──────────────
-                "isSecure" -> {
-                    val flags = window.attributes.flags
-                    val on = (flags and WindowManager.LayoutParams.FLAG_SECURE) != 0
-                    result.success(on)
-                }
+                 // ── Diagnose: ist FLAG_SECURE aktuell gesetzt? ──────────────
+                 "isSecure" -> {
+                     val flags = window.attributes.flags
+                     val on = (flags and WindowManager.LayoutParams.FLAG_SECURE) != 0
+                     result.success(on)
+                 }
 
-                else -> result.notImplemented()
+                 // ── System-Sicherheitseinstellungen oeffnen ─────────────────
+                 "openSecuritySettings" -> {
+                     try {
+                         val intent = Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS)
+                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                         startActivity(intent)
+                         result.success(true)
+                     } catch (e: Exception) {
+                         result.error("UNAVAILABLE", "Konnte Sicherheitseinstellungen nicht oeffnen", null)
+                     }
+                 }
+
+                 else -> result.notImplemented()
             }
         }
     }

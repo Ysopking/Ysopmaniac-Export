@@ -278,16 +278,17 @@ class StammdatenResolver {
     final country = ((settings['country']  as String?) ?? 'de').trim();
     final jahr    = (settings['jahr']      as int?)    ?? 1990;
 
-    // ─────────────────────────────────────────────────────────────
-    // 1. QUELLEN-PRESET (skaliert durch employmentWeight)
-    // ─────────────────────────────────────────────────────────────
-    final preset = _employmentSourcePresets[employmentType];
-    if (preset != null && employmentWeight >= 0.7) {
-      final count = employmentWeight >= 1.4
-          ? preset.length
-          : (employmentWeight >= 1.0 ? 2 : 1);
-      preferredSources.addAll(preset.take(count));
-    }
+     // ─────────────────────────────────────────────────────────────
+     // 1. QUELLEN-PRESET (skaliert durch employmentWeight)
+     // ─────────────────────────────────────────────────────────────
+     final preset = _employmentSourcePresets[employmentType];
+     if (preset != null && employmentWeight >= 0.6) {
+       // Sehr leicht: ab 0.6 1 Quelle; ab 1.0 zwei; ab 1.2 alle.
+       final count = employmentWeight >= 1.2
+           ? preset.length
+           : (employmentWeight >= 1.0 ? 2 : 1);
+       preferredSources.addAll(preset.take(count));
+     }
 
     // ─────────────────────────────────────────────────────────────
     // 2. STUDENT-SPEZIFISCH

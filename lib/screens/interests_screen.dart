@@ -110,11 +110,11 @@ class InterestsScreen extends ConsumerWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (hasProfile) ...[
-                  const Icon(Icons.auto_awesome_rounded,
-                      size: 14, color: Color(0xFF6C4AB6)),
-                  const SizedBox(width: 5),
-                ],
+                 if (hasProfile) ...[
+                   const Icon(Icons.auto_awesome_rounded,
+                       size: 14, color: FindUXProTheme.primaryPurple),
+                   const SizedBox(width: 5),
+                 ],
                 Expanded(
                   child: Text(
                     subtitle,
@@ -382,14 +382,14 @@ class _SubcategoryScreen extends ConsumerWidget {
                     },
                   ),
                   if (i < category.subs.length - 1)
-                    const Padding(
-                      padding: EdgeInsets.only(left: 16),
-                      child: Divider(
-                        height: 1,
-                        thickness: 0.5,
-                        color: Color(0xFFE5E5EA),
-                      ),
-                    ),
+                     const Padding(
+                       padding: EdgeInsets.only(left: 16),
+                       child: Divider(
+                         height: 1,
+                         thickness: 0.5,
+                         color: FindUXProTheme.lightGray,
+                       ),
+                     ),
                 ],
               ],
             ),

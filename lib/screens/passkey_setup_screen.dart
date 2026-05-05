@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart';
 import '../logic/state_provider.dart';
 import '../services/security_service.dart';
 import '../theme.dart';
@@ -54,24 +54,22 @@ class _PasskeySetupScreenState extends ConsumerState<PasskeySetupScreen>
   }
 
   Future<void> _openSecuritySettings() async {
-    // Versuche zunaechst die Sicherheits-Einstellungen, sonst die allgemeinen.
-    final candidates = [
-      Uri.parse('android.settings.SECURITY_SETTINGS'),
-      Uri.parse('android.settings.SETTINGS'),
-    ];
-    for (final uri in candidates) {
-      try {
-        final ok = await launchUrl(
-          Uri(scheme: 'package', path: 'com.android.settings'),
-          mode: LaunchMode.externalApplication,
+    const channel = MethodChannel('com.findux/security');
+    try {
+      await channel.invokeMethod('openSecuritySettings');
+    } on PlatformException catch (_) {
+      // Fallback: Manuelle Anleitung zeigen
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Bitte oeffne die Einstellungen manuell und richte eine Geraete-Sperre ein.'),
+          ),
         );
-        if (ok) return;
-      } catch (_) {}
-      try {
-        final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-        if (ok) return;
-      } catch (_) {}
+      }
     }
+  }
+    // Fallback: App-spezifische Einstellungen (uebergeordnet)
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
